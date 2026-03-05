@@ -1,0 +1,236 @@
+import { createServer } from "http";
+import { WebSocketServer, type WebSocket } from "ws";
+import type { IncomingMessage } from "http";
+import { app } from "./app.js";
+import { initDatabase } from "./db/index.js";
+import { getConfig } from "./services/config.js";
+import {
+  ensureInitialCredentials,
+  verifySessionToken,
+} from "./services/auth.js";
+import { spawn } from "child_process";
+import {
+  restoreServerStates,
+  shutdownAllServers,
+} from "./services/serverProcess.js";
+import { initializeSchedules } from "./services/scheduler.js";
+import { initializeMessageBroadcasters } from "./services/messageBroadcaster.js";
+import {
+  startAutoUpdateCheck,
+  stopAutoUpdateCheck,
+} from "./services/agentUpdater.js";
+import { SimpleLogger } from "./services/logger.js";
+import { DEFAULT_LOG_SETTINGS } from "@game-servum/shared";
+
+const config = getConfig();
+
+// Initialize logger
+export const logger = new SimpleLogger("agent", config.logsPath, {
+  ...DEFAULT_LOG_SETTINGS,
+  writeToConsole: process.env.NODE_ENV === "development",
+});
+
+// Store connected clients
+const clients = new Set<WebSocket>();
+
+// Broadcast to all connected clients
+export function broadcast(type: string, payload: unknown) {
+  const message = JSON.stringify({ type, payload });
+  clients.forEach((client) => {
+    if (client.readyState === 1) {
+      // WebSocket.OPEN = 1
+      client.send(message);
+    }
+  });
+}
+
+async function main() {
+  logger.info("[Server] Starting server...", {
+    mode: "standalone (Agent)",
+    port: config.port,
+    authEnabled: config.authEnabled,
+  });
+
+  // Initialize database
+  await initDatabase();
+  logger.info("[Server] Database initialized");
+
+  // Generate initial credentials on first start (if auth enabled)
+  ensureInitialCredentials();
+
+  // Restore server states (check if any servers were running before restart)
+  restoreServerStates();
+
+  // Initialize scheduled restarts
+  initializeSchedules();
+
+  // Initialize scheduled RCON message broadcasters
+  initializeMessageBroadcasters();
+
+  // Start periodic agent update checks (every 4 hours)
+  startAutoUpdateCheck(4);
+
+  // Create HTTP server
+  const server = createServer(app);
+
+  // Create WebSocket server with auth verification
+  const wss = new WebSocketServer({
+    server,
+    path: "/ws",
+    verifyClient: (info: { req: IncomingMessage }, callback) => {
+      if (!config.authEnabled) {
+        callback(true);
+        return;
+      }
+
+      // Extract token from query string
+      const url = new URL(
+        info.req.url || "",
+        `http://${info.req.headers.host}`,
+      );
+      const token = url.searchParams.get("token");
+
+      if (!token) {
+        callback(false, 401, "Authentication required");
+        return;
+      }
+
+      const payload = verifySessionToken(token);
+      if (!payload) {
+        callback(false, 401, "Invalid or expired session token");
+        return;
+      }
+
+      // Attach session to request for later use
+      (info.req as any).agentSession = payload;
+      callback(true);
+    },
+  });
+
+  wss.on("connection", (ws: WebSocket) => {
+    logger.debug("[WebSocket] Client connected");
+    clients.add(ws);
+
+    ws.on("close", () => {
+      logger.debug("[WebSocket] Client disconnected");
+      clients.delete(ws);
+    });
+
+    ws.on("error", (error: Error) => {
+      logger.error("[WebSocket] Client error", error);
+      clients.delete(ws);
+    });
+  });
+
+  // Start server
+  server.listen(config.port, config.host, () => {
+    logger.info("[Server] HTTP and WebSocket server listening", {
+      http: `http://${config.host}:${config.port}`,
+      websocket: `ws://${config.host}:${config.port}/ws`,
+      auth: config.authEnabled ? "enabled" : "disabled",
+    });
+
+    // Also print to console for visibility
+    logger.info(`
+╔════════════════════════════════════════
+║         Game-Servum Agent              
+╠════════════════════════════════════════
+║  HTTP:      http://${config.host}:${config.port}      
+║  WebSocket: ws://${config.host}:${config.port}/ws     
+║  Auth:      ${config.authEnabled ? "enabled " : "disabled"}
+╚════════════════════════════════════════
+    `);
+  });
+
+  // Graceful shutdown handler
+  async function gracefulShutdown(signal: string) {
+    logger.info(`[Shutdown] Received ${signal}, shutting down gracefully...`);
+
+    const isRestart = (process as any).__gameServumRestart === true;
+    if (isRestart) {
+      logger.info(
+        "[Shutdown] This is a restart — will trigger service restart",
+      );
+    }
+
+    // Stop periodic update checks
+    stopAutoUpdateCheck();
+
+    // Stop all running game servers
+    await shutdownAllServers();
+
+    // Close WebSocket connections
+    clients.forEach((client) => {
+      client.close();
+    });
+    clients.clear();
+
+    // Close WebSocket server first — it shares the HTTP server and
+    // prevents server.close() from completing while it's still attached
+    await new Promise<void>((resolve) => {
+      wss.close(() => {
+        logger.info("[Shutdown] WebSocket server closed");
+        resolve();
+      });
+    });
+
+    // Close HTTP server (releases the port)
+    await new Promise<void>((resolve) => {
+      server.close(() => {
+        logger.info("[Shutdown] HTTP server closed");
+        resolve();
+      });
+    });
+
+    // Shutdown logger (flush remaining buffer)
+    logger.shutdown();
+
+    // For restart: on Windows, use sc.exe to restart the service.
+    // In dev mode, just exit and let the developer restart manually.
+    if (isRestart) {
+      const scriptPath = process.argv[1] || "";
+      const isDevMode = scriptPath.endsWith(".ts");
+
+      if (isDevMode) {
+        logger.info(
+          "[Shutdown] Dev mode — skipping service restart (restart manually)",
+        );
+      } else if (process.platform === "win32") {
+        // Spawn detached sc.exe to restart the service after we exit
+        try {
+          const child = spawn(
+            "cmd.exe",
+            [
+              "/c",
+              "timeout",
+              "/t",
+              "2",
+              "/nobreak",
+              ">",
+              "nul",
+              "&&",
+              "sc",
+              "start",
+              "GameServumAgent",
+            ],
+            { detached: true, stdio: "ignore", windowsHide: true },
+          );
+          child.unref();
+          logger.info("[Shutdown] Service restart scheduled via sc.exe");
+        } catch (err) {
+          logger.error("[Shutdown] Failed to schedule service restart", err);
+        }
+      }
+    }
+
+    process.exit(0);
+  }
+
+  // Handle termination signals
+  process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+  process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+}
+
+main().catch((err) => logger.error("[Server] Fatal error:", err));
+
+export { clients };

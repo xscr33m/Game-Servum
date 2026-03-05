@@ -1,0 +1,30 @@
+{
+  "name": "game-servum",
+  "version": "0.9.0",
+  "description": "Web-based GameServer management with SteamCMD",
+  "private": true,
+  "workspaces": [
+    "packages/shared",
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "clean": "npm cache clean --force && node -e \"const fs = require('fs'); const path = require('path'); const dirs = ['packages/shared/dist', 'server/dist', 'client/dist', 'dist']; dirs.forEach(d => { const p = path.join(process.cwd(), d); if (fs.existsSync(p)) fs.rmSync(p, {recursive: true}); });\"",
+    "dev": "concurrently \"npm run dev -w @game-servum/shared\" \"npm run dev:server\" \"npm run dev:client\"",
+    "update:check": "node scripts/update-packages.mjs --verbose --dry-run",
+    "update:install": "node scripts/update-packages.mjs --verbose --install",
+    "dev:server": "npm run dev --workspace=server",
+    "dev:client": "npm run dev --workspace=client",
+    "build": "npm run build -w @game-servum/shared && npm run build --workspace=server && npm run build --workspace=client",
+    "build:agent": "npm run build -w @game-servum/shared && npm run build --workspace=server && node scripts/build-agent-windows.mjs",
+    "build:dashboard": "npm run build -w @game-servum/shared && npm run build --workspace=client && node scripts/build-dashboard-windows.mjs",
+    "build:linux": "npm run build -w @game-servum/shared && npm run build --workspace=client && node scripts/build-dashboard-linux.mjs",
+    "build:all": "npm run build:agent && npm run build:dashboard && npm run build:linux"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

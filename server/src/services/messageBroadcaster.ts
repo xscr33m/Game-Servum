@@ -1,0 +1,139 @@
+/**
+ * Scheduled Message Broadcaster Service
+ *
+ * Sends recurring RCON messages to players at configurable intervals.
+ * Use cases: server name reminders, rules links, Discord invites, etc.
+ *
+ * Each server can have multiple messages, each with its own interval.
+ * Messages are sent via BattlEye RCON using `say -1 <message>`.
+ * Timers are started when a server starts and cleared when it stops.
+ */
+
+import { broadcast, logger } from "../index.js";
+import {
+  getEnabledMessagesByServerId,
+  getServerById,
+  getAllServers,
+} from "../db/index.js";
+import { getRconConnection } from "./playerTracker.js";
+import { resolveVariables } from "./variableResolver.js";
+
+// Active message timers per server: Map<serverId, Map<messageId, timer>>
+const messageTimers = new Map<
+  number,
+  Map<number, ReturnType<typeof setInterval>>
+>();
+
+/**
+ * Start broadcasting all enabled messages for a server
+ */
+export function startMessageBroadcaster(serverId: number): void {
+  // Clear any existing timers for this server
+  stopMessageBroadcaster(serverId);
+
+  const server = getServerById(serverId);
+  if (!server || server.status !== "running") {
+    return;
+  }
+
+  const messages = getEnabledMessagesByServerId(serverId);
+  if (messages.length === 0) {
+    return;
+  }
+
+  const timers = new Map<number, ReturnType<typeof setInterval>>();
+
+  for (const msg of messages) {
+    const intervalMs = msg.intervalMinutes * 60 * 1000;
+
+    // Start the interval — first message fires after the interval, not immediately
+    const timer = setInterval(() => {
+      sendMessage(serverId, msg.message);
+    }, intervalMs);
+
+    timers.set(msg.id, timer);
+
+    logger.info(
+      `[MessageBroadcaster] Server ${serverId}: scheduled message #${msg.id} every ${msg.intervalMinutes} min`,
+    );
+  }
+
+  messageTimers.set(serverId, timers);
+
+  logger.info(
+    `[MessageBroadcaster] Server ${serverId}: ${messages.length} message(s) active`,
+  );
+}
+
+/**
+ * Stop all message timers for a server
+ */
+export function stopMessageBroadcaster(serverId: number): void {
+  const timers = messageTimers.get(serverId);
+  if (timers) {
+    for (const timer of timers.values()) {
+      clearInterval(timer);
+    }
+    messageTimers.delete(serverId);
+  }
+}
+
+/**
+ * Reload messages for a server (called after add/edit/delete)
+ */
+export function reloadMessageBroadcaster(serverId: number): void {
+  const server = getServerById(serverId);
+  if (server && server.status === "running") {
+    startMessageBroadcaster(serverId);
+  }
+}
+
+/**
+ * Send a single RCON message
+ */
+async function sendMessage(
+  serverId: number,
+  messageTemplate: string,
+): Promise<void> {
+  // Resolve all template variables
+  const message = resolveVariables(serverId, messageTemplate);
+
+  const rcon = getRconConnection(serverId);
+  if (rcon && rcon.isConnected()) {
+    try {
+      await rcon.sendCommand(`say -1 ${message}`);
+      logger.info(`[MessageBroadcaster] Server ${serverId}: sent "${message}"`);
+    } catch (err) {
+      logger.error(
+        `[MessageBroadcaster] Server ${serverId}: failed to send message:`,
+        err,
+      );
+    }
+  } else {
+    logger.warn(
+      `[MessageBroadcaster] Server ${serverId}: RCON not connected, skipping message`,
+    );
+  }
+}
+
+/**
+ * Initialize message broadcasters for all running servers (called on app startup)
+ */
+export function initializeMessageBroadcasters(): void {
+  const servers = getAllServers();
+  let count = 0;
+
+  for (const server of servers) {
+    if (server.status === "running") {
+      const messages = getEnabledMessagesByServerId(server.id);
+      if (messages.length > 0) {
+        startMessageBroadcaster(server.id);
+        count++;
+      }
+    }
+  }
+
+  logger.info(
+    `[MessageBroadcaster] Initialized broadcasters for ${count} server(s)`,
+  );
+}

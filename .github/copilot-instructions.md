@@ -1,0 +1,455 @@
+# Game-Servum - AI Coding Instructions
+
+> **For AI coding agents:** Everything you need is in this file. All context is inline for maximum productivity.
+>
+> **For human developers:** Organized topic-specific documentation is available in [`docs/`](../docs/) — see root [README.md](../README.md) for the complete list.
+>
+> **Optional deep-dive:** Reference detailed docs only when you need comprehensive coverage of specific topics (architecture, troubleshooting, etc.).
+
+## Quick Reference
+
+**Critical Files:**
+
+- [`server/src/services/gameDefinitions.ts`](../server/src/services/gameDefinitions.ts) — Add new game server support here
+- [`packages/shared/src/constants/index.ts`](../packages/shared/src/constants/index.ts) — Version constants (must match `package.json`)
+- [`server/src/db/index.ts`](../server/src/db/index.ts) — Database schema & migrations (manual, no ORM)
+- [`client/src/contexts/BackendContext.tsx`](../client/src/contexts/BackendContext.tsx) — Multi-agent connection management
+- [`electron/main/main-unified.js`](../electron/main/main-unified.js) — Electron entry point (Dashboard only)
+- [`service/winsw/GameServumAgent.xml`](../service/winsw/GameServumAgent.xml) — WinSW Windows Service configuration for Agent
+- [`client/src/pages/Settings.tsx`](../client/src/pages/Settings.tsx) — Settings page with Data Management section
+
+**Service orchestration:** `server/src/index.ts` coordinates startup → `serverProcess.ts` spawns games → triggers `playerTracker`, `scheduler`, `messageBroadcaster`, `updateChecker`
+
+**Data mutation pattern:** Always call `saveDatabase()` after any DB write (sql.js is in-memory)
+
+**WebSocket broadcast:** Import `broadcast` from `../index.js` in services → push real-time updates to all clients
+
+## Architecture Overview
+
+Monorepo for a web-based game server management tool using SteamCMD.
+
+**Platform Support:**
+
+- **Agent (backend)**: Windows only (game servers require Windows)
+- **Dashboard (frontend)**: Windows, Linux, macOS (browser or Electron)
+- **Development**: Any platform with Node.js 20+
+
+| Layer         | Stack                                                                 | Location              |
+| ------------- | --------------------------------------------------------------------- | --------------------- |
+| Frontend      | React 19 + Vite 7 + TypeScript + Tailwind CSS 4 + shadcn/ui           | `client/`             |
+| Backend       | Node.js + Express + TypeScript + sql.js (SQLite in-memory)            | `server/`             |
+| Shared Types  | TypeScript types & constants package                                  | `packages/shared/`    |
+| Agent Service | WinSW Windows Service + Node.js + esbuild bundle                      | `service/`, `server/` |
+| Desktop       | Electron 40 (Dashboard only)                                          | `electron/`           |
+| Communication | REST (`/api/*` + `/api/v1/*`) + WebSocket (`/ws`) + optional JWT auth | —                     |
+
+## Development Commands
+
+```bash
+npm run dev                  # Starts shared (watch) + client (:5173) + server (:3001) via concurrently
+npm run dev:client           # Vite dev server with HMR + proxy to backend
+npm run dev:server           # tsx watch mode
+npm run build                # Build shared → server (tsc) → client (vite build)
+npm run build:agent          # Build Agent-only Windows installer (~100 MB)
+npm run build:dashboard      # Build Dashboard-only Windows installer (~90 MB)
+npm run build:linux          # Build Dashboard AppImage for Linux (Dashboard-only, no Agent)
+npm run build:all            # Build all platform-specific installers (only works on respective platform)
+npm run update:check         # Check all workspace packages for available updates (dry-run)
+npm run update:install       # Update workspace packages to latest versions
+npm run clean                # Clear build caches and dist folders
+```
+
+**Platform-Specific Build Requirements:**
+
+- `build:agent` requires Windows (uses NSIS installer, bundles Node.js runtime + WinSW service wrapper)
+- `build:dashboard` requires Windows (uses Squirrel.Windows installer, Electron only)
+- `build:linux` requires Linux build environment (uses `mksquashfs`, `AppImage` tools)
+- `build:all` builds only what's possible on current platform (Windows: Agent+Dashboard, Linux: Dashboard AppImage)
+- `dev` and `build` work on any platform but agent runtime is Windows-only
+
+**⚠️ Important:** For a full release, build Windows installers on Windows, then build Linux AppImage on Linux separately.
+
+**Testing & Linting:**
+
+- ❌ No test framework configured
+- ❌ No linting on server side
+- ✅ ESLint configured for client (see `client/eslint.config.js`)
+
+## TypeScript & Module Conventions
+
+- **ES Modules everywhere**: Use `.js` extensions in server imports even for `.ts` files (`import { foo } from "./bar.js"`)
+- **Client path alias**: `@/` → `src/` (configured in `vite.config.ts`)
+- **Shared types**: `@game-servum/shared` package in `packages/shared/` — shared types are re-exported from both `client/src/types/index.ts` and `server/src/types/index.ts`
+- **Local-only types**: Server keeps `PlayerSession`, `AppConfig` locally; Client keeps `GameDefinition`, `LogFile`, `ArchiveSession` locally
+- **npm workspaces**: Root `package.json` manages `packages/shared`, `client`, `server`
+
+## Backend Patterns
+
+### Service Layer (`server/src/services/`)
+
+- `config.ts` — Loads `.env` via dotenv, resolves paths via env vars with fallback to project root: `steamcmd/`, `servers/`, `data/`. Environment variables:
+  - `GAME_SERVUM_ROOT` — Overrides auto-detected root directory (used by NSIS installer)
+  - `STEAMCMD_PATH`, `SERVERS_PATH`, `DATA_PATH`, `LOGS_PATH` — Custom paths (relative to root or absolute)
+  - `PORT` (default: 3001), `HOST` (default: 0.0.0.0), `CORS_ORIGINS` (default: \*)
+  - `AUTH_ENABLED` (default: true), `JWT_SECRET` — Authentication config (enabled by default for security)
+- `agentSettings.ts` — Manages Windows Service auto-start toggle via `sc.exe` commands. `getAutoStartEnabled()` checks `sc qc GameServumAgent` (`AUTO_START=2`), `setAutoStartEnabled()` uses `sc config start= auto/demand`. Also provides `getServiceState()` for service status. Platform guard: returns false/null on non-Windows
+- `agentUpdater.ts` — Standalone self-updater using GitHub Releases API. Checks `https://api.github.com/repos/xscr33m/Game-Servum/releases/latest` for update ZIPs. Downloads to `data/.update-staging/`, installs via PowerShell script (stop service → extract → start). State persisted to `data/.agent-update-state.json`. Auto-check timer: configurable interval (default 4h). Broadcasts WebSocket events: `update:detected`, `update-check:complete`, `update:applied`, `update:restart`
+- `auth.ts` — API-Key + Password authentication. PBKDF2 (100k iterations, SHA-512) password hashing, SHA-256 key hashing, JWT session tokens (24h). Auto-generates initial credentials on first start when auth enabled, writes `CREDENTIALS.txt` to data directory
+- `gameDefinitions.ts` — `GAME_DEFINITIONS` is a `Record<string, GameDefinition>` keyed by game ID. Currently defines: `dayz`, `7dtd`, `ark`. Each entry has optional `postInstall()` hook, optional `workshopAppId`, `portCount`, `portStride`, `queryPortOffset`, and `configFiles[]`
+- `serverProcess.ts` — Spawns game servers, tracks PIDs in `runningProcesses` Map, handles graceful shutdown (`taskkill` on Windows). Crash protection: max 3 crashes in 10 minutes, 10s restart delay. On start: resolves launch param placeholders via `variableResolver`, appends mod params, archives old logs, starts player tracking + scheduler + message broadcaster + update checker
+- `serverInstall.ts` — Drives SteamCMD to install/update game servers, tracks active installs in a Map. Progress tracking via `console_log.txt` polling (500ms). Exports `updateServer()` for validate+update flows
+- `modManager.ts` — Workshop mod install/uninstall via SteamCMD, copies mods to server directory as `@SafeModName`, generates `-mod=` and `-serverMod=` launch params. Update checking via Steam Workshop API (`time_updated` comparison). Supports `cancelModInstallation()`
+- `playerTracker.ts` — Dual tracking: RCON polling (primary, every 15s) + ADM log parsing (historical backfill). Auto-reconnect RCON on disconnect (30s delay). Character ID sync from ADM logs
+- `steamcmd.ts` — Downloads SteamCMD, handles interactive login (including Steam Guard flow) with state machine: `idle → started → awaiting_guard → success/failed`. 60s login timeout
+- `rcon.ts` — Full BattlEye RCON protocol implementation over UDP. CRC32 validation, keep-alive (30s), multi-part response reassembly, player list parsing
+- `scheduler.ts` — Configurable restart interval (hours) with pre-restart RCON warnings at configurable minute offsets. Warning message templates support `{MINUTES}` placeholder. Exports `startSchedule()`, `clearSchedule()`, `initializeSchedules()`
+- `messageBroadcaster.ts` — Sends recurring RCON messages at per-message configurable intervals. Uses `variableResolver` for template variables. Exports `startMessageBroadcaster()`, `stopMessageBroadcaster()`, `reloadMessageBroadcaster()`, `initializeMessageBroadcasters()`
+- `updateChecker.ts` — Checks for game server updates (SteamCMD `app_info_print` + buildid comparison) and mod updates (Workshop API). Auto-restart on update: configurable delay, RCON warning schedule, stop → update → restart. First check 30s after server starts. Broadcasts `update:detected` and `update:restart` WS events
+- `variableResolver.ts` — Resolves `{VARIABLE}` placeholders in templates. Built-in variables: `{SERVER_NAME}`, `{PORT}`, `{PLAYER_COUNT}`, `{NEXT_RESTART}`, `{MINUTES}`. Also loads custom per-server variables from DB. Prevents overriding builtins
+- `logManager.ts` — Archives `.ADM`, `.RPT`, `.log` files to timestamped subfolders under `profiles/_log_archives/`. Configurable retention (default 30 days, 0=keep forever). Path traversal prevention, log-extension whitelist
+- `systemMonitor.ts` — CPU (via `os.cpus()` delta), memory (`os.totalmem()`/`os.freemem()`), disk (PowerShell `Get-CimInstance`), network (`netstat -e` with rate calculation)
+- `logger.ts` — App-level logging service (not game server logs). Zero-dependency, uses only Node.js `fs`. Daily rotation, configurable buffering (100 entries), auto-cleanup based on retention. Logs to `{logsPath}/{context}-{date}.log`. Supports runtime settings updates via `updateSettings()`. Buffer flushes every 5s
+
+### Database (`server/src/db/index.ts`)
+
+- Uses **sql.js** (SQLite compiled to WASM, runs in-memory). Must call `saveDatabase()` after every mutation to flush to disk at `data/gameservum.db`
+- All queries use raw SQL with positional `?` params and manual row-to-object mapping (no ORM)
+- Schema migrations are manual checks in `runMigrations()` using `PRAGMA table_info()` — add new columns by checking if they exist first
+- Tables:
+  - `steam_config` — Steam credentials
+  - `game_servers` — Server instances (18+ columns including `profiles_path`, `auto_restart`)
+  - `server_mods` — Workshop mods per server (includes `workshop_updated_at`)
+  - `player_sessions` — Player connect/disconnect tracking (includes `character_id`)
+  - `api_keys` — Auth API keys (created via migration)
+  - `log_settings` — Per-server log archiving/retention config
+  - `server_schedules` — Scheduled restart config
+  - `server_messages` — Recurring RCON broadcast messages
+  - `server_variables` — Custom template variables per server
+  - `update_restart_settings` — Auto-update-restart config
+  - `app_settings` — Global application settings
+
+### Middleware (`server/src/middleware/`)
+
+- `auth.ts` — JWT session token verification. Skips auth when `AUTH_ENABLED=false` (default). Public paths: `/api/v1/health`, `/api/v1/info`, `/api/v1/auth/connect`, `/api/v1/auth/refresh`
+
+### Routes (`server/src/routes/`)
+
+- `auth.ts` — `/api/v1/auth/*` endpoints (connect, refresh, key CRUD, password change)
+- `servers.ts` — All `/api/v1/servers/*` endpoints. Major endpoint groups:
+  - Server CRUD: `GET /`, `GET /:id`, `POST /`, `DELETE /:id` (requires name confirmation)
+  - Lifecycle: `POST /:id/start`, `POST /:id/stop`, `GET /:id/requirements`
+  - Games: `GET /games/list`, `GET /games/suggest-port/:gameId`, `POST /games/check-port-conflict`
+  - Settings: `PUT /:id/launch-params`, `PUT /:id/profiles-path`, `PUT /:id/port`, `PUT /:id/name`, `PUT /:id/auto-restart`
+  - Config/Files: `GET|PUT /:id/config`, `GET|PUT /:id/files/:filename` (whitelist: `ban.txt`, `whitelist.txt`, `BEServer_x64.cfg`)
+  - Mods: `GET|POST /:id/mods`, `PUT|DELETE /:id/mods/:modId`, `POST /:id/mods/:modId/reinstall`, `POST /:id/mods/reorder`
+  - Players: `GET /:id/players`, `POST|DELETE /:id/players/whitelist`, `POST|DELETE /:id/players/ban`
+  - Logs: `GET /:id/logs`, log content, archives, settings
+  - Schedule: `GET|PUT /:id/schedule`
+  - Messages: CRUD at `/:id/messages`
+  - Variables: CRUD at `/:id/variables` + `GET /:id/variables/builtins`
+  - Updates: `GET|PUT /:id/update-restart`, `POST /:id/check-updates`
+  - Utilities: `POST /:id/open-folder`, `GET /:id/disk-usage`, `POST /:id/update`
+  - Also mounted at legacy prefix `/api/servers/*`
+- `steamcmd.ts` — `/api/v1/steamcmd/*` endpoints (status, install, login, guard, logout, install-app). Also at `/api/steamcmd/*`
+- `system.ts` — `/api/v1/system/*` endpoints (metrics, settings CRUD). Also at `/api/system/*`
+- `logs.ts` — `/api/v1/logs/*` endpoints for app-level logs (not game server logs): `GET|PUT /settings`, `GET /files`, `GET /files/:filename`, `DELETE /files/:filename`. List, read, delete log files, manage logger settings
+
+### Express App (`server/src/app.ts`)
+
+- Public endpoints (no auth): `GET /api/v1/health` (status, version, uptime), `GET /api/v1/info` (version, apiVersion, minCompatibleVersion, authEnabled, features[])
+- Agent status page: `GET /` (localhost-only HTML page showing agent status, version, uptime, features)
+- Features advertised: `steamcmd`, `mods`, `rcon`, `player-tracking`, `scheduler`
+
+### WebSocket
+
+- `broadcast(type, payload)` exported from `server/src/index.ts` — sends to all connected clients
+- Message types follow `domain:action` pattern. Full list in `packages/shared/src/types/websocket.ts` under `WSMessageType` (26 types)
+- Key event domains: `server:*`, `install:*`, `steamcmd:*`, `mod:*`, `player:*`, `schedule:*`, `message:*`, `update:*`
+- Services import `broadcast` directly from `../index.js` to push real-time updates
+- WebSocket auth: JWT token passed via `?token=` query param when `AUTH_ENABLED=true`
+
+### Server Startup Sequence (`server/src/index.ts`)
+
+1. Initialize database
+2. `ensureInitialCredentials()` — auto-generates API key/password on first launch
+3. `restoreServerStates()` — reattaches to still-running server PIDs, resets stale `starting`/`stopping` statuses
+4. `initializeSchedules()` — restarts scheduled timers for running servers
+5. `initializeMessageBroadcasters()` — restarts recurring RCON messages for running servers
+6. `startAutoUpdateCheck(4)` — begins checking GitHub Releases for agent updates every 4 hours
+7. HTTP + WebSocket listen
+8. Graceful shutdown: `shutdownAllServers()`, close all WS clients, 15s force-exit timer
+
+## Frontend Patterns
+
+### Structure
+
+- **Pages**: `Dashboard.tsx` (server list + onboarding wizard + system monitor), `ServerDetail.tsx` (6-tab server management), `Settings.tsx` (global app settings + auto-update controls), `Logs.tsx` (app-level logs viewer + settings)
+- **Server detail tabs**: `components/server/` — `OverviewTab`, `ConfigTab`, `LogsTab`, `ModsTab`, `PlayersTab`, `SettingsTab`, `UpdateCheckDialog`
+- **UI primitives**: `components/ui/` (shadcn/ui — don't modify directly)
+- **Dialogs**: `AddServerDialog.tsx`, `DeleteServerDialog.tsx`, `AddAgentDialog.tsx`, `UpdateNotification.tsx`
+- **Onboarding**: `components/onboarding/` — `OnboardingWizard.tsx` with step components (`WelcomeStep`, `ConnectAgentStep`, `SteamCmdInstallStep`, `SteamLoginStep`, `SteamGuardStep`, `CompleteStep`). Dashboard flow includes agent connection step
+- **Multi-agent**: `AgentSelector.tsx` for switching between connected agents, `AppSettingsPanel.tsx` for global settings
+
+### Multi-Agent Architecture (`client/src/contexts/BackendContext.tsx`)
+
+- `BackendContext` manages multiple `BackendConnection` objects for connecting to remote agents
+- Creates scoped API client + WebSocket manager per active connection
+- Token lifecycle: auto-refresh at 80% of JWT lifetime, re-authenticate on `ApiAuthError`
+- Auto-reconnect: polls health endpoint every 5s when WS disconnects
+
+### API Client (`client/src/lib/api.ts`)
+
+- `createApiClient(connection)` factory — creates typed fetch wrappers scoped to a `BackendConnection`
+- Sub-clients accessed via `apiClient.steamcmd.*`, `apiClient.servers.*`, `apiClient.system.*`, `apiClient.health.*`, `apiClient.auth.*`
+- All calls proxied to `:3001` in dev via Vite config (`/api` and `/ws` proxy rules)
+
+### WebSocket Hook (`client/src/hooks/useWebSocket.ts`)
+
+- `useWebSocket()` returns `{ subscribe, isConnected }` from the `BackendContext`
+- `WebSocketManager` class handles the actual connection per agent
+- Auto-reconnects on abnormal closure (3s delay). Use `subscribe(handler)` to register message handlers — returns an unsubscribe function for cleanup in `useEffect`
+
+### Credential Store (`client/src/lib/credentialStore.ts`)
+
+- Plaintext storage: localStorage for browser/Dashboard, JSON file for Electron (via IPC)
+- Strips session tokens before persisting to reduce exposure
+- ElectronCredentialStore: pre-loads connections synchronously before React renders
+
+### Electron Settings (`client/src/lib/electronSettings.ts`)
+
+- Persistent settings store that survives reinstalls — stores in `Documents/Game Servum/app-settings.json` (not Electron userData)
+- Falls back to localStorage in browser mode
+- Used for: auto-update preferences, system monitoring toggle, UI preferences
+
+### Routing (`client/src/App.tsx`)
+
+- Uses `HashRouter` in Electron (`window.electronAPI` detected) for `file://` compat, otherwise `BrowserRouter`
+- Routes: `/` → Dashboard, `/server/:id` → ServerDetail, `/server/:id/:tab` → ServerDetail with tab, `/settings` → Settings, `/logs` → Logs
+
+### Platform-Specific Features (`client/src/pages/Settings.tsx`)
+
+- **Launch on Startup**: Only available on Windows (uses `app.setLoginItemSettings()`)
+  - Linux AppImages are portable and lack fixed installation paths, making auto-start unreliable
+  - UI conditionally shows this setting only when `isWindows === true` (detected via `window.electronAPI.app.getPlatform()`)
+- **Minimize to Tray**: Works on all platforms (Windows, Linux, macOS)
+- **Auto-Update**: Electron-only feature (works on all platforms)
+
+## Shared Package (`packages/shared/`)
+
+- **Constants**: `APP_VERSION`, `API_VERSION`, `MIN_COMPATIBLE_AGENT_VERSION`, `compareSemVer()`, `isAgentCompatible()`, `DEFAULT_AGENT_PORT`, `DEFAULT_DASHBOARD_PORT`, `TOKEN_LIFETIME_SECONDS`
+- **Types**: `ServerStatus` (7 states: `installing`, `stopped`, `starting`, `running`, `stopping`, `error`, `updating`), `GameServer`, `ServerMod`, `ModStatus`, `WSMessageType` (28 event types), API request/response types
+
+## Agent Windows Service (`service/winsw/`)
+
+The Agent runs as a native Windows Service via WinSW (v3.0.0-alpha.11):
+
+- **Service name**: `GameServumAgent`, display name "Game Servum Agent"
+- **Recovery**: auto-restart on failure (10s, 10s, 30s delays), reset after 1 hour
+- **Data directory**: Configurable during installation (default: `C:\ProgramData\Game Servum\`), stored as system env var `GAME_SERVUM_ROOT`. NSIS installer patches WinSW XML at install time replacing `{{LOGPATH}}` and `{{DATA_DIR}}` placeholders with actual paths (WinSW cannot expand env vars reliably on first install)
+- **Installer**: NSIS (`scripts/nsis/agent-installer.nsi`) — installs to `Program Files\Game Servum Agent\`
+- **Auto-start**: managed via `sc.exe` (AUTO_START/DEMAND_ONLY), exposed through REST API
+- **Self-updater**: `agentUpdater.ts` checks GitHub Releases API, downloads update ZIP, runs PowerShell script to stop service → extract → restart
+- **Graceful shutdown**: 30s stop timeout in WinSW config
+- No Electron, no tray icon — fully managed via Dashboard over REST API
+
+## Electron (`electron/main/main-unified.js`)
+
+Dashboard-only Electron app (no agent code):
+
+- Single-instance lock, BrowserWindow + system tray
+- User data in `Documents/Game Servum` (Windows) or `~/.config/game-servum-dashboard/` (Linux)
+- IPC handlers: credential storage, app settings, logger, local logs, auto-updater
+- Uses `electron-updater` for Dashboard self-updates (GitHub Releases)
+- `app-settings.json` stores `auto_update_enabled`, `minimize_to_tray` preferences
+
+## Build System
+
+### Separate Builds (v1.1+)
+
+**Agent-only (`scripts/build-agent-windows.mjs`):**
+
+1. Build shared types (`tsc -p packages/shared`)
+2. Bundle server via **esbuild** → `agent.mjs` (ESM, node platform)
+3. Stage service files: `node.exe`, `agent.mjs`, `sql-wasm.wasm`, `GameServumAgent.exe` (WinSW), `.xml` config
+4. Build NSIS installer (`makensis` required on PATH)
+5. Create update ZIP (agent.mjs + sql-wasm.wasm only)
+6. Output: `Game-Servum-Agent-Setup-v{version}.exe` (~50 MB) + `Game-Servum-Agent-Update-v{version}.zip` (~20 MB)
+
+**Dashboard-only Windows (`scripts/build-dashboard-windows.mjs`):**
+
+1. Build shared types
+2. Build client via Vite (`--base=./`)
+3. Stage Electron project (no agent code)
+4. Package with `electron-builder` (Squirrel target)
+5. Output: `Game-Servum-Dashboard-Setup-v{version}.exe` (~90 MB) + `.nupkg` files for auto-update
+
+**Dashboard-only Linux (`scripts/build-dashboard-linux.mjs`):**
+
+1. Build shared types
+2. Build client via Vite
+3. Stage Electron project (Dashboard components only)
+4. Package with `electron-builder` (AppImage target)
+5. Output: `Game-Servum-Dashboard_v{version}.AppImage` (~80 MB)
+
+**Platform-specific paths:**
+
+- Windows: `Documents/Game Servum/`
+- Linux: `~/.config/game-servum-dashboard/` (Dashboard-only)
+- macOS: `~/Library/Application Support/Game Servum/`
+
+**Agent NSIS installer features:**
+
+- Installs to `C:\Program Files\Game Servum Agent\`
+- Data stored in configurable directory (default: `C:\ProgramData\Game Servum\`, preserved on uninstall)
+- Registers and starts `GameServumAgent` Windows Service
+- Adds Windows Firewall rule for TCP port 3001
+- Supports upgrade (stops service → updates files → restarts)
+- Migrates data from legacy Electron install (`Documents\Game Servum\`)
+- Uninstall removes service and install dir but preserves data
+
+**Important:**
+
+- Agent installer contains: Node.js runtime + agent.mjs + WinSW service wrapper (no Electron)
+- Dashboard installer contains: Electron + React frontend only
+- Linux builds contain ONLY the Dashboard. No Agent, no Node.js runtime, no game server management. Dashboard connects to remote Windows Agents over network.
+- **Agent runtime is Windows-only** (game servers require Windows)
+
+## Adding a New Game Server Definition
+
+Add entry to `GAME_DEFINITIONS` record in `server/src/services/gameDefinitions.ts`:
+
+```typescript
+mygame: {
+  id: "mygame",
+  name: "My Game",
+  appId: 123456,
+  workshopAppId: 123456,       // Only if workshop uses different App ID
+  executable: "server.exe",
+  defaultPort: 27015,
+  portCount: 1,                // Number of consecutive ports used
+  portStride: 1,               // Increment between server instances (defaults to portCount)
+  queryPortOffset: 1,          // Query port = defaultPort + offset
+  requiresLogin: false,
+  defaultLaunchParams: "-port={PORT}",
+  description: "Brief description",
+  configFiles: ["config.cfg"], // Optional: important config files
+  postInstall: async (installPath, serverName) => { /* optional setup */ },
+}
+```
+
+## Data Flow: Server Installation
+
+1. Client calls `apiClient.servers.create()` → `POST /api/servers`
+2. Route creates DB entry via `createServer()`, starts `installServer()` in background (not awaited)
+3. `serverInstall.ts` spawns SteamCMD process, polls `console_log.txt` for progress, broadcasts `install:progress` via WebSocket
+4. Client receives `install:progress` and `install:output` messages in real-time
+5. On completion, `install:complete` broadcast + `postInstall()` hook runs if defined
+
+## Data Flow: Server Start
+
+1. `checkServerRequirements()` validates executable, config, profiles, dependencies (DirectX, VC++ Runtime, BattlEye)
+2. `variableResolver` resolves all `{VARIABLE}` placeholders in launch params
+3. `modManager.generateModParams()` appends `-mod=` params
+4. `logManager.archiveLogsBeforeStart()` archives previous session logs
+5. Server process spawned, PID tracked
+6. On spawn: updates DB status → broadcasts `server:status` → starts player tracking → starts scheduler → starts message broadcaster → starts update checker
+
+## Version Management & Releases
+
+**Version synchronization is critical** — two locations must always match:
+
+1. **`package.json`** (root) — use `npm version major|minor|patch` to update
+2. **`packages/shared/src/constants/index.ts`** — manually update `APP_VERSION` to match
+
+**Release process**:
+
+1. Update version in both locations (must match exactly)
+2. Build installers:
+   - `npm run build:agent` → `dist/Game-Servum-Agent-v{version}.exe`
+   - `npm run build:dashboard` → `dist/Game-Servum-Dashboard-v{version}.exe`
+   - `npm run build:linux` → `dist/Game-Servum-Dashboard-v{version}.AppImage`
+   - Or use `npm run build:all` to build everything
+3. Test all installation scenarios (Agent + Dashboard on same or different machines)
+4. Create GitHub Release with tag `v{version}` (e.g., `v1.2.0`)
+5. Upload all installers as release assets
+6. Auto-updater polls GitHub Releases API every 4 hours (configurable)
+
+**Platform-specific builds:**
+
+- Agent Windows installer uses NSIS (requires `makensis` on PATH)
+- Dashboard Windows installer uses Squirrel.Windows (no additional dependencies required)
+- Linux Dashboard AppImage requires Linux build environment: `npm run build:linux`
+- Agent runtime is Windows-only (game servers require Windows)
+- Dashboard works on Windows, Linux, macOS (connects to remote Windows Agents)
+
+## Code Style
+
+- Prefer `function` declarations over arrow functions for top-level/exported functions
+- Use explicit return types on exported functions
+- Error handling: Catch, log with `[ServiceName]` prefix, broadcast error state — don't throw unhandled
+- API mutation responses: `{ success: boolean, message: string }` pattern
+- Console logging uses bracket prefixes: `[Install]`, `[ServerProcess]`, `[DayZ]`, `[PlayerTracker]`, `[Scheduler]`, `[MessageBroadcaster]`, `[UpdateChecker]`, `[RCON]`, `[LogManager]`, `[SystemMonitor]`, `[Logger]`, `[LogsAPI]`, `[AutoUpdater]`
+
+## Common Pitfalls & Debugging
+
+**Database mutations without save:**
+
+```typescript
+// ❌ WRONG - changes lost on restart
+db.run("UPDATE game_servers SET status = ? WHERE id = ?", [
+  "running",
+  serverId,
+]);
+
+// ✅ CORRECT - persists to disk
+db.run("UPDATE game_servers SET status = ? WHERE id = ?", [
+  "running",
+  serverId,
+]);
+saveDatabase();
+```
+
+**Import extensions in server code:**
+
+```typescript
+// ❌ WRONG - TypeScript won't resolve
+import { foo } from "./bar";
+
+// ✅ CORRECT - ES Modules require .js extension even for .ts files
+import { foo } from "./bar.js";
+```
+
+**WebSocket broadcast in services:**
+
+```typescript
+// ✅ Import broadcast function from server index
+import { broadcast } from "../index.js";
+
+// Then use it to push real-time updates
+broadcast("server:status", { serverId, status: "running" });
+```
+
+**Database migrations:**
+
+```typescript
+// Check if column exists before adding (manual migration pattern)
+const columns = db.exec(`PRAGMA table_info(game_servers)`)[0];
+const hasColumn = columns.values.some((row) => row[1] === "new_column");
+if (!hasColumn) {
+  db.run(`ALTER TABLE game_servers ADD COLUMN new_column TEXT DEFAULT ''`);
+  saveDatabase();
+}
+```
+
+**Debugging server processes:**
+
+- Check `data/gameservum.db` for server states (use SQLite browser)
+- Monitor WebSocket messages in browser DevTools Network tab
+- Check `data/logs/` for agent logs (daily rotation)
+- Game server logs in `servers/{game}/{serverName}/profiles/`
+
+**Port conflicts:**
+
+- Each server needs `portCount` consecutive ports starting at `port`
+- Port suggestions use `portStride` (default = `portCount`) between instances
+- Always check for conflicts with `POST /api/v1/servers/games/check-port-conflict`

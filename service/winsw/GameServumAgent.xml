@@ -1,0 +1,40 @@
+<service>
+  <!-- Service identity -->
+  <id>GameServumAgent</id>
+  <name>Game Servum Agent</name>
+  <description>Game server management agent for Game Servum. Manages SteamCMD game servers, provides REST API and WebSocket for remote Dashboard connections.</description>
+
+  <!-- Executable & arguments -->
+  <executable>%BASE%\node.exe</executable>
+  <arguments>"%BASE%\agent.mjs"</arguments>
+  <startmode>Automatic</startmode>
+
+  <!-- Environment variables -->
+  <!-- {{DATA_DIR}} is replaced by the NSIS installer with the actual data directory path -->
+  <env name="GAME_SERVUM_ROOT" value="{{DATA_DIR}}" />
+  <env name="NODE_ENV" value="production" />
+
+  <!-- Working directory -->
+  <workingdirectory>%BASE%</workingdirectory>
+
+  <!-- Service recovery: restart on failure -->
+  <onfailure action="restart" delay="10 sec" />
+  <onfailure action="restart" delay="10 sec" />
+  <onfailure action="restart" delay="30 sec" />
+  <resetfailure>1 hour</resetfailure>
+
+  <!-- Graceful shutdown: send Ctrl+C (SIGINT equivalent) -->
+  <stopparentprocessfirst>false</stopparentprocessfirst>
+  <stoptimeout>30 sec</stoptimeout>
+
+  <!-- Logging (WinSW wrapper logs, not application logs) -->
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>3</keepFiles>
+  </log>
+  <!-- {{LOGPATH}} is replaced by the NSIS installer with the actual log directory path -->
+  <logpath>{{LOGPATH}}</logpath>
+
+  <!-- Delay auto-start to allow network services to initialize -->
+  <delayedAutoStart>true</delayedAutoStart>
+</service>

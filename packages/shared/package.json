@@ -1,0 +1,21 @@
+{
+  "name": "@game-servum/shared",
+  "version": "0.9.0",
+  "type": "module",
+  "description": "Shared types and constants for Game-Servum",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput"
+  },
+  "devDependencies": {
+    "typescript": "~5.8.0"
+  }
+}
