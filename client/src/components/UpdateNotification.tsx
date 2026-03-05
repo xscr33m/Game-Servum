@@ -67,12 +67,16 @@ export function UpdateNotification() {
     const unsubscribeError = api.onError((error) => {
       logger.error("[UpdateNotification] Error", error);
 
-      // Filter out 404 errors (private repo) — these are handled silently in main process
+      // Filter out expected errors (no production release, private repo, etc.)
       const errMsg = error.message || "";
-      if (errMsg.includes("404") || errMsg.includes("authentication token")) {
-        logger.info(
-          "[UpdateNotification] Repository is private or has no releases yet",
-        );
+      if (
+        errMsg.includes("404") ||
+        errMsg.includes("406") ||
+        errMsg.includes("Unable to find latest version") ||
+        errMsg.includes("authentication token") ||
+        errMsg.includes("Cannot parse releases feed")
+      ) {
+        logger.info("[UpdateNotification] No production release available yet");
         return;
       }
 

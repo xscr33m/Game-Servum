@@ -484,10 +484,16 @@ function dashboard_setupIPC() {
     } catch (err) {
       const errMsg = err.message || "";
 
-      // Handle 404 errors gracefully (private repo or no releases)
-      if (errMsg.includes("404") || errMsg.includes("authentication token")) {
+      // Handle expected errors gracefully (no production release, private repo, etc.)
+      if (
+        errMsg.includes("404") ||
+        errMsg.includes("406") ||
+        errMsg.includes("Unable to find latest version") ||
+        errMsg.includes("authentication token") ||
+        errMsg.includes("Cannot parse releases feed")
+      ) {
         logger.info(
-          "[AutoUpdater] Manual check: No public releases available (repository might be private)",
+          "[AutoUpdater] Manual check: No production release available yet",
         );
         return { success: true, updateInfo: null }; // Treat as "no updates available"
       }
@@ -722,11 +728,15 @@ function dashboard_setupAutoUpdater() {
     autoUpdater.on("error", (err) => {
       const errMsg = err.message || "";
 
-      // Handle 404 errors gracefully (private repo or no releases yet)
-      if (errMsg.includes("404") || errMsg.includes("authentication token")) {
-        logger.info(
-          "[AutoUpdater] No public releases available (repository might be private)",
-        );
+      // Handle expected errors gracefully (no production release, private repo, etc.)
+      if (
+        errMsg.includes("404") ||
+        errMsg.includes("406") ||
+        errMsg.includes("Unable to find latest version") ||
+        errMsg.includes("authentication token") ||
+        errMsg.includes("Cannot parse releases feed")
+      ) {
+        logger.info("[AutoUpdater] No production release available yet");
         // Don't send error to frontend — treat as "no update available"
         return;
       }

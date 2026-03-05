@@ -114,6 +114,20 @@ export async function checkForUpdates(): Promise<void> {
     });
 
     if (!response.ok) {
+      // 404 = no production release exists yet (e.g. only pre-releases)
+      if (response.status === 404) {
+        updateState.updateAvailable = false;
+        updateState.lastCheck = Date.now();
+        logger.info(
+          "[AgentUpdater] No production release found (only pre-releases or no releases yet)",
+        );
+        broadcast("update-check:complete", {
+          updateAvailable: false,
+          currentVersion: APP_VERSION,
+          latestVersion: APP_VERSION,
+        });
+        return;
+      }
       throw new Error(`GitHub API returned ${response.status}`);
     }
 
