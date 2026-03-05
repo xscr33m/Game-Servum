@@ -298,7 +298,7 @@ export function AgentControlPanel() {
     if (!activeConnection) return;
     try {
       await api.system.installUpdate();
-      toastSuccess("Agent is restarting to install update...");
+      // Toast comes via WebSocket "update:restart" event
       updateConnectionStatus(activeConnection.id, "reconnecting");
       setActionsMenuOpen(false);
     } catch (err) {

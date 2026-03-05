@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { FaDownload, FaSpinner, FaRocket, FaXmark } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { toastSuccess, toastError } from "@/lib/toast";
+import { toastError } from "@/lib/toast";
 import { logger } from "@/lib/logger";
 
 interface UpdateInfo {
@@ -61,7 +61,6 @@ export function UpdateNotification() {
       logger.info("[UpdateNotification] Update downloaded");
       setIsDownloaded(true);
       setDownloadProgress(null);
-      toastSuccess("Update downloaded — ready to install!");
     });
 
     const unsubscribeError = api.onError((error) => {
@@ -149,7 +148,7 @@ export function UpdateNotification() {
 
       {updateInfo.releaseNotes && (
         <p className="text-xs text-muted-foreground mb-3 line-clamp-2">
-          {updateInfo.releaseNotes}
+          {updateInfo.releaseNotes.replace(/<[^>]*>/g, "")}
         </p>
       )}
 

@@ -349,6 +349,9 @@ export async function installUpdate(): Promise<void> {
   });
 
   // Create a PowerShell script that performs the update
+  const logFile = path
+    .join(STAGING_DIR, "update-log.txt")
+    .replace(/\\/g, "\\\\");
   const psScript = `
 # Game Servum Agent Update Script
 # Auto-generated — do not edit
@@ -357,30 +360,57 @@ $ServiceName = "${SERVICE_NAME}"
 $ZipPath = "${zipPath.replace(/\\/g, "\\\\")}"
 $InstallDir = "${installDir.replace(/\\/g, "\\\\")}"
 $StagingDir = "${STAGING_DIR.replace(/\\/g, "\\\\")}"
+$LogFile = "${logFile}"
 
-# Wait for the agent process to release files
-Start-Sleep -Seconds 3
-
-# Stop the service
-Write-Host "Stopping service $ServiceName..."
-try { Stop-Service -Name $ServiceName -Force -ErrorAction Stop } catch {
-  Write-Host "Service stop warning: $_"
+function Log($msg) {
+  $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+  "[$ts] $msg" | Tee-Object -FilePath $LogFile -Append
 }
-Start-Sleep -Seconds 2
 
-# Extract update files
-Write-Host "Extracting update from $ZipPath to $InstallDir..."
-Expand-Archive -Path $ZipPath -DestinationPath $InstallDir -Force
+try {
+  Log "Update script started"
+  Log "Waiting for agent process to release files..."
+  Start-Sleep -Seconds 5
 
-# Start the service
-Write-Host "Starting service $ServiceName..."
-Start-Service -Name $ServiceName -ErrorAction Stop
+  # Stop the service
+  Log "Stopping service $ServiceName..."
+  try { Stop-Service -Name $ServiceName -Force -ErrorAction Stop } catch {
+    Log "Service stop warning: $_"
+  }
 
-# Cleanup staging
-Write-Host "Cleaning up staging directory..."
-Remove-Item -Path $StagingDir -Recurse -Force -ErrorAction SilentlyContinue
+  # Wait for service to fully stop
+  Log "Waiting for service to stop..."
+  $timeout = 30
+  while ($timeout -gt 0) {
+    $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    if ($svc.Status -eq "Stopped") { break }
+    Start-Sleep -Seconds 1
+    $timeout--
+  }
+  Log "Service status: $((Get-Service -Name $ServiceName).Status)"
 
-Write-Host "Update to v${version} completed successfully."
+  # Extract update files
+  Log "Extracting update from $ZipPath to $InstallDir..."
+  Expand-Archive -Path $ZipPath -DestinationPath $InstallDir -Force
+  Log "Extraction complete"
+
+  # Start the service
+  Log "Starting service $ServiceName..."
+  Start-Service -Name $ServiceName -ErrorAction Stop
+  Log "Service started successfully"
+
+  # Cleanup staging (keep log file for diagnostics)
+  Log "Cleaning up staging directory..."
+  Get-ChildItem -Path $StagingDir -Exclude "update-log.txt" | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+
+  Log "Update to v${version} completed successfully."
+} catch {
+  Log "ERROR: $_"
+  Log "Stack: $($_.ScriptStackTrace)"
+  # Still try to restart the service on error
+  try { Start-Service -Name $ServiceName -ErrorAction SilentlyContinue } catch {}
+  exit 1
+}
 `;
 
   const psScriptPath = path.join(STAGING_DIR, "install-update.ps1");
@@ -391,10 +421,22 @@ Write-Host "Update to v${version} completed successfully."
     message: `Installing update v${version}...`,
   });
 
-  // Launch the PowerShell script as a detached process
+  // Launch via cmd.exe /c start to create a new process outside the service's
+  // process tree — ensures the script survives when Stop-Service kills the agent
   const child = spawn(
-    "powershell.exe",
-    ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", psScriptPath],
+    "cmd.exe",
+    [
+      "/c",
+      "start",
+      "/min",
+      "GameServumUpdate",
+      "powershell.exe",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      psScriptPath,
+    ],
     {
       detached: true,
       stdio: "ignore",

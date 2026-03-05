@@ -248,7 +248,7 @@ export function Settings() {
                         if (w.electronAPI?.updater?.checkForUpdates) {
                           const result =
                             await w.electronAPI.updater.checkForUpdates();
-                          if (result.updateAvailable) {
+                          if (result?.updateInfo) {
                             toastSuccess("Update available!");
                           } else {
                             toastInfo("You're running the latest version");
