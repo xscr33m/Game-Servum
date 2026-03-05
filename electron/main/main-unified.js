@@ -468,14 +468,14 @@ function dashboard_setupIPC() {
 
       // Platform-specific configuration (matching dashboard_setupAutoUpdater)
       if (process.platform === "win32") {
-        // Windows: Feed URL already set during startup
-        const feedConfig = {
-          provider: "generic",
-          url: `https://github.com/xscr33m/Game-Servum/releases/latest/download/${MODE}/`,
-        };
-        autoUpdater.setFeedURL(feedConfig);
+        // Windows (Squirrel.Windows): GitHub provider finds RELEASES file in flat release assets
+        autoUpdater.setFeedURL({
+          provider: "github",
+          owner: "xscr33m",
+          repo: "Game-Servum",
+        });
       } else {
-        // Linux/macOS: Use channels
+        // Linux/macOS: GitHub provider with channel (finds {channel}-linux.yml in release assets)
         autoUpdater.channel = MODE;
       }
 
@@ -657,22 +657,20 @@ function dashboard_setupAutoUpdater() {
     autoUpdater.autoInstallOnAppQuit = true;
 
     // Platform-specific update configuration:
-    // - Windows (Squirrel.Windows): Uses generic provider (works with private repos)
-    // - Linux/macOS (AppImage/.dmg): Uses GitHub provider + channel .yml files
+    // - Windows (Squirrel.Windows): GitHub provider finds RELEASES file in flat release assets
+    // - Linux/macOS (AppImage/.dmg): GitHub provider + channel .yml files
     if (process.platform === "win32") {
-      // Windows: Use generic provider for Squirrel.Windows (works with private repos)
-      // Points to agent/ or dashboard/ subdirectory where RELEASES file is located
-      const feedConfig = {
-        provider: "generic",
-        url: `https://github.com/xscr33m/Game-Servum/releases/latest/download/${MODE}/`,
-      };
-      autoUpdater.setFeedURL(feedConfig);
-      // NO channel for Windows - Squirrel searches for RELEASES file in feed URL directory
+      // Windows: GitHub provider — electron-updater finds RELEASES + .nupkg in release assets
+      autoUpdater.setFeedURL({
+        provider: "github",
+        owner: "xscr33m",
+        repo: "Game-Servum",
+      });
       logger.info(
-        `[AutoUpdater] Windows generic provider: ${feedConfig.url} (searches for RELEASES)`,
+        "[AutoUpdater] Windows GitHub provider (Squirrel.Windows — searches for RELEASES in release assets)",
       );
     } else {
-      // Linux/macOS: GitHub provider with channels (finds {channel}-linux.yml / {channel}-mac.yml)
+      // Linux/macOS: GitHub provider with channel (finds {channel}-linux.yml / {channel}-mac.yml)
       autoUpdater.channel = MODE;
       logger.info(
         `[AutoUpdater] ${process.platform} channel: ${MODE} (looks for ${MODE}-${process.platform === "darwin" ? "mac" : "linux"}.yml)`,
@@ -736,7 +734,7 @@ function dashboard_setupAutoUpdater() {
       // Handle ENOENT errors gracefully (missing app-update.yml during development)
       if (errMsg.includes("ENOENT") || errMsg.includes("no such file")) {
         logger.info(
-          "[AutoUpdater] Update metadata not found (expected for Squirrel.Windows with generic provider)",
+          "[AutoUpdater] Update metadata not found (expected during development)",
         );
         // Don't send error to frontend — this is normal for our setup
         return;

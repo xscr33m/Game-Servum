@@ -12,8 +12,8 @@
  *  6. Copy output to dist/
  *
  * Output:
- *   dist/v{version}/agent/Game-Servum-Agent-Setup-v{version}.exe (~50 MB)
- *   dist/v{version}/agent/Game-Servum-Agent-Update-v{version}.zip (~20 MB)
+ *   dist/v{version}/Game-Servum-Agent-Setup-v{version}.exe (~50 MB)
+ *   dist/v{version}/Game-Servum-Agent-Update-v{version}.zip (~20 MB)
  *
  * Prerequisites:
  *   - Node.js 20+ (for bundling)
@@ -44,7 +44,6 @@ const APP_VERSION = pkg.version || "1.0.0";
 
 const STAGING = resolve(ROOT, "dist", "staging-agent-windows");
 const DIST_DIR = resolve(ROOT, "dist", `v${APP_VERSION}`);
-const AGENT_DIST_DIR = resolve(DIST_DIR, "agent");
 
 const WINSW_VERSION = "3.0.0-alpha.11";
 const WINSW_URL = `https://github.com/winsw/winsw/releases/download/v${WINSW_VERSION}/WinSW-x64.exe`;
@@ -180,7 +179,7 @@ console.log("  ✓ Staged all service files");
 // ─── 4. Build NSIS installer ────────────────────────────────────
 
 console.log("\n[4/6] Building NSIS installer...");
-mkdirSync(AGENT_DIST_DIR, { recursive: true });
+mkdirSync(DIST_DIR, { recursive: true });
 
 // Auto-detect makensis — check common install locations before falling back to PATH
 function findMakensis() {
@@ -219,7 +218,7 @@ if (!makensis) {
 
 const nsisScript = resolve(ROOT, "scripts", "nsis", "agent-installer.nsi");
 const installerExe = `Game-Servum-Agent-Setup-v${APP_VERSION}.exe`;
-const installerPath = resolve(AGENT_DIST_DIR, installerExe);
+const installerPath = resolve(DIST_DIR, installerExe);
 
 try {
   execSync(
@@ -236,7 +235,7 @@ try {
 
 console.log("\n[5/6] Creating update package...");
 const updateZipName = `Game-Servum-Agent-Update-v${APP_VERSION}.zip`;
-const updateZipPath = resolve(AGENT_DIST_DIR, updateZipName);
+const updateZipPath = resolve(DIST_DIR, updateZipName);
 
 try {
   // Create ZIP with just the updateable files (agent.mjs + sql-wasm.wasm)
@@ -266,16 +265,26 @@ rmSync(STAGING, { recursive: true });
 console.log("");
 console.log("╔══════════════════════════════════════════════════════════════");
 console.log(
-  `║  Output: dist/v${APP_VERSION}/agent/                              `,
+  `\u2551  Output: dist/v${APP_VERSION}/                              `,
 );
-console.log("║                                                              ");
-console.log("║  Mode: Windows Service (WinSW)                              ");
 console.log(
-  "║  Data stored in: C:\\ProgramData\\Game Servum\\                ",
+  "\u2551                                                              ",
 );
-console.log("║  Port: 3001 (configurable via .env)                          ");
-console.log("║                                                              ");
-console.log("║  Release Assets:                                             ");
+console.log(
+  "\u2551  Mode: Windows Service (WinSW)                              ",
+);
+console.log(
+  "\u2551  Data stored in: C:\\ProgramData\\Game Servum\\                ",
+);
+console.log(
+  "\u2551  Port: 3001 (configurable via .env)                          ",
+);
+console.log(
+  "\u2551                                                              ",
+);
+console.log(
+  "\u2551  GitHub Release Assets (flat):                               ",
+);
 console.log(`║    ├── ${installerExe.padEnd(50)}`);
 console.log(`║    └── ${updateZipName.padEnd(50)}`);
 console.log("║                                                              ");

@@ -187,9 +187,7 @@ execSync("npx electron-builder --linux --publish never", {
 console.log("\n[6/6] Centralizing output...");
 mkdirSync(DIST_DIR, { recursive: true });
 
-// Create dashboard/ subdirectory (matches Windows structure)
-const dashboardDistDir = resolve(DIST_DIR, "dashboard");
-mkdirSync(dashboardDistDir, { recursive: true });
+// Copy all release assets flat to dist/v{version}/ (GitHub Releases = flat file uploads)
 
 const releaseDir = resolve(STAGING, "release");
 let outputFile = "";
@@ -199,26 +197,25 @@ if (existsSync(releaseDir)) {
     f.endsWith(".AppImage"),
   );
   for (const file of appImages) {
-    cpSync(resolve(releaseDir, file), resolve(dashboardDistDir, file));
+    cpSync(resolve(releaseDir, file), resolve(DIST_DIR, file));
     outputFile = file;
-    console.log(`  ✓ Copied to dashboard/: ${file}`);
+    console.log(`  ✓ ${file}`);
   }
 
-  // Copy dashboard-linux.yml to DIST_DIR root (not in subdirectory!)
-  // electron-updater looks for {channel}-linux.yml in release root
+  // Copy dashboard-linux.yml (electron-updater metadata for GitHub provider + channel)
   if (existsSync(resolve(releaseDir, "dashboard-linux.yml"))) {
     cpSync(
       resolve(releaseDir, "dashboard-linux.yml"),
       resolve(DIST_DIR, "dashboard-linux.yml"),
     );
-    console.log(`  ✓ Copied to root: dashboard-linux.yml`);
+    console.log(`  ✓ dashboard-linux.yml`);
   } else if (existsSync(resolve(releaseDir, "latest-linux.yml"))) {
     // Fallback: electron-builder might create latest-linux.yml
     cpSync(
       resolve(releaseDir, "latest-linux.yml"),
       resolve(DIST_DIR, "dashboard-linux.yml"),
     );
-    console.log(`  ✓ Copied (renamed) to root: dashboard-linux.yml`);
+    console.log(`  ✓ dashboard-linux.yml (renamed from latest-linux.yml)`);
   }
 
   if (appImages.length === 0) {
@@ -236,11 +233,11 @@ console.log("");
 console.log("╔══════════════════════════════════════════════════════════════");
 if (outputFile) {
   console.log(
-    `║  Output: dist/v${APP_VERSION}/dashboard/${outputFile.substring(0, 18).padEnd(18)}`,
+    `║  Output: dist/v${APP_VERSION}/${outputFile.substring(0, 40).padEnd(40)}`,
   );
 } else {
   console.log(
-    `║  Output: dist/v${APP_VERSION}/dashboard/                        `,
+    `║  Output: dist/v${APP_VERSION}/                                  `,
   );
 }
 console.log("║                                                              ");
@@ -248,11 +245,7 @@ console.log("║  Mode: Dashboard only (connects to remote Windows Agents)    ")
 console.log("║  Data stored in: ~/.config/game-servum-dashboard/            ");
 console.log("║  No Agent runtime — Windows Agents required for servers      ");
 console.log("║                                                              ");
-console.log("║  GitHub Release Assets Structure:                            ");
-console.log("║    dashboard/                                                ");
-console.log("║      ├── RELEASES (from Windows build)                       ");
-console.log("║      ├── Game-Servum-Dashboard-Setup-v{version}.exe         ");
-console.log("║      ├── GameServumDashboard-{version}-full.nupkg           ");
-console.log("║      └── Game-Servum-Dashboard-v{version}.AppImage          ");
-console.log("║    dashboard-linux.yml (in release root!)                    ");
+console.log("║  GitHub Release Assets (flat):                               ");
+console.log("║    ├── Game-Servum-Dashboard-{version}.AppImage              ");
+console.log("║    └── dashboard-linux.yml                                   ");
 console.log("╚══════════════════════════════════════════════════════════════");

@@ -210,35 +210,30 @@ let outputFile = "";
 if (existsSync(squirrelDir)) {
   const files = readdirSync(squirrelDir);
 
-  // Create dashboard/ subdirectory for organized GitHub Release assets
-  const dashboardDistDir = resolve(DIST_DIR, "dashboard");
-  mkdirSync(dashboardDistDir, { recursive: true });
+  // Copy all release assets flat to dist/v{version}/ (GitHub Releases = flat file uploads)
 
-  // Copy installer executable
+  // Copy installer executable (rename to hyphenated format for consistency)
   const setupFiles = files.filter(
     (f) => f.endsWith(".exe") && f.includes("Setup"),
   );
+  const targetSetupName = `Game-Servum-Dashboard-Setup-v${APP_VERSION}.exe`;
   for (const file of setupFiles) {
-    cpSync(resolve(squirrelDir, file), resolve(dashboardDistDir, file));
-    outputFile = file;
-    console.log(`  ✓ Copied to dashboard/: ${file}`);
+    cpSync(resolve(squirrelDir, file), resolve(DIST_DIR, targetSetupName));
+    outputFile = targetSetupName;
+    console.log(`  ✓ ${file} → ${targetSetupName}`);
   }
 
-  // Copy .nupkg files (required for auto-updates)
+  // Copy .nupkg files (required for Squirrel.Windows auto-updates)
   const nupkgFiles = files.filter((f) => f.endsWith(".nupkg"));
   for (const file of nupkgFiles) {
-    cpSync(resolve(squirrelDir, file), resolve(dashboardDistDir, file));
-    console.log(`  ✓ Copied to dashboard/: ${file}`);
+    cpSync(resolve(squirrelDir, file), resolve(DIST_DIR, file));
+    console.log(`  ✓ ${file}`);
   }
 
   // Copy RELEASES metadata (required for Squirrel.Windows auto-updates)
-  // Keep as RELEASES (subdirectory structure prevents conflicts)
   if (files.includes("RELEASES")) {
-    cpSync(
-      resolve(squirrelDir, "RELEASES"),
-      resolve(dashboardDistDir, "RELEASES"),
-    );
-    console.log(`  ✓ Copied to dashboard/: RELEASES`);
+    cpSync(resolve(squirrelDir, "RELEASES"), resolve(DIST_DIR, "RELEASES"));
+    console.log(`  ✓ RELEASES`);
   }
 
   if (setupFiles.length === 0) {
@@ -265,20 +260,19 @@ console.log("");
 console.log("╔══════════════════════════════════════════════════════════════");
 if (outputFile) {
   console.log(
-    `║  Output: dist/v${APP_VERSION}/dashboard/${outputFile.substring(0, 18).padEnd(18)}`,
+    `║  Output: dist/v${APP_VERSION}/${outputFile.substring(0, 40).padEnd(40)}`,
   );
 } else {
   console.log(
-    `║  Output: dist/v${APP_VERSION}/dashboard/                        `,
+    `║  Output: dist/v${APP_VERSION}/                                  `,
   );
 }
 console.log("║                                                              ");
 console.log("║  Mode: Dashboard only (connects to remote/local Agents)      ");
 console.log("║  Data stored in: Documents/Game Servum/                      ");
 console.log("║                                                              ");
-console.log("║  GitHub Release Assets Structure:                            ");
-console.log("║    dashboard/                                                ");
-console.log("║      ├── RELEASES                                            ");
-console.log("║      ├── Game-Servum-Dashboard-Setup-{version}.exe          ");
-console.log("║      └── GameServumDashboard-{version}-full.nupkg            ");
+console.log("║  GitHub Release Assets (flat):                               ");
+console.log("║    ├── RELEASES                                              ");
+console.log("║    ├── Game-Servum-Dashboard-Setup-v{version}.exe            ");
+console.log("║    └── GameServumDashboard-{version}-full.nupkg              ");
 console.log("╚══════════════════════════════════════════════════════════════");
