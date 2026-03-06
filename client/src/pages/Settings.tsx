@@ -240,7 +240,8 @@ export function Settings() {
                           electronAPI?: {
                             updater?: {
                               checkForUpdates: () => Promise<{
-                                updateAvailable: boolean;
+                                success: boolean;
+                                updateInfo?: unknown;
                               }>;
                             };
                           };
