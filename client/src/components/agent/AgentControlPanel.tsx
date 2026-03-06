@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   FaServer,
   FaArrowsRotate,
@@ -85,6 +85,7 @@ export function AgentControlPanel() {
   // Update state
   const [updateState, setUpdateState] = useState<UpdateState | null>(null);
   const [updateLoading, setUpdateLoading] = useState(false);
+  const manualCheckRef = useRef(false);
 
   // Fetch agent system info when connected
   const fetchInfo = useCallback(async () => {
@@ -158,6 +159,10 @@ export function AgentControlPanel() {
           latestVersion,
           checking: false,
         }));
+        if (!updateAvailable && manualCheckRef.current) {
+          toastInfo("Agent is up to date");
+        }
+        manualCheckRef.current = false;
       } else if (message.type === "update:applied") {
         setUpdateState((prev) => ({
           ...prev!,
@@ -268,9 +273,9 @@ export function AgentControlPanel() {
 
   async function handleCheckForUpdates() {
     setUpdateLoading(true);
+    manualCheckRef.current = true;
     try {
       await api.system.checkForUpdates();
-      toastSuccess("Checking for updates...");
       // Refresh state after a short delay to allow updater to process
       setTimeout(() => fetchUpdateState(), 1500);
     } catch (err) {
@@ -284,7 +289,7 @@ export function AgentControlPanel() {
     setUpdateLoading(true);
     try {
       await api.system.downloadUpdate();
-      toastSuccess("Downloading update...");
+      toastInfo("Downloading update...");
       // Refresh state after a short delay
       setTimeout(() => fetchUpdateState(), 1500);
     } catch (err) {
