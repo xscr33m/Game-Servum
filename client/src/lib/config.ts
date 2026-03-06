@@ -16,7 +16,8 @@ export interface BackendConnection {
     | "error"
     | "authenticating"
     | "reconnecting"
-    | "updating";
+    | "updating"
+    | "restarting";
   reconnectAttempts?: number; // Track number of reconnection attempts
   lastError?: string; // Last error message for UI display
   agentInfo?: {

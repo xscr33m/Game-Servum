@@ -29,6 +29,9 @@ const TOKEN_RENEWAL_RATIO = 0.8;
 const RECONNECT_POLL_INTERVAL = 3_000;
 // Initial delay before first reconnect attempt (1 second)
 const RECONNECT_INITIAL_DELAY = 1_000;
+// Longer initial delay for intentional disconnects (updating/restarting)
+// to wait for the agent to fully shut down before polling
+const RECONNECT_INTENTIONAL_DELAY = 15_000;
 // Max reconnect attempts before giving up (3 attempts, then user must manually retry)
 const MAX_RECONNECT_ATTEMPTS = 3;
 
@@ -360,6 +363,9 @@ export function BackendProvider({ children }: { children: ReactNode }) {
   // When the active connection loses WebSocket connectivity, poll the health
   // endpoint until the agent is back, then re-authenticate and reconnect.
   const isReconnecting = useRef(false);
+  // Cooldown after successful reconnect — prevents re-entering the polling
+  // branch while the WS manager is still connecting with the fresh token
+  const reconnectCooldownRef = useRef(false);
 
   useEffect(() => {
     if (!activeConnection) return;
@@ -372,11 +378,13 @@ export function BackendProvider({ children }: { children: ReactNode }) {
       }
       reconnectAttemptsRef.current = 0;
       isReconnecting.current = false;
+      reconnectCooldownRef.current = false;
       // Ensure status is "connected" — but don't override "updating"
       // (the agent is about to go down, WS just hasn't disconnected yet)
       if (
         activeConnection.status !== "connected" &&
-        activeConnection.status !== "updating"
+        activeConnection.status !== "updating" &&
+        activeConnection.status !== "restarting"
       ) {
         updateConnection(activeConnection.id, {
           status: "connected",
@@ -391,13 +399,18 @@ export function BackendProvider({ children }: { children: ReactNode }) {
     // (has credentials stored, meaning it was previously connected)
     if (!activeConnection.apiKey || !activeConnection.password) return;
 
+    // After a successful reconnect, the token update recreates the WS manager.
+    // Give it time to connect before we start polling again.
+    if (reconnectCooldownRef.current) return;
+
     // Mark as reconnecting (distinguishes from initial connect / permanent disconnect)
     // Don't override "updating" status — that's handled separately with unlimited retries
     if (
       activeConnection.status !== "reconnecting" &&
       activeConnection.status !== "authenticating" &&
       activeConnection.status !== "error" &&
-      activeConnection.status !== "updating"
+      activeConnection.status !== "updating" &&
+      activeConnection.status !== "restarting"
     ) {
       updateConnection(activeConnection.id, { status: "reconnecting" });
     }
@@ -416,6 +429,15 @@ export function BackendProvider({ children }: { children: ReactNode }) {
     const connId = activeConnection.id;
     const connName = activeConnection.name;
 
+    // Use a longer initial delay for intentional disconnects (update/restart)
+    // so we don't hit the agent while it's still shutting down
+    const isIntentional =
+      activeConnection.status === "updating" ||
+      activeConnection.status === "restarting";
+    const initialDelay = isIntentional
+      ? RECONNECT_INTENTIONAL_DELAY
+      : RECONNECT_INITIAL_DELAY;
+
     async function attemptReconnect() {
       // Find the latest connection state
       const conn = connections.find((c) => c.id === connId);
@@ -432,7 +454,8 @@ export function BackendProvider({ children }: { children: ReactNode }) {
       const currentAttempt = reconnectAttemptsRef.current;
 
       // Skip attempt limit when agent is updating — keep polling until it comes back
-      const isUpdating = conn.status === "updating";
+      const isUpdating =
+        conn.status === "updating" || conn.status === "restarting";
 
       // Check if we've reached the limit BEFORE trying again
       if (
@@ -478,7 +501,7 @@ export function BackendProvider({ children }: { children: ReactNode }) {
           `[Reconnect] Agent "${conn.name}" is reachable — re-authenticating...`,
         );
         // Preserve "updating" status through the auth phase so the banner stays blue
-        if (conn.status !== "updating") {
+        if (conn.status !== "updating" && conn.status !== "restarting") {
           updateConnection(connId, { status: "authenticating" });
         }
 
@@ -496,8 +519,8 @@ export function BackendProvider({ children }: { children: ReactNode }) {
           logger.warn(
             `[Reconnect] Re-auth failed for "${conn.name}" (${authRes.status})`,
           );
-          // During updates, keep "updating" status so unlimited retries continue
-          if (conn.status !== "updating") {
+          // During updates/restarts, keep status so unlimited retries continue
+          if (conn.status !== "updating" && conn.status !== "restarting") {
             updateConnection(connId, {
               status: "error",
               lastError:
@@ -545,16 +568,26 @@ export function BackendProvider({ children }: { children: ReactNode }) {
           toastSuccess(
             `Agent "${connName}" updated and reconnected successfully`,
           );
+        } else if (conn.status === "restarting") {
+          toastSuccess(`Agent "${connName}" restarted successfully`);
         } else {
           toastSuccess(`Reconnected to ${connName}`);
         }
 
-        // Stop polling
+        // Stop polling — set cooldown so the effect doesn't immediately
+        // restart polling while the WS manager connects with the new token
         if (reconnectTimerRef.current) {
           clearInterval(reconnectTimerRef.current);
           reconnectTimerRef.current = null;
         }
         reconnectAttemptsRef.current = 0;
+        isReconnecting.current = false;
+        reconnectCooldownRef.current = true;
+
+        // Clear the cooldown after a generous window for WS to connect
+        setTimeout(() => {
+          reconnectCooldownRef.current = false;
+        }, 30_000);
 
         // The token update will trigger the activeConnection useEffect,
         // which recreates the API client and WS manager with the new token.
@@ -563,14 +596,14 @@ export function BackendProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // First attempt quickly (1s), then regular interval
+    // First attempt after initial delay, then regular interval
     const initialTimer = setTimeout(() => {
       attemptReconnect();
       reconnectTimerRef.current = setInterval(
         attemptReconnect,
         RECONNECT_POLL_INTERVAL,
       );
-    }, RECONNECT_INITIAL_DELAY);
+    }, initialDelay);
 
     return () => {
       clearTimeout(initialTimer);

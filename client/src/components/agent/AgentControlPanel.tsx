@@ -37,6 +37,7 @@ const STATUS_COLORS = {
   authenticating: "text-yellow-500",
   reconnecting: "text-yellow-500",
   updating: "text-blue-500",
+  restarting: "text-blue-500",
   disconnected: "text-red-400",
   error: "text-red-500",
 } as const;
@@ -218,7 +219,7 @@ export function AgentControlPanel() {
     try {
       await api.system.restart();
       toastSuccess("Agent is restarting...");
-      updateConnectionStatus(activeConnection.id, "reconnecting");
+      updateConnectionStatus(activeConnection.id, "restarting");
       setConfirmRestart(false);
     } catch {
       toastError("Failed to restart agent");

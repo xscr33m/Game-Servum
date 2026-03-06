@@ -73,6 +73,19 @@ export function AgentStatusBanner() {
     );
   }
 
+  // ── Restarting ────────────────────────────────────────────────────────
+  if (status === "restarting") {
+    return (
+      <Banner color="blue">
+        <FaArrowsRotate className="h-3.5 w-3.5 animate-spin shrink-0" />
+        <span>
+          Agent <strong>{name}</strong> is restarting and will reconnect
+          automatically…
+        </span>
+      </Banner>
+    );
+  }
+
   // ── Reconnecting / Authenticating ─────────────────────────────────────
   if (status === "reconnecting" || status === "authenticating") {
     return (
