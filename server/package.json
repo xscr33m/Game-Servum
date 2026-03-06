@@ -1,6 +1,6 @@
 {
   "name": "server",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "type": "module",
   "description": "Game-Servum Backend",
   "main": "dist/index.js",
