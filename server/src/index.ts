@@ -200,19 +200,7 @@ async function main() {
         try {
           const child = spawn(
             "cmd.exe",
-            [
-              "/c",
-              "timeout",
-              "/t",
-              "2",
-              "/nobreak",
-              ">",
-              "nul",
-              "&&",
-              "sc",
-              "start",
-              "GameServumAgent",
-            ],
+            ["/c", "timeout /t 5 /nobreak >nul && sc start GameServumAgent"],
             { detached: true, stdio: "ignore", windowsHide: true },
           );
           child.unref();
