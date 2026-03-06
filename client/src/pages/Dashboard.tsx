@@ -27,6 +27,7 @@ import { DeleteServerDialog } from "@/components/DeleteServerDialog";
 import { SteamAccountDialog } from "@/components/SteamAccountDialog";
 import { SystemMonitor } from "@/components/SystemMonitor";
 import { AgentReconnectionScreen } from "@/components/AgentReconnectionScreen";
+import { AgentUpdatingBanner } from "@/components/AgentUpdatingBanner";
 import { useBackend } from "@/hooks/useBackend";
 import { logger } from "@/lib/logger";
 import { getElectronSettings } from "@/lib/electronSettings";
@@ -136,11 +137,13 @@ export function Dashboard() {
   }, [searchParams]);
 
   // Delayed reconnection screen — wait 2 seconds before showing to avoid flash on refresh
+  // Skip when agent is updating — handled by the non-blocking AgentUpdatingBanner instead
   useEffect(() => {
     if (
       activeConnection &&
       !showOnboarding &&
-      activeConnection.status !== "connected"
+      activeConnection.status !== "connected" &&
+      activeConnection.status !== "updating"
     ) {
       // Start a timer to show reconnect screen after 2 seconds
       const timer = setTimeout(() => {
@@ -425,6 +428,8 @@ export function Dashboard() {
           </>
         }
       />
+
+      <AgentUpdatingBanner />
 
       <div className="flex-1 flex overflow-hidden">
         <main className="flex-1 overflow-y-auto">

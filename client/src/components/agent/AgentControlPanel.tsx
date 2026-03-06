@@ -35,6 +35,7 @@ const STATUS_COLORS = {
   connected: "text-green-500",
   authenticating: "text-yellow-500",
   reconnecting: "text-yellow-500",
+  updating: "text-blue-500",
   disconnected: "text-red-400",
   error: "text-red-500",
 } as const;
@@ -172,7 +173,7 @@ export function AgentControlPanel() {
       } else if (message.type === "update:restart") {
         toastInfo("Agent is restarting to install update...");
         if (activeConnection) {
-          updateConnectionStatus(activeConnection.id, "reconnecting");
+          updateConnectionStatus(activeConnection.id, "updating");
         }
       }
     });
@@ -304,7 +305,7 @@ export function AgentControlPanel() {
     try {
       await api.system.installUpdate();
       // Toast comes via WebSocket "update:restart" event
-      updateConnectionStatus(activeConnection.id, "reconnecting");
+      updateConnectionStatus(activeConnection.id, "updating");
       setActionsMenuOpen(false);
     } catch (err) {
       toastError((err as Error).message);
@@ -342,15 +343,23 @@ export function AgentControlPanel() {
               {activeConnection.name}
             </span>
 
-            {/* Update badge */}
-            {updateState?.updateAvailable && (
+            {/* Update badge / Updating indicator */}
+            {status === "updating" ? (
+              <Badge
+                variant="default"
+                className="ml-1 text-[10px] px-1.5 py-0 gap-1 bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-500/30"
+              >
+                <FaArrowsRotate className="h-2.5 w-2.5 animate-spin" />
+                Updating
+              </Badge>
+            ) : updateState?.updateAvailable ? (
               <Badge variant="warning" className="ml-1 text-[10px] px-1.5 py-0">
                 Update
               </Badge>
-            )}
+            ) : null}
 
-            {/* Uptime — separated by a subtle divider */}
-            {displayUptime != null && isConnected && (
+            {/* Uptime — separated by a subtle divider (hidden while updating) */}
+            {status !== "updating" && displayUptime != null && isConnected && (
               <>
                 <span className="text-border/80 hidden sm:inline">·</span>
                 <span className="text-[11px] text-muted-foreground hidden sm:inline tabular-nums">
@@ -516,7 +525,9 @@ export function AgentControlPanel() {
                       handleReconnect();
                       setActionsMenuOpen(false);
                     }}
-                    disabled={!activeConnection || reconnecting}
+                    disabled={
+                      !activeConnection || reconnecting || status === "updating"
+                    }
                     className="flex items-center gap-2.5 w-full rounded-md px-3 py-2 text-sm hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {reconnecting ? (
@@ -533,7 +544,7 @@ export function AgentControlPanel() {
                       setConfirmRestart(true);
                       setActionsMenuOpen(false);
                     }}
-                    disabled={!isConnected}
+                    disabled={!isConnected || status === "updating"}
                     className="flex items-center gap-2.5 w-full rounded-md px-3 py-2 text-sm hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <FaRotateRight className="h-4 w-4" />
@@ -550,7 +561,8 @@ export function AgentControlPanel() {
                       !isConnected ||
                       updateLoading ||
                       updateState?.checking ||
-                      updateState?.downloading
+                      updateState?.downloading ||
+                      status === "updating"
                     }
                     className="flex items-center gap-2.5 w-full rounded-md px-3 py-2 text-sm hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >

@@ -388,10 +388,12 @@ export function BackendProvider({ children }: { children: ReactNode }) {
     if (!activeConnection.apiKey || !activeConnection.password) return;
 
     // Mark as reconnecting (distinguishes from initial connect / permanent disconnect)
+    // Don't override "updating" status — that's handled separately with unlimited retries
     if (
       activeConnection.status !== "reconnecting" &&
       activeConnection.status !== "authenticating" &&
-      activeConnection.status !== "error"
+      activeConnection.status !== "error" &&
+      activeConnection.status !== "updating"
     ) {
       updateConnection(activeConnection.id, { status: "reconnecting" });
     }
@@ -425,8 +427,12 @@ export function BackendProvider({ children }: { children: ReactNode }) {
       reconnectAttemptsRef.current++;
       const currentAttempt = reconnectAttemptsRef.current;
 
+      // Skip attempt limit when agent is updating — keep polling until it comes back
+      const isUpdating = conn.status === "updating";
+
       // Check if we've reached the limit BEFORE trying again
       if (
+        !isUpdating &&
         MAX_RECONNECT_ATTEMPTS > 0 &&
         currentAttempt >= MAX_RECONNECT_ATTEMPTS
       ) {
@@ -524,8 +530,14 @@ export function BackendProvider({ children }: { children: ReactNode }) {
           lastError: undefined,
         });
 
-        // Show success feedback
-        toastSuccess(`Reconnected to ${connName}`);
+        // Show success feedback — distinguish update completion from normal reconnect
+        if (conn.status === "updating") {
+          toastSuccess(
+            `Agent "${connName}" updated and reconnected successfully`,
+          );
+        } else {
+          toastSuccess(`Reconnected to ${connName}`);
+        }
 
         // Stop polling
         if (reconnectTimerRef.current) {
