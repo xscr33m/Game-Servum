@@ -9,9 +9,9 @@
  *  3. Stage Electron project (Dashboard only - no Agent/node.exe)
  *  4. Install Electron dependencies
  *  5. Run electron-builder → NSIS installer
- *  6. Copy output to dist/
+ *  6. Copy output + update metadata to dist/
  *
- * Output: dist/Game-Servum-Dashboard-v{version}.exe (~90 MB)
+ * Output: dist/Game-Servum-Dashboard-Setup-v{version}.exe (~90 MB) + dashboard.yml
  */
 import { execSync } from "child_process";
 import {
@@ -97,7 +97,6 @@ const electronPkg = {
   license: "MIT",
   main: "main/main-unified.js",
   dependencies: {
-    "electron-squirrel-startup": "^1.0.1",
     "electron-updater": "^6.8.3",
   },
   devDependencies: {
@@ -116,20 +115,18 @@ const electronPkg = {
     files: ["main/**/*", "assets/**/*"],
     extraResources: [{ from: "runtime", to: "runtime", filter: ["**/*"] }],
     win: {
-      target: [{ target: "squirrel", arch: ["x64"] }],
+      target: [{ target: "nsis", arch: ["x64"] }],
       icon: "build/icon.png",
     },
-    squirrelWindows: {
-      name: "GameServumDashboard",
-      iconUrl:
-        "https://raw.githubusercontent.com/xscr33m/Game-Servum/main/client/public/dashboard-icon.ico",
-      // loadingGif: resolve(ROOT, "client", "public", "setup-animation.gif"),
-      remoteReleases: true, // Enable delta updates (smaller update downloads)
+    nsis: {
+      oneClick: true,
+      artifactName: `Game-Servum-Dashboard-Setup-v${APP_VERSION}.\${ext}`,
     },
     publish: {
       provider: "github",
       owner: "xscr33m",
       repo: "Game-Servum",
+      channel: "dashboard",
       publisherName: ["xscr33mLabs"],
     },
   },
@@ -191,7 +188,7 @@ execSync("npm install --no-package-lock --loglevel=warn", {
 
 // ───  5. Build installer ─────────────────────────────────────────
 
-console.log("\n[5/5] Building Squirrel installer...");
+console.log("\n[5/6] Building NSIS installer...");
 execSync("npx electron-builder --win --publish never", {
   cwd: STAGING,
   stdio: "inherit",
@@ -203,53 +200,38 @@ execSync("npx electron-builder --win --publish never", {
 console.log("\n[6/6] Centralizing output...");
 mkdirSync(DIST_DIR, { recursive: true });
 
-// Squirrel.Windows creates files under release/squirrel-windows/
-const squirrelDir = resolve(STAGING, "release", "squirrel-windows");
+// NSIS creates files directly under release/
+const releaseDir = resolve(STAGING, "release");
 let outputFile = "";
 
-if (existsSync(squirrelDir)) {
-  const files = readdirSync(squirrelDir);
+if (existsSync(releaseDir)) {
+  const files = readdirSync(releaseDir);
 
-  // Copy all release assets flat to dist/v{version}/ (GitHub Releases = flat file uploads)
-
-  // Copy installer executable (rename to hyphenated format for consistency)
-  const setupFiles = files.filter(
+  // Copy installer executable
+  const setupFile = files.find(
     (f) => f.endsWith(".exe") && f.includes("Setup"),
   );
-  const targetSetupName = `Game-Servum-Dashboard-Setup-v${APP_VERSION}.exe`;
-  for (const file of setupFiles) {
-    cpSync(resolve(squirrelDir, file), resolve(DIST_DIR, targetSetupName));
-    outputFile = targetSetupName;
-    console.log(`  ✓ ${file} → ${targetSetupName}`);
-  }
-
-  // Copy .nupkg files (required for Squirrel.Windows auto-updates)
-  const nupkgFiles = files.filter((f) => f.endsWith(".nupkg"));
-  for (const file of nupkgFiles) {
-    cpSync(resolve(squirrelDir, file), resolve(DIST_DIR, file));
-    console.log(`  ✓ ${file}`);
-  }
-
-  // Copy RELEASES metadata (required for Squirrel.Windows auto-updates)
-  if (files.includes("RELEASES")) {
-    cpSync(resolve(squirrelDir, "RELEASES"), resolve(DIST_DIR, "RELEASES"));
-    console.log(`  ✓ RELEASES`);
-  }
-
-  if (setupFiles.length === 0) {
+  if (setupFile) {
+    cpSync(resolve(releaseDir, setupFile), resolve(DIST_DIR, setupFile));
+    outputFile = setupFile;
+    console.log(`  ✓ ${setupFile}`);
+  } else {
     console.warn("  ⚠ WARNING: No installer .exe found");
   }
-  if (nupkgFiles.length === 0) {
-    console.warn("  ⚠ WARNING: No .nupkg files found (auto-update won't work)");
-  }
-  if (!files.includes("RELEASES")) {
+
+  // Copy dashboard.yml update metadata (required for electron-updater auto-updates)
+  const ymlFile = files.find((f) => f === "dashboard.yml");
+  if (ymlFile) {
+    cpSync(resolve(releaseDir, ymlFile), resolve(DIST_DIR, ymlFile));
+    console.log(`  ✓ ${ymlFile}`);
+  } else {
     console.warn(
-      "  ⚠ WARNING: RELEASES metadata not found (auto-update won't work)",
+      "  ⚠ WARNING: dashboard.yml not found (auto-update won't work)",
     );
   }
 } else {
-  console.error("  ✗ ERROR: Squirrel output directory not found!");
-  console.error(`    Expected: ${squirrelDir}`);
+  console.error("  ✗ ERROR: NSIS output directory not found!");
+  console.error(`    Expected: ${releaseDir}`);
 }
 
 // Clean up staging
@@ -272,7 +254,6 @@ console.log("║  Mode: Dashboard only (connects to remote/local Agents)      ")
 console.log("║  Data stored in: Documents/Game Servum/                      ");
 console.log("║                                                              ");
 console.log("║  GitHub Release Assets (flat):                               ");
-console.log("║    ├── RELEASES                                              ");
 console.log("║    ├── Game-Servum-Dashboard-Setup-v{version}.exe            ");
-console.log("║    └── GameServumDashboard-{version}-full.nupkg              ");
+console.log("║    └── dashboard.yml                                         ");
 console.log("╚══════════════════════════════════════════════════════════════");

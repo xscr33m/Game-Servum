@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { pipeline } from "stream/promises";
 import { createWriteStream } from "fs";
-import { spawn } from "child_process";
+import { execSync } from "child_process";
 import { APP_VERSION, compareSemVer } from "@game-servum/shared";
 import { getConfig } from "./config.js";
 import { logger, broadcast } from "../index.js";
@@ -403,12 +403,18 @@ try {
   Log "Cleaning up staging directory..."
   Get-ChildItem -Path $StagingDir -Exclude "update-log.txt" | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
+  # Remove the scheduled task that launched this script
+  Log "Removing scheduled task..."
+  schtasks /delete /tn "GameServumAgentUpdate" /f 2>&1 | Out-Null
+
   Log "Update to v${version} completed successfully."
 } catch {
   Log "ERROR: $_"
   Log "Stack: $($_.ScriptStackTrace)"
   # Still try to restart the service on error
   try { Start-Service -Name $ServiceName -ErrorAction SilentlyContinue } catch {}
+  # Clean up scheduled task even on error
+  schtasks /delete /tn "GameServumAgentUpdate" /f 2>&1 | Out-Null
   exit 1
 }
 `;
@@ -421,31 +427,33 @@ try {
     message: `Installing update v${version}...`,
   });
 
-  // Launch via cmd.exe /c start to create a new process outside the service's
-  // process tree — ensures the script survives when Stop-Service kills the agent
-  const child = spawn(
-    "cmd.exe",
-    [
-      "/c",
-      "start",
-      "/min",
-      "GameServumUpdate",
-      "powershell.exe",
-      "-NoProfile",
-      "-ExecutionPolicy",
-      "Bypass",
-      "-File",
-      psScriptPath,
-    ],
-    {
-      detached: true,
+  // Use Windows Task Scheduler to run the update script independently of the
+  // service process tree — ensures the script survives when the service stops
+  const taskName = "GameServumAgentUpdate";
+  const psCommand = `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${psScriptPath}"`;
+
+  try {
+    // Create a one-time scheduled task running as SYSTEM
+    execSync(
+      `schtasks /create /tn "${taskName}" /tr "${psCommand}" /sc once /st 00:00 /ru SYSTEM /f`,
+      { stdio: "ignore", windowsHide: true },
+    );
+
+    // Run the task immediately
+    execSync(`schtasks /run /tn "${taskName}"`, {
       stdio: "ignore",
       windowsHide: true,
-    },
-  );
-  child.unref();
+    });
 
-  logger.info("[AgentUpdater] Update script launched", { pid: child.pid });
+    logger.info(
+      "[AgentUpdater] Update task scheduled and started via schtasks",
+    );
+  } catch (err) {
+    logger.error("[AgentUpdater] Failed to schedule update task:", {
+      error: (err as Error).message,
+    });
+    throw new Error(`Failed to schedule update: ${(err as Error).message}`);
+  }
 
   // Reset state — the service will be restarted by the PS script
   updateState.downloaded = false;

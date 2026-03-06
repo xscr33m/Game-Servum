@@ -13,14 +13,7 @@
  *   macOS:    ~/Library/Application Support/Game Servum/
  */
 
-// ─── Squirrel.Windows Event Handling (MUST be first) ────────────
-// Only needed on Windows - skip on Linux/macOS
-if (process.platform === "win32") {
-  if (require("electron-squirrel-startup")) {
-    process.exit(0);
-  }
-}
-
+// ─── App Imports ────────────────────────────────────────────────
 const {
   app,
   BrowserWindow,
@@ -466,18 +459,8 @@ function dashboard_setupIPC() {
     try {
       const { autoUpdater } = require("electron-updater");
 
-      // Platform-specific configuration (matching dashboard_setupAutoUpdater)
-      if (process.platform === "win32") {
-        // Windows (Squirrel.Windows): GitHub provider finds RELEASES file in flat release assets
-        autoUpdater.setFeedURL({
-          provider: "github",
-          owner: "xscr33m",
-          repo: "Game-Servum",
-        });
-      } else {
-        // Linux/macOS: GitHub provider with channel (finds {channel}-linux.yml in release assets)
-        autoUpdater.channel = MODE;
-      }
+      // Use channel-based update discovery on all platforms
+      autoUpdater.channel = MODE;
 
       const result = await autoUpdater.checkForUpdates();
       return { success: true, updateInfo: result?.updateInfo };
@@ -662,26 +645,12 @@ function dashboard_setupAutoUpdater() {
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = true;
 
-    // Platform-specific update configuration:
-    // - Windows (Squirrel.Windows): GitHub provider finds RELEASES file in flat release assets
-    // - Linux/macOS (AppImage/.dmg): GitHub provider + channel .yml files
-    if (process.platform === "win32") {
-      // Windows: GitHub provider — electron-updater finds RELEASES + .nupkg in release assets
-      autoUpdater.setFeedURL({
-        provider: "github",
-        owner: "xscr33m",
-        repo: "Game-Servum",
-      });
-      logger.info(
-        "[AutoUpdater] Windows GitHub provider (Squirrel.Windows — searches for RELEASES in release assets)",
-      );
-    } else {
-      // Linux/macOS: GitHub provider with channel (finds {channel}-linux.yml / {channel}-mac.yml)
-      autoUpdater.channel = MODE;
-      logger.info(
-        `[AutoUpdater] ${process.platform} channel: ${MODE} (looks for ${MODE}-${process.platform === "darwin" ? "mac" : "linux"}.yml)`,
-      );
-    }
+    // Use channel-based update discovery on all platforms
+    // electron-updater looks for {channel}-{platform}.yml in GitHub Release assets
+    autoUpdater.channel = MODE;
+    logger.info(
+      `[AutoUpdater] Channel: ${MODE} (looks for ${MODE}-${process.platform === "win32" ? "win" : process.platform === "darwin" ? "mac" : "linux"}.yml)`,
+    );
 
     autoUpdater.on("checking-for-update", () => {
       logger.info("[AutoUpdater] Checking for updates...");
