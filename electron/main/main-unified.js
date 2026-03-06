@@ -645,6 +645,11 @@ function dashboard_setupAutoUpdater() {
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = true;
 
+    // Disable code signature verification (no signing certificate)
+    if (process.platform === "win32") {
+      autoUpdater.verifyUpdateCodeSignature = false;
+    }
+
     // Use channel-based update discovery on all platforms
     // electron-updater looks for {channel}-{platform}.yml in GitHub Release assets
     autoUpdater.channel = MODE;

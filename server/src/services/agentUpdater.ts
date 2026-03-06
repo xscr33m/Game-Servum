@@ -1,8 +1,7 @@
 import fs from "fs";
 import path from "path";
-import { pipeline } from "stream/promises";
 import { createWriteStream } from "fs";
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import { APP_VERSION, compareSemVer } from "@game-servum/shared";
 import { getConfig } from "./config.js";
 import { logger, broadcast } from "../index.js";
@@ -428,19 +427,34 @@ try {
   });
 
   // Use Windows Task Scheduler to run the update script independently of the
-  // service process tree — ensures the script survives when the service stops
+  // service process tree — ensures the script survives when the service stops.
+  // execFileSync bypasses cmd.exe, avoiding nested-quote issues with paths containing spaces.
   const taskName = "GameServumAgentUpdate";
   const psCommand = `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${psScriptPath}"`;
 
   try {
     // Create a one-time scheduled task running as SYSTEM
-    execSync(
-      `schtasks /create /tn "${taskName}" /tr "${psCommand}" /sc once /st 00:00 /ru SYSTEM /f`,
+    execFileSync(
+      "schtasks",
+      [
+        "/create",
+        "/tn",
+        taskName,
+        "/tr",
+        psCommand,
+        "/sc",
+        "once",
+        "/st",
+        "00:00",
+        "/ru",
+        "SYSTEM",
+        "/f",
+      ],
       { stdio: "ignore", windowsHide: true },
     );
 
     // Run the task immediately
-    execSync(`schtasks /run /tn "${taskName}"`, {
+    execFileSync("schtasks", ["/run", "/tn", taskName], {
       stdio: "ignore",
       windowsHide: true,
     });

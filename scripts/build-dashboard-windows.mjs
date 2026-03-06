@@ -127,7 +127,6 @@ const electronPkg = {
       owner: "xscr33m",
       repo: "Game-Servum",
       channel: "dashboard",
-      publisherName: ["xscr33mLabs"],
     },
   },
 };
