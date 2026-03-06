@@ -35,7 +35,7 @@ import {
 import { useBackend } from "@/hooks/useBackend";
 import { publicAsset } from "@/lib/assets";
 import { AppHeader } from "@/components/AppHeader";
-import { AgentUpdatingBanner } from "@/components/AgentUpdatingBanner";
+import { AgentStatusBanner } from "@/components/AgentStatusBanner";
 import { toastSuccess, toastError } from "@/lib/toast";
 import { logger } from "@/lib/logger";
 import { LogLevel } from "@game-servum/shared";
@@ -918,7 +918,7 @@ export function Logs() {
         }
       />
 
-      <AgentUpdatingBanner />
+      <AgentStatusBanner />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Main Content - Log Viewer */}

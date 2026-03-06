@@ -26,8 +26,7 @@ import { AddServerDialog } from "@/components/AddServerDialog";
 import { DeleteServerDialog } from "@/components/DeleteServerDialog";
 import { SteamAccountDialog } from "@/components/SteamAccountDialog";
 import { SystemMonitor } from "@/components/SystemMonitor";
-import { AgentReconnectionScreen } from "@/components/AgentReconnectionScreen";
-import { AgentUpdatingBanner } from "@/components/AgentUpdatingBanner";
+import { AgentStatusBanner } from "@/components/AgentStatusBanner";
 import { useBackend } from "@/hooks/useBackend";
 import { logger } from "@/lib/logger";
 import { getElectronSettings } from "@/lib/electronSettings";
@@ -60,7 +59,6 @@ export function Dashboard() {
       getElectronSettings().getItem("system_monitoring_enabled") === "true"
     );
   });
-  const [showReconnectScreen, setShowReconnectScreen] = useState(false);
 
   const { api, subscribe, isConnected, activeConnection, connections } =
     useBackend();
@@ -135,27 +133,6 @@ export function Dashboard() {
       setShowOnboarding(true);
     }
   }, [searchParams]);
-
-  // Delayed reconnection screen — wait 2 seconds before showing to avoid flash on refresh
-  // Skip when agent is updating — handled by the non-blocking AgentUpdatingBanner instead
-  useEffect(() => {
-    if (
-      activeConnection &&
-      !showOnboarding &&
-      activeConnection.status !== "connected" &&
-      activeConnection.status !== "updating"
-    ) {
-      // Start a timer to show reconnect screen after 2 seconds
-      const timer = setTimeout(() => {
-        setShowReconnectScreen(true);
-      }, 2000);
-
-      return () => clearTimeout(timer);
-    } else {
-      // Connection is healthy or no active connection — hide immediately
-      setShowReconnectScreen(false);
-    }
-  }, [activeConnection, activeConnection?.status, showOnboarding]);
 
   // Subscribe to WebSocket messages
   useEffect(() => {
@@ -256,12 +233,6 @@ export function Dashboard() {
         </div>
       </div>
     );
-  }
-
-  // Agent reconnection screen — show after delay when active agent is not connected
-  // Only in dashboard mode, unless we're in onboarding
-  if (showReconnectScreen) {
-    return <AgentReconnectionScreen />;
   }
 
   // Show onboarding wizard for first-time users
@@ -429,7 +400,7 @@ export function Dashboard() {
         }
       />
 
-      <AgentUpdatingBanner />
+      <AgentStatusBanner />
 
       <div className="flex-1 flex overflow-hidden">
         <main className="flex-1 overflow-y-auto">

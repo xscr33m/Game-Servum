@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { useBackend } from "@/hooks/useBackend";
 import { publicAsset } from "@/lib/assets";
 import { AppHeader } from "@/components/AppHeader";
-import { AgentUpdatingBanner } from "@/components/AgentUpdatingBanner";
+import { AgentStatusBanner } from "@/components/AgentStatusBanner";
 import { getElectronSettings } from "@/lib/electronSettings";
 import { logger } from "@/lib/logger";
 import { toastSuccess, toastError, toastInfo } from "@/lib/toast";
@@ -143,7 +143,7 @@ export function Settings() {
         }
       />
 
-      <AgentUpdatingBanner />
+      <AgentStatusBanner />
 
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-6xl mx-auto px-6 py-6">

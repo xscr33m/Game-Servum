@@ -203,11 +203,10 @@ export function AgentControlPanel() {
       if (ok) {
         toastSuccess(`Reconnected to ${activeConnection.name}`);
         fetchInfo();
-      } else {
-        toastError(`Failed to reconnect to ${activeConnection.name}`);
       }
+      // Failure is shown via the AgentStatusBanner — no toast needed
     } catch {
-      toastError("Reconnection failed");
+      // Failure is shown via the AgentStatusBanner — no toast needed
     } finally {
       setReconnecting(false);
     }

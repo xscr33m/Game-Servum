@@ -372,8 +372,12 @@ export function BackendProvider({ children }: { children: ReactNode }) {
       }
       reconnectAttemptsRef.current = 0;
       isReconnecting.current = false;
-      // Ensure status is "connected"
-      if (activeConnection.status !== "connected") {
+      // Ensure status is "connected" — but don't override "updating"
+      // (the agent is about to go down, WS just hasn't disconnected yet)
+      if (
+        activeConnection.status !== "connected" &&
+        activeConnection.status !== "updating"
+      ) {
         updateConnection(activeConnection.id, {
           status: "connected",
           reconnectAttempts: 0,
@@ -473,7 +477,10 @@ export function BackendProvider({ children }: { children: ReactNode }) {
         logger.info(
           `[Reconnect] Agent "${conn.name}" is reachable — re-authenticating...`,
         );
-        updateConnection(connId, { status: "authenticating" });
+        // Preserve "updating" status through the auth phase so the banner stays blue
+        if (conn.status !== "updating") {
+          updateConnection(connId, { status: "authenticating" });
+        }
 
         // Re-authenticate with stored credentials
         const authRes = await fetch(`${conn.url}/api/v1/auth/connect`, {
@@ -489,13 +496,16 @@ export function BackendProvider({ children }: { children: ReactNode }) {
           logger.warn(
             `[Reconnect] Re-auth failed for "${conn.name}" (${authRes.status})`,
           );
-          updateConnection(connId, {
-            status: "error",
-            lastError:
-              authRes.status === 401
-                ? "Authentication failed - invalid credentials"
-                : `Authentication failed (${authRes.status})`,
-          });
+          // During updates, keep "updating" status so unlimited retries continue
+          if (conn.status !== "updating") {
+            updateConnection(connId, {
+              status: "error",
+              lastError:
+                authRes.status === 401
+                  ? "Authentication failed - invalid credentials"
+                  : `Authentication failed (${authRes.status})`,
+            });
+          }
           return;
         }
 

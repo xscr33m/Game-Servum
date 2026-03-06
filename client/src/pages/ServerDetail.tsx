@@ -25,7 +25,7 @@ import { SettingsTab } from "@/components/server/SettingsTab";
 import { useBackend } from "@/hooks/useBackend";
 import { AgentControlPanel } from "@/components/agent/AgentControlPanel";
 import { AppHeader } from "@/components/AppHeader";
-import { AgentUpdatingBanner } from "@/components/AgentUpdatingBanner";
+import { AgentStatusBanner } from "@/components/AgentStatusBanner";
 import {
   toastSuccess,
   toastError,
@@ -257,7 +257,7 @@ export function ServerDetail() {
         }
       />
 
-      <AgentUpdatingBanner />
+      <AgentStatusBanner />
 
       {/* Main Content with Tabs */}
       <main className="flex-1 overflow-y-auto">

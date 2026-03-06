@@ -50,6 +50,7 @@ export function AgentUpdateNotification({
   async function handleInstall() {
     try {
       await api.system.installUpdate();
+      setDismissed(true);
       onInstallStarted();
     } catch (err) {
       toastError((err as Error).message);
