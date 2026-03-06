@@ -26,6 +26,7 @@ import {
 import { AddAgentDialog } from "@/components/agent/AddAgentDialog";
 import { RemoveAgentDialog } from "@/components/agent/RemoveAgentDialog";
 import { EditAgentDialog } from "@/components/agent/EditAgentDialog";
+import { AgentUpdateNotification } from "@/components/agent/AgentUpdateNotification";
 import { useBackend } from "@/hooks/useBackend";
 import { toastSuccess, toastError, toastInfo } from "@/lib/toast";
 import type { BackendConnection } from "@/lib/config";
@@ -143,9 +144,6 @@ export function AgentControlPanel() {
           latestVersion,
           checking: false,
         }));
-        toastInfo(`Agent update available: v${latestVersion}`, {
-          description: `Current version: v${currentVersion}. Open the agent menu to download and install.`,
-        });
       } else if (message.type === "update-check:complete") {
         const { updateAvailable, currentVersion, latestVersion } =
           message.payload as {
@@ -706,6 +704,19 @@ export function AgentControlPanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Agent Update Notification Card */}
+      {updateState && activeConnection && (
+        <AgentUpdateNotification
+          updateState={updateState}
+          agentName={activeConnection.name}
+          api={api}
+          onInstallStarted={() => {
+            updateConnectionStatus(activeConnection.id, "updating");
+            setActionsMenuOpen(false);
+          }}
+        />
+      )}
     </>
   );
 }
