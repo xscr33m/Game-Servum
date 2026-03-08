@@ -1,5 +1,6 @@
 import os from "os";
 import { exec } from "child_process";
+import { statfs } from "fs/promises";
 
 export interface SystemMetrics {
   cpu: {
@@ -63,7 +64,7 @@ function getCpuUsage(): number {
   return 0; // First call — no delta yet
 }
 
-// ─── Network via os.networkInterfaces() delta ───────────────────────────
+// ─── Network via netstat -e delta ───────────────────────────────────────
 
 interface NetworkSnapshot {
   bytesSent: number;
@@ -84,7 +85,7 @@ function getNetworkStats(): Promise<{
   receiveRate: number;
 }> {
   return new Promise((resolve) => {
-    exec("netstat -e", (error, stdout) => {
+    exec("netstat -e", { windowsHide: true }, (error, stdout) => {
       if (error) {
         resolve({
           bytesSent: 0,
@@ -140,53 +141,46 @@ function getNetworkStats(): Promise<{
   });
 }
 
-// ─── Disk Usage via PowerShell (Windows) ────────────────────────────────
+// ─── Disk Usage via fs.statfs() (native, no subprocess) ────────────────
 
-function getDiskUsage(): Promise<{
+async function getDiskUsage(): Promise<{
   totalBytes: number;
   freeBytes: number;
   usedBytes: number;
   usagePercent: number;
   drive: string;
 }> {
-  return new Promise((resolve) => {
-    const drive = process.cwd().charAt(0).toUpperCase() + ":";
-    const defaultResult = {
-      totalBytes: 0,
-      freeBytes: 0,
-      usedBytes: 0,
-      usagePercent: 0,
-      drive,
-    };
+  const drive = process.cwd().charAt(0).toUpperCase() + ":";
+  const defaultResult = {
+    totalBytes: 0,
+    freeBytes: 0,
+    usedBytes: 0,
+    usagePercent: 0,
+    drive,
+  };
 
-    // Use PowerShell Get-CimInstance (works on all modern Windows versions)
-    const psCommand = `powershell -NoProfile -Command "Get-CimInstance -ClassName Win32_LogicalDisk -Filter \\"DeviceID='${drive}'\\" | Select-Object -Property Size,FreeSpace | ConvertTo-Json"`;
+  try {
+    // statfs works on any path — use cwd root (e.g. "C:\\" on Windows)
+    const stats = await statfs(process.cwd());
+    const totalBytes = stats.bsize * stats.blocks;
+    const freeBytes = stats.bsize * stats.bavail;
+    const usedBytes = totalBytes - freeBytes;
+    const usagePercent =
+      totalBytes > 0 ? Math.round((usedBytes / totalBytes) * 1000) / 10 : 0;
 
-    exec(psCommand, (error, stdout) => {
-      if (error) {
-        resolve(defaultResult);
-        return;
-      }
-
-      try {
-        const parsed = JSON.parse(stdout.trim());
-        const totalBytes = parsed.Size || 0;
-        const freeBytes = parsed.FreeSpace || 0;
-        const usedBytes = totalBytes - freeBytes;
-        const usagePercent =
-          totalBytes > 0 ? Math.round((usedBytes / totalBytes) * 1000) / 10 : 0;
-
-        resolve({ totalBytes, freeBytes, usedBytes, usagePercent, drive });
-      } catch {
-        resolve(defaultResult);
-      }
-    });
-  });
+    return { totalBytes, freeBytes, usedBytes, usagePercent, drive };
+  } catch {
+    return defaultResult;
+  }
 }
 
-// ─── Public API ─────────────────────────────────────────────────────────
+// ─── Cached metrics collection ──────────────────────────────────────────
 
-export async function getSystemMetrics(): Promise<SystemMetrics> {
+const COLLECTION_INTERVAL = 2000;
+let cachedMetrics: SystemMetrics | null = null;
+let collectionTimer: ReturnType<typeof setInterval> | null = null;
+
+async function collectMetrics(): Promise<SystemMetrics> {
   const cpus = os.cpus();
   const totalMem = os.totalmem();
   const freeMem = os.freemem();
@@ -197,7 +191,7 @@ export async function getSystemMetrics(): Promise<SystemMetrics> {
     getNetworkStats(),
   ]);
 
-  return {
+  const metrics: SystemMetrics = {
     cpu: {
       usagePercent: getCpuUsage(),
       cores: cpus.length,
@@ -214,4 +208,34 @@ export async function getSystemMetrics(): Promise<SystemMetrics> {
     uptime: os.uptime(),
     timestamp: new Date().toISOString(),
   };
+
+  cachedMetrics = metrics;
+  return metrics;
+}
+
+/** Start background metrics collection (call when first client connects). */
+export function startMetricsCollection(): void {
+  if (collectionTimer) return;
+  // Kick off an immediate collection (don't await — runs in background)
+  collectMetrics().catch(() => {});
+  collectionTimer = setInterval(() => {
+    collectMetrics().catch(() => {});
+  }, COLLECTION_INTERVAL);
+}
+
+/** Stop background metrics collection (call when last client disconnects). */
+export function stopMetricsCollection(): void {
+  if (collectionTimer) {
+    clearInterval(collectionTimer);
+    collectionTimer = null;
+  }
+  // Keep cachedMetrics for quick response on reconnect
+}
+
+// ─── Public API ─────────────────────────────────────────────────────────
+
+export async function getSystemMetrics(): Promise<SystemMetrics> {
+  if (cachedMetrics) return cachedMetrics;
+  // No cache yet (first call or before timer started) — collect once directly
+  return collectMetrics();
 }

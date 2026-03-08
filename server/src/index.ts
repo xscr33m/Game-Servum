@@ -20,6 +20,10 @@ import {
   startAutoUpdateCheck,
   stopAutoUpdateCheck,
 } from "./services/agentUpdater.js";
+import {
+  startMetricsCollection,
+  stopMetricsCollection,
+} from "./services/systemMonitor.js";
 import { SimpleLogger } from "./services/logger.js";
 import { DEFAULT_LOG_SETTINGS } from "@game-servum/shared";
 import { setAppSetting } from "./db/index.js";
@@ -113,14 +117,29 @@ async function main() {
     logger.debug("[WebSocket] Client connected");
     clients.add(ws);
 
+    // Start metrics collection when first client connects
+    if (clients.size === 1) {
+      startMetricsCollection();
+    }
+
     ws.on("close", () => {
       logger.debug("[WebSocket] Client disconnected");
       clients.delete(ws);
+
+      // Stop metrics collection when last client disconnects
+      if (clients.size === 0) {
+        stopMetricsCollection();
+      }
     });
 
     ws.on("error", (error: Error) => {
       logger.error("[WebSocket] Client error", error);
       clients.delete(ws);
+
+      // Stop metrics collection when last client disconnects
+      if (clients.size === 0) {
+        stopMetricsCollection();
+      }
     });
   });
 
