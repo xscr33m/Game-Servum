@@ -237,15 +237,15 @@ export function ServerDetail() {
               />
             </Button>
             <div className="h-7 w-px bg-ring/30" />
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold">{server.name}</h1>
-              <Badge variant={status.variant}>{status.label}</Badge>
-            </div>
+            <AgentControlPanel />
           </>
         }
         right={
           <>
-            <AgentControlPanel />
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl font-bold">{server.name}</h1>
+              <Badge variant={status.variant}>{status.label}</Badge>
+            </div>
             {isRunning ? (
               <Button
                 variant="destructive"
