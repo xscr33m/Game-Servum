@@ -23,6 +23,10 @@ export type {
   AgentSettings,
   UpdateState,
   ApiResponse,
+  FirewallRuleDefinition,
+  FirewallRuleStatus,
+  FirewallStatus,
+  FirewallResult,
 } from "@game-servum/shared";
 
 // Client-only types
@@ -69,4 +73,5 @@ export interface GameDefinition {
   requiresLogin: boolean;
   description: string;
   defaultLaunchParams: string;
+  firewallRules?: import("@game-servum/shared").FirewallRuleDefinition[];
 }

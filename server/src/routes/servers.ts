@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from "express";
 import path from "path";
 import fs from "fs";
 import { exec } from "child_process";
-import { logger } from "../index.js";
+import { logger, broadcast } from "../index.js";
 import {
   getAllServers,
   getServerById,
@@ -75,6 +75,12 @@ import {
   readLogContent,
   deleteArchivedSession,
 } from "../services/logManager.js";
+import {
+  checkFirewallRules,
+  addFirewallRules,
+  removeFirewallRules,
+  updateFirewallRules,
+} from "../services/firewallManager.js";
 import type { CreateServerRequest } from "../types/index.js";
 
 const router = Router();
@@ -92,6 +98,7 @@ router.get("/games", (_req: Request, res: Response) => {
     requiresLogin: game.requiresLogin,
     description: game.description,
     defaultLaunchParams: game.defaultLaunchParams,
+    firewallRules: game.firewallRules ?? [],
   }));
   res.json(games);
 });
@@ -310,6 +317,27 @@ router.post("/", async (req: Request, res: Response) => {
     logger.error("Installation error:", err);
   });
 
+  // Add firewall rules in background (non-blocking)
+  addFirewallRules({
+    name: body.name,
+    port: body.port || gameDef.defaultPort,
+    installPath,
+    executable: gameDef.executable,
+    gameId: body.gameId,
+  })
+    .then((result) => {
+      if (result.errors.length > 0) {
+        logger.error(
+          `[Firewall] Errors creating rules for ${body.name}:`,
+          result.errors,
+        );
+      }
+      broadcast("firewall:updated", { serverId, ...result });
+    })
+    .catch((err) => {
+      logger.error("[Firewall] Failed to create rules:", err);
+    });
+
   res.status(201).json({
     server,
     message: "Server created, installation started",
@@ -516,6 +544,31 @@ router.put("/:id/ports", (req: Request, res: Response) => {
   }
 
   updateServerPorts(id, port, queryPort);
+
+  // Update firewall rules in background
+  updateFirewallRules(
+    {
+      name: server.name,
+      port: server.port,
+      installPath: server.installPath,
+      executable: server.executable,
+      gameId: server.gameId,
+    },
+    {
+      name: server.name,
+      port,
+      installPath: server.installPath,
+      executable: server.executable,
+      gameId: server.gameId,
+    },
+  )
+    .then((result) => {
+      broadcast("firewall:updated", { serverId: id, ...result });
+    })
+    .catch((err) => {
+      logger.error("[Firewall] Failed to update rules after port change:", err);
+    });
+
   res.json({ success: true, message: "Ports updated" });
 });
 
@@ -540,6 +593,31 @@ router.put("/:id/name", (req: Request, res: Response) => {
   }
 
   updateServerName(id, name.trim());
+
+  // Update firewall rules with new name in background
+  updateFirewallRules(
+    {
+      name: server.name,
+      port: server.port,
+      installPath: server.installPath,
+      executable: server.executable,
+      gameId: server.gameId,
+    },
+    {
+      name: name.trim(),
+      port: server.port,
+      installPath: server.installPath,
+      executable: server.executable,
+      gameId: server.gameId,
+    },
+  )
+    .then((result) => {
+      broadcast("firewall:updated", { serverId: id, ...result });
+    })
+    .catch((err) => {
+      logger.error("[Firewall] Failed to update rules after name change:", err);
+    });
+
   res.json({ success: true, message: "Server name updated" });
 });
 
@@ -1330,6 +1408,14 @@ router.delete("/:id", async (req: Request, res: Response) => {
     cancelInstallation(id);
   }
 
+  // Remove firewall rules before deleting (non-blocking, don't fail deletion)
+  try {
+    await removeFirewallRules(server.name, server.gameId, server.port);
+    logger.info(`[Delete] Removed firewall rules for server: ${server.name}`);
+  } catch (err) {
+    logger.error(`[Delete] Failed to remove firewall rules: ${err}`);
+  }
+
   // Delete server files
   const installPath = server.installPath;
   let filesDeleted = false;
@@ -1752,6 +1838,83 @@ router.delete("/:id/players/ban", (req: Request, res: Response) => {
   } catch (err) {
     res.status(500).json({
       error: `Failed to update ban list: ${(err as Error).message}`,
+    });
+  }
+});
+
+// ==================== FIREWALL ROUTES ====================
+
+// GET /api/servers/:id/firewall - Check firewall rule status
+router.get("/:id/firewall", async (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  try {
+    const status = await checkFirewallRules({
+      name: server.name,
+      port: server.port,
+      installPath: server.installPath,
+      executable: server.executable,
+      gameId: server.gameId,
+    });
+    res.json(status);
+  } catch (err) {
+    res.status(500).json({
+      error: `Failed to check firewall rules: ${(err as Error).message}`,
+    });
+  }
+});
+
+// POST /api/servers/:id/firewall - Add/repair missing firewall rules
+router.post("/:id/firewall", async (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  try {
+    const result = await addFirewallRules({
+      name: server.name,
+      port: server.port,
+      installPath: server.installPath,
+      executable: server.executable,
+      gameId: server.gameId,
+    });
+    broadcast("firewall:updated", { serverId: id, ...result });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({
+      error: `Failed to add firewall rules: ${(err as Error).message}`,
+    });
+  }
+});
+
+// DELETE /api/servers/:id/firewall - Remove all firewall rules for a server
+router.delete("/:id/firewall", async (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  try {
+    const result = await removeFirewallRules(
+      server.name,
+      server.gameId,
+      server.port,
+    );
+    broadcast("firewall:updated", { serverId: id, ...result });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({
+      error: `Failed to remove firewall rules: ${(err as Error).message}`,
     });
   }
 });

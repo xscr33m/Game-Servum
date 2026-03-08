@@ -9,3 +9,4 @@ export * from "./system.js";
 export * from "./api.js";
 export * from "./updater.js";
 export * from "./logging.js";
+export * from "./firewall.js";

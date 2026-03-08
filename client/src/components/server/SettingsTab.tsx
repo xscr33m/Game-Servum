@@ -10,6 +10,8 @@ import {
   FaTrashCan,
   FaCode,
   FaDownload,
+  FaShieldHalved,
+  FaSpinner,
 } from "react-icons/fa6";
 import {
   Card,
@@ -32,6 +34,7 @@ import type {
   ServerMessage,
   ServerVariable,
   UpdateRestartSettings,
+  FirewallStatus,
 } from "@/types";
 
 interface SettingsTabProps {
@@ -40,7 +43,16 @@ interface SettingsTabProps {
 }
 
 export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
-  const { api, isConnected } = useBackend();
+  const { api, isConnected, subscribe } = useBackend();
+
+  // Firewall state
+  const [firewallStatus, setFirewallStatus] = useState<FirewallStatus | null>(
+    null,
+  );
+  const [firewallLoading, setFirewallLoading] = useState(true);
+  const [firewallSaving, setFirewallSaving] = useState(false);
+  const [firewallError, setFirewallError] = useState<string | null>(null);
+
   // Schedule editing
   const [schedule, setSchedule] = useState<ServerSchedule | null>(null);
   const [scheduleLoading, setScheduleLoading] = useState(true);
@@ -86,6 +98,74 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
       logger.error("Failed to toggle auto-restart", err);
     }
   }, [server.id, server.autoRestart, onRefresh, api.servers]);
+
+  // Load firewall status
+  const loadFirewallStatus = useCallback(async () => {
+    setFirewallLoading(true);
+    setFirewallError(null);
+    try {
+      const status = await api.servers.getFirewallStatus(server.id);
+      setFirewallStatus(status);
+    } catch (err) {
+      setFirewallError((err as Error).message);
+    } finally {
+      setFirewallLoading(false);
+    }
+  }, [server.id, api.servers]);
+
+  useEffect(() => {
+    if (!isConnected) return;
+    loadFirewallStatus();
+  }, [loadFirewallStatus, isConnected]);
+
+  // Auto-refresh firewall status on WebSocket event
+  useEffect(() => {
+    const unsubscribe = subscribe((message) => {
+      if (
+        message.type === "firewall:updated" &&
+        (message.payload as { serverId?: number })?.serverId === server.id
+      ) {
+        loadFirewallStatus();
+      }
+    });
+    return unsubscribe;
+  }, [subscribe, server.id, loadFirewallStatus]);
+
+  const handleAddFirewallRules = useCallback(async () => {
+    setFirewallSaving(true);
+    setFirewallError(null);
+    try {
+      const result = await api.servers.addFirewallRules(server.id);
+      if (!result.success) {
+        setFirewallError(result.errors.join("; "));
+      } else {
+        toastSuccess(result.message);
+      }
+      await loadFirewallStatus();
+    } catch (err) {
+      setFirewallError((err as Error).message);
+    } finally {
+      setFirewallSaving(false);
+    }
+  }, [server.id, api.servers, loadFirewallStatus]);
+
+  const handleRemoveFirewallRules = useCallback(async () => {
+    setFirewallSaving(true);
+    setFirewallError(null);
+    try {
+      const result = await api.servers.removeFirewallRules(server.id);
+      if (!result.success) {
+        setFirewallError(result.errors.join("; "));
+      } else {
+        toastSuccess(result.message);
+      }
+      await loadFirewallStatus();
+    } catch (err) {
+      setFirewallError((err as Error).message);
+    } finally {
+      setFirewallSaving(false);
+    }
+  }, [server.id, api.servers, loadFirewallStatus]);
 
   // Update restart state
   const [updateRestart, setUpdateRestart] =
@@ -530,6 +610,138 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
                 onCheckedChange={handleToggleAutoRestart}
               />
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Windows Firewall Rules */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <FaShieldHalved className="h-5 w-5 text-ring" />
+                  Windows Firewall Rules
+                </CardTitle>
+                <CardDescription>
+                  Manage Windows Firewall rules for this game server's ports and
+                  executable
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                {firewallStatus &&
+                  !firewallLoading &&
+                  (firewallStatus.allPresent ? (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={handleRemoveFirewallRules}
+                      disabled={firewallSaving}
+                    >
+                      {firewallSaving ? (
+                        <FaSpinner className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <FaTrashCan className="mr-2 h-4 w-4" />
+                      )}
+                      Remove Rules
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={handleAddFirewallRules}
+                      disabled={firewallSaving}
+                    >
+                      {firewallSaving ? (
+                        <FaSpinner className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <FaShieldHalved className="mr-2 h-4 w-4" />
+                      )}
+                      {firewallStatus.rules.some((r) => r.exists) ||
+                      firewallStatus.executableRule.exists
+                        ? "Add Missing Rules"
+                        : "Add Rules"}
+                    </Button>
+                  ))}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {firewallLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <FaSpinner className="h-4 w-4 animate-spin" />
+                Checking firewall rules...
+              </div>
+            ) : firewallStatus ? (
+              <div className="space-y-3">
+                {/* Summary badge */}
+                <div className="flex items-center gap-2">
+                  {firewallStatus.allPresent ? (
+                    <Badge variant="success">All rules configured</Badge>
+                  ) : (
+                    <Badge variant="warning">
+                      {firewallStatus.rules.filter((r) => !r.exists).length +
+                        (firewallStatus.executableRule.exists ? 0 : 1)}{" "}
+                      of {firewallStatus.rules.length + 1} rule(s) missing
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Port rules */}
+                <div className="space-y-2">
+                  {firewallStatus.rules.map((rule) => (
+                    <div
+                      key={rule.name}
+                      className="flex items-center justify-between gap-3 bg-muted p-3 rounded-lg"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium">
+                          {rule.description}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {rule.protocol} {rule.ports}
+                        </p>
+                      </div>
+                      <Badge variant={rule.exists ? "success" : "destructive"}>
+                        {rule.exists ? "Active" : "Missing"}
+                      </Badge>
+                    </div>
+                  ))}
+
+                  {/* Executable rule */}
+                  <div className="flex items-center justify-between gap-3 bg-muted p-3 rounded-lg">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">Program Rule</p>
+                      <p className="text-xs text-muted-foreground">
+                        {server.executable ?? "Server executable"}
+                      </p>
+                    </div>
+                    <Badge
+                      variant={
+                        firewallStatus.executableRule.exists
+                          ? "success"
+                          : "destructive"
+                      }
+                    >
+                      {firewallStatus.executableRule.exists
+                        ? "Active"
+                        : "Missing"}
+                    </Badge>
+                  </div>
+                </div>
+
+                {firewallError && (
+                  <p className="text-xs text-red-500">{firewallError}</p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  Could not check firewall rules.
+                </p>
+                {firewallError && (
+                  <p className="text-xs text-red-500">{firewallError}</p>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 

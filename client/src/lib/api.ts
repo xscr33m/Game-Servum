@@ -185,6 +185,11 @@ export interface ServersApiClient {
   ) => Promise<{ sizeBytes: number; sizeFormatted: string }>;
   openFolder: (id: number) => Promise<{ success: boolean; message: string }>;
   cancelInstall: (id: number) => Promise<{ success: boolean; message: string }>;
+  getFirewallStatus: (id: number) => Promise<import("@/types").FirewallStatus>;
+  addFirewallRules: (id: number) => Promise<import("@/types").FirewallResult>;
+  removeFirewallRules: (
+    id: number,
+  ) => Promise<import("@/types").FirewallResult>;
   delete: (
     id: number,
     confirmName: string,
@@ -665,6 +670,16 @@ function createServersApi(fetchApi: FetchApiFn): ServersApiClient {
           method: "POST",
         },
       ),
+    getFirewallStatus: (id: number) =>
+      fetchApi<import("@/types").FirewallStatus>(`/servers/${id}/firewall`),
+    addFirewallRules: (id: number) =>
+      fetchApi<import("@/types").FirewallResult>(`/servers/${id}/firewall`, {
+        method: "POST",
+      }),
+    removeFirewallRules: (id: number) =>
+      fetchApi<import("@/types").FirewallResult>(`/servers/${id}/firewall`, {
+        method: "DELETE",
+      }),
     delete: (id: number, confirmName: string) =>
       fetchApi<{ success: boolean; message: string }>(`/servers/${id}`, {
         method: "DELETE",

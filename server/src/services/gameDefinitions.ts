@@ -12,6 +12,7 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import { logger } from "../index.js";
+import type { FirewallRuleDefinition } from "@game-servum/shared";
 
 export interface GameDefinition {
   id: string; // Unique identifier (e.g., "dayz", "7dtd")
@@ -28,6 +29,7 @@ export interface GameDefinition {
   defaultLaunchParams: string; // Default launch parameters
   description: string; // Brief description
   configFiles?: string[]; // Important config files to note
+  firewallRules?: FirewallRuleDefinition[]; // Port/protocol rules for Windows Firewall
   postInstall?: (installPath: string, serverName: string) => Promise<void>; // Post-install hook
 }
 
@@ -186,6 +188,16 @@ export const GAME_DEFINITIONS: Record<string, GameDefinition> = {
     description:
       "Post-apocalyptic survival game. Requires Steam login to download.",
     configFiles: ["serverDZ.cfg", "profiles/"],
+    firewallRules: [
+      { portOffset: 0, portCount: 4, protocol: "UDP", description: "Game" },
+      { portOffset: 4, portCount: 1, protocol: "UDP", description: "RCON" },
+      {
+        portOffset: 24714,
+        portCount: 1,
+        protocol: "UDP",
+        description: "Steam Query",
+      },
+    ],
     postInstall: dayZPostInstall,
   },
 
@@ -195,7 +207,7 @@ export const GAME_DEFINITIONS: Record<string, GameDefinition> = {
     appId: 294420,
     executable: "7DaysToDieServer.exe",
     defaultPort: 26900,
-    portCount: 1, // Game port only
+    portCount: 4, // Game port (26900) + network traffic (26901-26903)
     queryPort: 26901,
     queryPortOffset: 1,
     requiresLogin: false,
@@ -204,6 +216,14 @@ export const GAME_DEFINITIONS: Record<string, GameDefinition> = {
     description:
       "Zombie survival with base building. Can be downloaded anonymously.",
     configFiles: ["serverconfig.xml"],
+    firewallRules: [
+      {
+        portOffset: 0,
+        portCount: 4,
+        protocol: "TCP/UDP",
+        description: "Game + Network",
+      },
+    ],
     postInstall: sevenDaysPostInstall,
   },
 
@@ -222,6 +242,21 @@ export const GAME_DEFINITIONS: Record<string, GameDefinition> = {
     description: "Dinosaur survival game. Can be downloaded anonymously.",
     configFiles: [
       "ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini",
+    ],
+    firewallRules: [
+      {
+        portOffset: 0,
+        portCount: 2,
+        protocol: "UDP",
+        description: "Game + Peer",
+      },
+      {
+        portOffset: 19238,
+        portCount: 1,
+        protocol: "UDP",
+        description: "Steam Query",
+      },
+      { portOffset: 19243, portCount: 1, protocol: "TCP", description: "RCON" },
     ],
     postInstall: arkPostInstall,
   },
