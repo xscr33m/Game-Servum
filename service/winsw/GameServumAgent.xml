@@ -35,6 +35,6 @@
   <!-- {{LOGPATH}} is replaced by the NSIS installer with the actual log directory path -->
   <logpath>{{LOGPATH}}</logpath>
 
-  <!-- Delay auto-start to allow network services to initialize -->
-  <delayedAutoStart>true</delayedAutoStart>
+  <!-- No delayed auto-start -->
+  <delayedAutoStart>false</delayedAutoStart>
 </service>
