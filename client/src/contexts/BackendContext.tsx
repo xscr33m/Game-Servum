@@ -59,6 +59,10 @@ export function BackendProvider({ children }: { children: ReactNode }) {
   const tokenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reconnectAttemptsRef = useRef(0);
+  // Tracks whether WS was previously connected — used to distinguish
+  // "unexpected disconnect" (prev=true) from "WS not yet created after reconnect" (prev=false)
+  const prevWsConnectedRef = useRef(false);
+  const prevActiveIdRef = useRef<string | null>(null);
 
   // Keep latest connections in ref for dynamic token getter
   // IMPORTANT: Update synchronously during render, NOT in useEffect!
@@ -384,6 +388,12 @@ export function BackendProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!activeConnection) return;
 
+    // Reset WS tracking when switching to a different agent
+    if (activeConnection.id !== prevActiveIdRef.current) {
+      prevWsConnectedRef.current = false;
+      prevActiveIdRef.current = activeConnection.id;
+    }
+
     if (wsConnected) {
       // Connection is healthy — stop any reconnect polling
       if (reconnectTimerRef.current) {
@@ -392,6 +402,7 @@ export function BackendProvider({ children }: { children: ReactNode }) {
       }
       reconnectAttemptsRef.current = 0;
       isReconnecting.current = false;
+      prevWsConnectedRef.current = true;
       // Ensure status is "connected" — but don't override "updating"
       // (the agent is about to go down, WS just hasn't disconnected yet)
       if (
@@ -408,10 +419,16 @@ export function BackendProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Just successfully reconnected — the token was updated (status="connected")
-    // but the WS manager hasn't been recreated with the new token yet.
-    // Wait for the token-change effect to recreate WS → wsConnected=true.
-    if (activeConnection.status === "connected") return;
+    // WS disconnected while status is "connected" — two possible scenarios:
+    // 1. Post-reconnect: token was just updated, WS manager is being recreated
+    //    (prevWsConnected=false) → wait for the new WS to connect
+    // 2. Unexpected disconnect: agent crashed or network dropped
+    //    (prevWsConnected=true) → fall through to start reconnecting
+    if (activeConnection.status === "connected") {
+      if (!prevWsConnectedRef.current) return;
+      // Unexpected disconnect — WS was previously connected, now it's gone
+      prevWsConnectedRef.current = false;
+    }
 
     // WS disconnected — only start polling if we had a valid connection before
     // (has credentials stored, meaning it was previously connected)
