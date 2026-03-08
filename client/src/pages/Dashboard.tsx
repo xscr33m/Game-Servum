@@ -315,8 +315,8 @@ export function Dashboard() {
             {steamcmd?.installed && (
               <Badge
                 variant={steamcmd.loggedIn ? "success" : "secondary"}
-                className="gap-1.5 cursor-pointer"
-                onClick={() => setShowSteamAccount(true)}
+                className={`gap-1.5 ${isConnected ? "cursor-pointer" : "opacity-50 cursor-not-allowed"}`}
+                onClick={() => isConnected && setShowSteamAccount(true)}
                 title="Steam Account"
               >
                 {steamcmd.loggedIn ? (
