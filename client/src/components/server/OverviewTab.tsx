@@ -20,7 +20,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -273,99 +272,72 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
         </Alert>
       )}
 
-      {/* Server Info Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Game</CardTitle>
-            <FaServer className="h-4 w-4 text-ring" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{gameName}</div>
-            <p className="text-xs text-muted-foreground">
-              App ID: {server.appId}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Network</CardTitle>
-            <FaNetworkWired className="h-4 w-4 text-ring" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">:{server.port}</div>
-            <p className="text-xs text-muted-foreground">
-              Query: {server.queryPort || server.port + 3}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Status</CardTitle>
-            <FaHardDrive className="h-4 w-4 text-ring" />
-          </CardHeader>
-          <CardContent>
+      {/* Server Info */}
+      <Card>
+        <CardContent className="py-4">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
             <div className="flex items-center gap-2">
-              <Badge
-                variant={
-                  server.status === "running"
-                    ? "success"
-                    : server.status === "error"
-                      ? "destructive"
-                      : "secondary"
-                }
-                className="text-lg px-3 py-1"
-              >
-                {server.status}
-              </Badge>
+              <FaServer className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Game</span>
+              <span className="text-sm font-semibold">{gameName}</span>
+              <span className="text-xs text-muted-foreground font-mono">
+                ({server.appId})
+              </span>
             </div>
-            {server.pid && (
-              <p className="text-xs text-muted-foreground mt-1">
-                PID: {server.pid}
-              </p>
+
+            <div className="h-4 w-px bg-border" />
+
+            <div className="flex items-center gap-2">
+              <FaNetworkWired className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Port</span>
+              <span className="text-sm font-semibold font-mono">
+                {server.port}
+              </span>
+              {server.queryPort && (
+                <span className="text-xs text-muted-foreground font-mono">
+                  / {server.queryPort}
+                </span>
+              )}
+            </div>
+
+            <div className="h-4 w-px bg-border" />
+
+            <div className="flex items-center gap-2">
+              <FaClock className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Created</span>
+              <span className="text-sm font-semibold">{createdDate}</span>
+            </div>
+
+            <div className="h-4 w-px bg-border" />
+
+            <div className="flex items-center gap-2">
+              <FaHardDrive className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Disk</span>
+              <span className="text-sm font-semibold">
+                {diskUsage ?? "..."}
+              </span>
+            </div>
+
+            {(uptime || server.pid) && (
+              <>
+                <div className="h-4 w-px bg-border" />
+                <div className="flex items-center gap-2">
+                  <FaClock className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Uptime</span>
+                  <span className="text-sm font-semibold font-mono tabular-nums">
+                    {uptime}
+                  </span>
+                  {server.pid && (
+                    <span className="text-xs text-muted-foreground font-mono">
+                      PID {server.pid}
+                    </span>
+                  )}
+                </div>
+              </>
             )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Uptime</CardTitle>
-            <FaClock className="h-4 w-4 text-ring" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold tabular-nums">
-              {uptime ?? "\u2014"}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {isRunning ? "Time running" : "Server offline"}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Created</CardTitle>
-            <FaClock className="h-4 w-4 text-ring" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{createdDate}</div>
-            <p className="text-xs text-muted-foreground">Installation date</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Disk Usage</CardTitle>
-            <FaHardDrive className="h-4 w-4 text-ring" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{diskUsage ?? "..."}</div>
-            <p className="text-xs text-muted-foreground">Server files</p>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Server Details */}
       <Card>
