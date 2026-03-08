@@ -67,12 +67,13 @@ export function ServerCard({
     server.status === "stopping";
 
   function handleOpenServer() {
+    if (disabled) return;
     navigate(`/server/${server.id}`);
   }
 
   return (
     <div
-      className="group relative rounded-xl border bg-card text-card-foreground shadow overflow-hidden transition-all duration-200 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 cursor-pointer"
+      className={`group relative rounded-xl border bg-card text-card-foreground shadow overflow-hidden transition-all duration-200 ${disabled ? "opacity-75 cursor-default" : "hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 cursor-pointer"}`}
       onClick={handleOpenServer}
     >
       {/* Running indicator glow */}
@@ -164,7 +165,12 @@ export function ServerCard({
             Start
           </Button>
         )}
-        <Button variant="outline" size="sm" onClick={handleOpenServer}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleOpenServer}
+          disabled={disabled}
+        >
           <FaArrowUpRightFromSquare className="h-3.5 w-3.5 mr-1.5" />
           Open
         </Button>

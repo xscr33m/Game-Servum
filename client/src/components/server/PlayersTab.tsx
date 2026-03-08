@@ -95,7 +95,7 @@ export function PlayersTab({ server }: PlayersTabProps) {
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const { api, subscribe } = useBackend();
+  const { api, subscribe, isConnected } = useBackend();
 
   /**
    * Check if a character ID is present in the whitelist content
@@ -149,17 +149,18 @@ export function PlayersTab({ server }: PlayersTabProps) {
   }, [server.id, api.servers]);
 
   useEffect(() => {
+    if (!isConnected) return;
     loadPlayers();
     loadFiles();
-  }, [loadPlayers, loadFiles]);
+  }, [loadPlayers, loadFiles, isConnected]);
 
   // Auto-refresh player list every 30 seconds when server is running
   useEffect(() => {
-    if (server.status !== "running") return;
+    if (server.status !== "running" || !isConnected) return;
 
     const interval = setInterval(loadPlayers, 30000);
     return () => clearInterval(interval);
-  }, [server.status, loadPlayers]);
+  }, [server.status, loadPlayers, isConnected]);
 
   // Subscribe to player updates via WebSocket
   useEffect(() => {

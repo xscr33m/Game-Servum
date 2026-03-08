@@ -31,7 +31,7 @@ const RECONNECT_POLL_INTERVAL = 3_000;
 const RECONNECT_INITIAL_DELAY = 1_000;
 // Longer initial delay for intentional disconnects (updating/restarting)
 // to wait for the agent to fully shut down before polling
-const RECONNECT_INTENTIONAL_DELAY = 15_000;
+const RECONNECT_INTENTIONAL_DELAY = 30_000;
 // Max reconnect attempts before giving up (20 attempts ≈ 60s, then user must manually retry)
 const MAX_RECONNECT_ATTEMPTS = 20;
 
@@ -407,6 +407,11 @@ export function BackendProvider({ children }: { children: ReactNode }) {
       }
       return;
     }
+
+    // Just successfully reconnected — the token was updated (status="connected")
+    // but the WS manager hasn't been recreated with the new token yet.
+    // Wait for the token-change effect to recreate WS → wsConnected=true.
+    if (activeConnection.status === "connected") return;
 
     // WS disconnected — only start polling if we had a valid connection before
     // (has credentials stored, meaning it was previously connected)

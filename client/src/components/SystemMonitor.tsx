@@ -83,7 +83,7 @@ function UsageRing({
 }
 
 export function SystemMonitor() {
-  const { api, activeConnection } = useBackend();
+  const { api, activeConnection, isConnected } = useBackend();
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
   const [error, setError] = useState(false);
   const intervalRef = useRef<number | null>(null);
@@ -98,7 +98,9 @@ export function SystemMonitor() {
     }
   }, [api.system]);
 
+  // Poll only while connected; clear stale data when disconnected
   useEffect(() => {
+    if (!isConnected) return;
     const initialTimeout = window.setTimeout(fetchMetrics, 0);
     intervalRef.current = window.setInterval(fetchMetrics, POLL_INTERVAL);
     return () => {
@@ -106,10 +108,13 @@ export function SystemMonitor() {
       if (intervalRef.current) {
         window.clearInterval(intervalRef.current);
       }
+      // Clear stale metrics and reset error when polling stops (disconnect)
+      setMetrics(null);
+      setError(false);
     };
-  }, [fetchMetrics]);
+  }, [fetchMetrics, isConnected]);
 
-  if (error) {
+  if (error && isConnected) {
     return null;
   }
 

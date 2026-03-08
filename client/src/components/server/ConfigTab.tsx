@@ -214,7 +214,7 @@ function generateConfig(config: DayZConfig, originalContent: string): string {
 }
 
 export function ConfigTab({ server }: ConfigTabProps) {
-  const { api } = useBackend();
+  const { api, isConnected } = useBackend();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -243,8 +243,9 @@ export function ConfigTab({ server }: ConfigTabProps) {
   }, [server.id, server.gameId, api.servers]);
 
   useEffect(() => {
+    if (!isConnected) return;
     loadConfig();
-  }, [loadConfig]);
+  }, [loadConfig, isConnected]);
 
   function handleConfigChange<K extends keyof DayZConfig>(
     key: K,

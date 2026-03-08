@@ -112,6 +112,22 @@ export function ServerDetail() {
     }
   }, [activeConnection?.id, navigate]);
 
+  // Redirect to Dashboard when agent is not connected.
+  // ServerDetail requires a live agent connection — all data and actions
+  // depend on it.  When the agent restarts, updates, or drops, we redirect
+  // so the Dashboard (with AgentStatusBanner) handles the reconnect UX.
+  // Skip undefined status (initial state before BackendContext authenticates)
+  // and "authenticating" (connection handshake in progress).
+  useEffect(() => {
+    if (
+      activeConnection?.status &&
+      activeConnection.status !== "connected" &&
+      activeConnection.status !== "authenticating"
+    ) {
+      navigate("/", { replace: true });
+    }
+  }, [activeConnection?.status, navigate]);
+
   // Subscribe to server status updates
   useEffect(() => {
     const unsubscribe = subscribe((message) => {
@@ -170,17 +186,23 @@ export function ServerDetail() {
     );
   }
 
-  if (error || !server) {
+  if (!server) {
     return (
       <div className="h-screen flex flex-col bg-background">
-        <header className="border-b shrink-0">
-          <div className="px-4 py-3">
-            <Button variant="ghost" onClick={() => navigate("/")}>
+        <AppHeader
+          left={
+            <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
               <FaArrowLeft className="h-4 w-4 mr-2" />
-              Back to Dashboard
+              <img
+                src={publicAsset("dashboard-icon.png")}
+                alt=""
+                className="h-7 w-auto mr-1"
+              />
             </Button>
-          </div>
-        </header>
+          }
+          right={<AgentControlPanel />}
+        />
+        <AgentStatusBanner />
         <main className="flex-1 overflow-y-auto">
           <div className="container mx-auto px-4 py-8">
             <div className="text-center text-destructive">

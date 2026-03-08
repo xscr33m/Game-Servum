@@ -74,7 +74,7 @@ export function ModsTab({ server }: ModsTabProps) {
   const [persistentError, setPersistentError] = useState<string | null>(null);
   const [actionInProgress, setActionInProgress] = useState<number | null>(null);
 
-  const { api, subscribe } = useBackend();
+  const { api, subscribe, isConnected } = useBackend();
 
   const loadMods = useCallback(async () => {
     try {
@@ -91,8 +91,9 @@ export function ModsTab({ server }: ModsTabProps) {
   }, [server.id, api.servers]);
 
   useEffect(() => {
+    if (!isConnected) return;
     loadMods();
-  }, [loadMods]);
+  }, [loadMods, isConnected]);
 
   // Subscribe to mod updates via WebSocket
   useEffect(() => {

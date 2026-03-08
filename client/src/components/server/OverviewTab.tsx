@@ -45,7 +45,7 @@ const gameNames: Record<string, string> = {
 };
 
 export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
-  const { api } = useBackend();
+  const { api, isConnected } = useBackend();
   // Server name editing
   const [editingName, setEditingName] = useState(false);
   const [serverName, setServerName] = useState(server.name);
@@ -103,6 +103,7 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
 
   // Fetch default launch params for the game
   useEffect(() => {
+    if (!isConnected) return;
     api.servers
       .getAvailableGames()
       .then((games: GameDefinition[]) => {
@@ -112,7 +113,7 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
         }
       })
       .catch(() => {});
-  }, [server.gameId, api.servers]);
+  }, [server.gameId, api.servers, isConnected]);
 
   const handleSaveLaunchParams = useCallback(async () => {
     setParamsSaving(true);
@@ -168,11 +169,12 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
 
   // Load disk usage
   useEffect(() => {
+    if (!isConnected) return;
     api.servers
       .getDiskUsage(server.id)
       .then((result) => setDiskUsage(result.sizeFormatted))
       .catch(() => setDiskUsage(null));
-  }, [server.id, api.servers]);
+  }, [server.id, api.servers, isConnected]);
 
   async function handleOpenFolder() {
     try {

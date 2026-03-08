@@ -40,7 +40,7 @@ interface SettingsTabProps {
 }
 
 export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
-  const { api } = useBackend();
+  const { api, isConnected } = useBackend();
   // Schedule editing
   const [schedule, setSchedule] = useState<ServerSchedule | null>(null);
   const [scheduleLoading, setScheduleLoading] = useState(true);
@@ -123,8 +123,9 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
   }, [server.id, api.servers]);
 
   useEffect(() => {
+    if (!isConnected) return;
     loadUpdateRestart();
-  }, [loadUpdateRestart]);
+  }, [loadUpdateRestart, isConnected]);
 
   function handleRevertUpdateRestart() {
     if (updateRestart) {
@@ -222,8 +223,9 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
   }, [server.id, api.servers]);
 
   useEffect(() => {
+    if (!isConnected) return;
     loadSchedule();
-  }, [loadSchedule]);
+  }, [loadSchedule, isConnected]);
 
   // Load messages
   const loadMessages = useCallback(async () => {
@@ -238,8 +240,9 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
   }, [server.id, api.servers]);
 
   useEffect(() => {
+    if (!isConnected) return;
     loadMessages();
-  }, [loadMessages]);
+  }, [loadMessages, isConnected]);
 
   const handleSaveSchedule = useCallback(async () => {
     const interval = parseInt(scheduleInterval, 10);
@@ -421,8 +424,9 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
   }, [server.id, api.servers]);
 
   useEffect(() => {
+    if (!isConnected) return;
     loadVariables();
-  }, [loadVariables]);
+  }, [loadVariables, isConnected]);
 
   // Variable handlers
   function resetVarForm() {

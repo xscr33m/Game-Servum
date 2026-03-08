@@ -524,7 +524,10 @@ export function AgentControlPanel() {
                       setActionsMenuOpen(false);
                     }}
                     disabled={
-                      !activeConnection || reconnecting || status === "updating"
+                      !activeConnection ||
+                      reconnecting ||
+                      status === "updating" ||
+                      status === "restarting"
                     }
                     className="flex items-center gap-2.5 w-full rounded-md px-3 py-2 text-sm hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >

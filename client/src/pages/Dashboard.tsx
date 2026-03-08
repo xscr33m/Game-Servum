@@ -37,6 +37,14 @@ import { toastSuccess, toastError, showDependencyError } from "@/lib/toast";
 import type { GameServer, SteamCMDStatus } from "@/types";
 import { APP_VERSION } from "@game-servum/shared";
 
+// ── Module-level navigation cache ──
+// Survives SPA navigation (Dashboard → ServerDetail → Dashboard) but not
+// full page refreshes.  Keeps the server list visible when the user
+// navigates back to the Dashboard while the agent is temporarily unreachable.
+let _cachedServers: GameServer[] = [];
+let _cachedSteamcmd: SteamCMDStatus | null = null;
+let _cacheAgentId: string | null = null;
+
 export function Dashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -63,14 +71,32 @@ export function Dashboard() {
   const { api, subscribe, isConnected, activeConnection, connections } =
     useBackend();
 
+  // Restore from navigation cache if the active agent matches
+  useEffect(() => {
+    if (activeConnection?.id && activeConnection.id === _cacheAgentId) {
+      if (_cachedServers.length > 0) setServers(_cachedServers);
+      if (_cachedSteamcmd) setSteamcmd(_cachedSteamcmd);
+    } else if (activeConnection?.id && activeConnection.id !== _cacheAgentId) {
+      // Agent changed — clear stale cache
+      _cachedServers = [];
+      _cachedSteamcmd = null;
+      _cacheAgentId = activeConnection.id;
+    }
+  }, [activeConnection?.id]);
+
   const loadServers = useCallback(async () => {
     const data = await api.servers.getAll();
     setServers(data);
-  }, [api]);
+    // Update navigation cache
+    _cachedServers = data;
+    _cacheAgentId = activeConnection?.id ?? null;
+  }, [api, activeConnection?.id]);
 
   const loadSteamCMD = useCallback(async () => {
     const status = await api.steamcmd.getStatus();
     setSteamcmd(status);
+    // Update navigation cache
+    _cachedSteamcmd = status;
   }, [api]);
 
   const loadData = useCallback(async () => {
@@ -166,6 +192,7 @@ export function Dashboard() {
   }, [subscribe, loadServers]);
 
   async function handleStartServer(id: number) {
+    if (!isConnected) return;
     try {
       await api.servers.start(id);
       const server = servers.find((s) => s.id === id);
@@ -178,6 +205,7 @@ export function Dashboard() {
   }
 
   async function handleStopServer(id: number) {
+    if (!isConnected) return;
     try {
       await api.servers.stop(id);
       const server = servers.find((s) => s.id === id);
@@ -432,18 +460,33 @@ export function Dashboard() {
               </div>
 
               {servers.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 text-center">
-                  <div className="rounded-full bg-muted p-6 mb-4">
-                    <FaPlus className="h-8 w-8 text-muted-foreground" />
+                !isConnected && connections.length > 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-center">
+                    <div className="rounded-full bg-muted p-6 mb-4">
+                      <FaArrowsRotate className="h-8 w-8 text-muted-foreground animate-spin" />
+                    </div>
+                    <h3 className="text-lg font-medium mb-1">
+                      Waiting for agent connection…
+                    </h3>
+                    <p className="text-sm text-muted-foreground max-w-sm">
+                      The agent is currently unreachable. Server list will load
+                      automatically once the connection is restored.
+                    </p>
                   </div>
-                  <h3 className="text-lg font-medium mb-1">
-                    No servers installed
-                  </h3>
-                  <p className="text-sm text-muted-foreground max-w-sm">
-                    Get started by adding your first game server. SteamCMD will
-                    handle the download and installation.
-                  </p>
-                </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-20 text-center">
+                    <div className="rounded-full bg-muted p-6 mb-4">
+                      <FaPlus className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                    <h3 className="text-lg font-medium mb-1">
+                      No servers installed
+                    </h3>
+                    <p className="text-sm text-muted-foreground max-w-sm">
+                      Get started by adding your first game server. SteamCMD
+                      will handle the download and installation.
+                    </p>
+                  </div>
+                )
               ) : (
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {servers.map((server) => (

@@ -74,7 +74,7 @@ const RETENTION_OPTIONS = [
 ];
 
 export function LogsTab({ server }: LogsTabProps) {
-  const { api } = useBackend();
+  const { api, isConnected } = useBackend();
   // State
   const [currentLogs, setCurrentLogs] = useState<LogFile[]>([]);
   const [archives, setArchives] = useState<ArchiveSession[]>([]);
@@ -166,13 +166,19 @@ export function LogsTab({ server }: LogsTabProps) {
   }, [server.id, api.servers]);
 
   useEffect(() => {
+    if (!isConnected) return;
     loadLogFiles();
     loadSettings();
-  }, [loadLogFiles, loadSettings]);
+  }, [loadLogFiles, loadSettings, isConnected]);
 
   // Auto-refresh effect
   useEffect(() => {
-    if (autoRefresh && selectedLog && viewingSource === "current") {
+    if (
+      autoRefresh &&
+      selectedLog &&
+      viewingSource === "current" &&
+      isConnected
+    ) {
       intervalRef.current = window.setInterval(() => {
         loadLogContent(selectedLog, "current", false);
       }, 5000);
@@ -184,7 +190,7 @@ export function LogsTab({ server }: LogsTabProps) {
         intervalRef.current = null;
       }
     };
-  }, [autoRefresh, selectedLog, viewingSource, loadLogContent]);
+  }, [autoRefresh, selectedLog, viewingSource, loadLogContent, isConnected]);
 
   // Auto-scroll to bottom when content changes
   useEffect(() => {
