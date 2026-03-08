@@ -613,138 +613,6 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
           </CardContent>
         </Card>
 
-        {/* Windows Firewall Rules */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <FaShieldHalved className="h-5 w-5 text-ring" />
-                  Windows Firewall Rules
-                </CardTitle>
-                <CardDescription>
-                  Manage Windows Firewall rules for this game server's ports and
-                  executable
-                </CardDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                {firewallStatus &&
-                  !firewallLoading &&
-                  (firewallStatus.allPresent ? (
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={handleRemoveFirewallRules}
-                      disabled={firewallSaving}
-                    >
-                      {firewallSaving ? (
-                        <FaSpinner className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <FaTrashCan className="mr-2 h-4 w-4" />
-                      )}
-                      Remove Rules
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      onClick={handleAddFirewallRules}
-                      disabled={firewallSaving}
-                    >
-                      {firewallSaving ? (
-                        <FaSpinner className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <FaShieldHalved className="mr-2 h-4 w-4" />
-                      )}
-                      {firewallStatus.rules.some((r) => r.exists) ||
-                      firewallStatus.executableRule.exists
-                        ? "Add Missing Rules"
-                        : "Add Rules"}
-                    </Button>
-                  ))}
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {firewallLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <FaSpinner className="h-4 w-4 animate-spin" />
-                Checking firewall rules...
-              </div>
-            ) : firewallStatus ? (
-              <div className="space-y-3">
-                {/* Summary badge */}
-                <div className="flex items-center gap-2">
-                  {firewallStatus.allPresent ? (
-                    <Badge variant="success">All rules configured</Badge>
-                  ) : (
-                    <Badge variant="warning">
-                      {firewallStatus.rules.filter((r) => !r.exists).length +
-                        (firewallStatus.executableRule.exists ? 0 : 1)}{" "}
-                      of {firewallStatus.rules.length + 1} rule(s) missing
-                    </Badge>
-                  )}
-                </div>
-
-                {/* Port rules */}
-                <div className="space-y-2">
-                  {firewallStatus.rules.map((rule) => (
-                    <div
-                      key={rule.name}
-                      className="flex items-center justify-between gap-3 bg-muted p-3 rounded-lg"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium">
-                          {rule.description}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {rule.protocol} {rule.ports}
-                        </p>
-                      </div>
-                      <Badge variant={rule.exists ? "success" : "destructive"}>
-                        {rule.exists ? "Active" : "Missing"}
-                      </Badge>
-                    </div>
-                  ))}
-
-                  {/* Executable rule */}
-                  <div className="flex items-center justify-between gap-3 bg-muted p-3 rounded-lg">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium">Program Rule</p>
-                      <p className="text-xs text-muted-foreground">
-                        {server.executable ?? "Server executable"}
-                      </p>
-                    </div>
-                    <Badge
-                      variant={
-                        firewallStatus.executableRule.exists
-                          ? "success"
-                          : "destructive"
-                      }
-                    >
-                      {firewallStatus.executableRule.exists
-                        ? "Active"
-                        : "Missing"}
-                    </Badge>
-                  </div>
-                </div>
-
-                {firewallError && (
-                  <p className="text-xs text-red-500">{firewallError}</p>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">
-                  Could not check firewall rules.
-                </p>
-                {firewallError && (
-                  <p className="text-xs text-red-500">{firewallError}</p>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
         {/* Auto-Restart on Update */}
         <Card>
           <CardHeader>
@@ -1484,6 +1352,138 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
                   )
                 )}
               </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Windows Firewall Rules */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <FaShieldHalved className="h-5 w-5 text-ring" />
+                  Windows Firewall Rules
+                </CardTitle>
+                <CardDescription>
+                  Manage Windows Firewall rules for this game server's ports and
+                  executable
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                {firewallStatus &&
+                  !firewallLoading &&
+                  (firewallStatus.allPresent ? (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={handleRemoveFirewallRules}
+                      disabled={firewallSaving}
+                    >
+                      {firewallSaving ? (
+                        <FaSpinner className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <FaTrashCan className="mr-2 h-4 w-4" />
+                      )}
+                      Remove Rules
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={handleAddFirewallRules}
+                      disabled={firewallSaving}
+                    >
+                      {firewallSaving ? (
+                        <FaSpinner className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <FaShieldHalved className="mr-2 h-4 w-4" />
+                      )}
+                      {firewallStatus.rules.some((r) => r.exists) ||
+                      firewallStatus.executableRule.exists
+                        ? "Add Missing Rules"
+                        : "Add Rules"}
+                    </Button>
+                  ))}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {firewallLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <FaSpinner className="h-4 w-4 animate-spin" />
+                Checking firewall rules...
+              </div>
+            ) : firewallStatus ? (
+              <div className="space-y-3">
+                {/* Summary badge */}
+                <div className="flex items-center gap-2">
+                  {firewallStatus.allPresent ? (
+                    <Badge variant="success">All rules configured</Badge>
+                  ) : (
+                    <Badge variant="warning">
+                      {firewallStatus.rules.filter((r) => !r.exists).length +
+                        (firewallStatus.executableRule.exists ? 0 : 1)}{" "}
+                      of {firewallStatus.rules.length + 1} rule(s) missing
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Port rules */}
+                <div className="space-y-2">
+                  {firewallStatus.rules.map((rule) => (
+                    <div
+                      key={rule.name}
+                      className="flex items-center justify-between gap-3 bg-muted p-3 rounded-lg"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium">
+                          {rule.description}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {rule.protocol} {rule.ports}
+                        </p>
+                      </div>
+                      <Badge variant={rule.exists ? "success" : "destructive"}>
+                        {rule.exists ? "Active" : "Missing"}
+                      </Badge>
+                    </div>
+                  ))}
+
+                  {/* Executable rule */}
+                  <div className="flex items-center justify-between gap-3 bg-muted p-3 rounded-lg">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">Program Rule</p>
+                      <p className="text-xs text-muted-foreground">
+                        {server.executable ?? "Server executable"}
+                      </p>
+                    </div>
+                    <Badge
+                      variant={
+                        firewallStatus.executableRule.exists
+                          ? "success"
+                          : "destructive"
+                      }
+                    >
+                      {firewallStatus.executableRule.exists
+                        ? "Active"
+                        : "Missing"}
+                    </Badge>
+                  </div>
+                </div>
+
+                {firewallError && (
+                  <p className="text-xs text-red-500">{firewallError}</p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  Could not check firewall rules.
+                </p>
+                {firewallError && (
+                  <p className="text-xs text-red-500">{firewallError}</p>
+                )}
+              </div>
             )}
           </CardContent>
         </Card>
