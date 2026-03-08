@@ -21,6 +21,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -73,6 +81,7 @@ export function ModsTab({ server }: ModsTabProps) {
   const [error, setError] = useState<string | null>(null);
   const [persistentError, setPersistentError] = useState<string | null>(null);
   const [actionInProgress, setActionInProgress] = useState<number | null>(null);
+  const [modToRemove, setModToRemove] = useState<ServerMod | null>(null);
 
   const { api, subscribe, isConnected } = useBackend();
 
@@ -160,8 +169,6 @@ export function ModsTab({ server }: ModsTabProps) {
   }
 
   async function handleRemoveMod(mod: ServerMod) {
-    if (!confirm(`Remove "${mod.name}"?`)) return;
-
     setActionInProgress(mod.id);
     try {
       await api.servers.removeMod(server.id, mod.id);
@@ -466,7 +473,7 @@ export function ModsTab({ server }: ModsTabProps) {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleRemoveMod(mod)}
+                        onClick={() => setModToRemove(mod)}
                         disabled={isRunning || isProcessing}
                         title="Remove mod"
                         className="text-destructive hover:text-destructive"
@@ -530,6 +537,44 @@ export function ModsTab({ server }: ModsTabProps) {
             )}
         </CardContent>
       </Card>
+
+      {/* Remove Mod Confirmation Dialog */}
+      <Dialog
+        open={!!modToRemove}
+        onOpenChange={(open) => !open && setModToRemove(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FaTrashCan className="h-5 w-5 text-destructive" />
+              Remove Mod
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove{" "}
+              <span className="font-semibold text-foreground">
+                {modToRemove?.name}
+              </span>
+              ?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setModToRemove(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (modToRemove) {
+                  handleRemoveMod(modToRemove);
+                  setModToRemove(null);
+                }
+              }}
+            >
+              Remove
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

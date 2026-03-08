@@ -32,6 +32,14 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useBackend } from "@/hooks/useBackend";
 import { publicAsset } from "@/lib/assets";
 import { AppHeader } from "@/components/AppHeader";
@@ -81,6 +89,10 @@ export function Logs() {
   const [refreshing, setRefreshing] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    agentId: string;
+    fileName: string;
+  } | null>(null);
 
   // Get current active log state
   const currentLogs = logStates[activeTab] || {
@@ -537,20 +549,16 @@ export function Logs() {
     const state = logStates[agentId];
     if (!state?.selectedFile) return;
 
-    if (
-      !confirm(
-        `Delete log file "${state.selectedFile}"? This action cannot be undone.`,
-      )
-    ) {
-      return;
-    }
+    setDeleteTarget({ agentId, fileName: state.selectedFile });
+  }
 
+  async function executeDelete(agentId: string, fileName: string) {
     try {
       // For dashboard: use local IPC
       if (agentId === "dashboard") {
         const electronLogs = window.electronAPI?.logs;
         if (electronLogs) {
-          const response = await electronLogs.deleteFile(state.selectedFile);
+          const response = await electronLogs.deleteFile(fileName);
           if (response.success) {
             toastSuccess("Log file deleted");
             setHasLoadedTab((prev) => {
@@ -565,7 +573,7 @@ export function Logs() {
       }
 
       // For agents: use REST API
-      const response = await api.logs.deleteFile(state.selectedFile);
+      const response = await api.logs.deleteFile(fileName);
       if (response.success) {
         toastSuccess("Log file deleted");
         setHasLoadedTab((prev) => {
@@ -1078,6 +1086,44 @@ export function Logs() {
           </div>
         </main>
       </div>
+
+      {/* Delete Log File Confirmation Dialog */}
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FaTrash className="h-5 w-5 text-destructive" />
+              Delete Log File
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete{" "}
+              <span className="font-semibold text-foreground">
+                {deleteTarget?.fileName}
+              </span>
+              ? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (deleteTarget) {
+                  executeDelete(deleteTarget.agentId, deleteTarget.fileName);
+                  setDeleteTarget(null);
+                }
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

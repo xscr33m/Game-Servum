@@ -7,6 +7,8 @@ import {
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { useBackend } from "@/hooks/useBackend";
+import { RemoveAgentDialog } from "@/components/agent/RemoveAgentDialog";
+import type { BackendConnection } from "@/lib/config";
 
 const SHOW_DELAY_MS = 2000;
 
@@ -47,6 +49,10 @@ function useDelayedVisibility(shouldShow: boolean): boolean {
 export function AgentStatusBanner() {
   const { activeConnection, resetReconnectAttempts, removeConnection } =
     useBackend();
+
+  const [removeTarget, setRemoveTarget] = useState<BackendConnection | null>(
+    null,
+  );
 
   const isIntentional =
     activeConnection?.status === "updating" ||
@@ -112,35 +118,46 @@ export function AgentStatusBanner() {
   // ── Error (max attempts reached or auth failure) ──────────────────────
   if (status === "error") {
     return (
-      <Banner color="red">
-        <FaCircleExclamation className="h-3.5 w-3.5 shrink-0" />
-        <span>
-          Connection to agent <strong>{name}</strong> failed
-          {activeConnection.lastError && (
-            <span className="opacity-70"> — {activeConnection.lastError}</span>
-          )}
-        </span>
-        <div className="ml-auto flex items-center gap-2 shrink-0">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 px-2 text-xs hover:bg-red-500/20"
-            onClick={() => resetReconnectAttempts(activeConnection.id)}
-          >
-            <FaArrowsRotate className="h-3 w-3 mr-1" />
-            Retry
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 px-2 text-xs hover:bg-red-500/20"
-            onClick={() => removeConnection(activeConnection.id)}
-          >
-            <FaTrash className="h-3 w-3 mr-1" />
-            Remove
-          </Button>
-        </div>
-      </Banner>
+      <>
+        <Banner color="red">
+          <FaCircleExclamation className="h-3.5 w-3.5 shrink-0" />
+          <span>
+            Connection to agent <strong>{name}</strong> failed
+            {activeConnection.lastError && (
+              <span className="opacity-70">
+                {" "}
+                — {activeConnection.lastError}
+              </span>
+            )}
+          </span>
+          <div className="ml-auto flex items-center gap-2 shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs hover:bg-red-500/20"
+              onClick={() => resetReconnectAttempts(activeConnection.id)}
+            >
+              <FaArrowsRotate className="h-3 w-3 mr-1" />
+              Retry
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs hover:bg-red-500/20"
+              onClick={() => setRemoveTarget(activeConnection)}
+            >
+              <FaTrash className="h-3 w-3 mr-1" />
+              Remove
+            </Button>
+          </div>
+        </Banner>
+        <RemoveAgentDialog
+          open={!!removeTarget}
+          onOpenChange={(open) => !open && setRemoveTarget(null)}
+          agent={removeTarget}
+          onConfirm={(id) => removeConnection(id)}
+        />
+      </>
     );
   }
 
