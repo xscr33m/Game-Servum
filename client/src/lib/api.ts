@@ -388,10 +388,19 @@ function createFetchApi(
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    const response = await fetch(`${baseUrl}${endpoint}`, {
-      ...options,
-      headers: { ...headers, ...(options?.headers as Record<string, string>) },
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${baseUrl}${endpoint}`, {
+        ...options,
+        headers: {
+          ...headers,
+          ...(options?.headers as Record<string, string>),
+        },
+      });
+    } catch {
+      // Network-level failure (agent unreachable, DNS failure, CORS, etc.)
+      throw new Error("Agent not reachable — check connection");
+    }
 
     if (response.status === 401) {
       throw new ApiAuthError("Invalid or expired session token");

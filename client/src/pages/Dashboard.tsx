@@ -96,6 +96,8 @@ export function Dashboard() {
   }, [loadSteamCMD, loadServers, api.system]);
 
   // Fetch initial data (skip during onboarding and before connection is ready)
+  // Also skip if we already have cached data — it will be refreshed once connected
+  const hasData = servers.length > 0 || steamcmd !== null;
   useEffect(() => {
     if (!showOnboarding && isConnected) {
       loadData();
@@ -250,7 +252,7 @@ export function Dashboard() {
     );
   }
 
-  if (loading) {
+  if (loading && !hasData) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <FaArrowsRotate className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -307,6 +309,7 @@ export function Dashboard() {
               variant="outline"
               size="icon"
               title="Refresh Data"
+              disabled={!isConnected}
             >
               <FaArrowsRotate className="h-4 w-4" />
             </Button>
@@ -420,7 +423,7 @@ export function Dashboard() {
                   </p>
                 </div>
                 <Button
-                  disabled={!steamcmd?.installed}
+                  disabled={!steamcmd?.installed || !isConnected}
                   onClick={() => setShowAddServer(true)}
                 >
                   <FaPlus className="h-4 w-4 mr-2" />
@@ -450,6 +453,7 @@ export function Dashboard() {
                       onStart={handleStartServer}
                       onStop={handleStopServer}
                       onDelete={handleDeleteServer}
+                      disabled={!isConnected}
                     />
                   ))}
                 </div>

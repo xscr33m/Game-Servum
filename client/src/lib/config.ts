@@ -20,6 +20,7 @@ export interface BackendConnection {
     | "restarting";
   reconnectAttempts?: number; // Track number of reconnection attempts
   lastError?: string; // Last error message for UI display
+  statusUpdatedAt?: number; // Timestamp when status was last set (for stale status detection)
   agentInfo?: {
     version: string;
     hostname: string;
@@ -59,7 +60,11 @@ export function getWsUrl(connection?: BackendConnection | null): string {
 // ── Connection persistence ──
 // Uses pluggable CredentialStore. Sync wrappers for backward compatibility.
 
-import { getCredentialStore, ElectronCredentialStore } from "./credentialStore";
+import {
+  getCredentialStore,
+  ElectronCredentialStore,
+  cleanStaleStatuses,
+} from "./credentialStore";
 
 const STORAGE_KEY = "game-servum-connections";
 
@@ -102,7 +107,7 @@ export function loadConnections(): BackendConnection[] {
       console.log("[config] No data in localStorage");
       return [];
     }
-    const parsed = JSON.parse(stored);
+    const parsed = cleanStaleStatuses(JSON.parse(stored));
     console.log(
       "[config] Loaded from localStorage:",
       parsed.length,

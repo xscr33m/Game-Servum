@@ -16,6 +16,7 @@ interface ServerCardProps {
   onStart: (id: number) => void;
   onStop: (id: number) => void;
   onDelete: (id: number) => void;
+  disabled?: boolean;
 }
 
 const statusConfig = {
@@ -52,6 +53,7 @@ export function ServerCard({
   onStart,
   onStop,
   onDelete,
+  disabled = false,
 }: ServerCardProps) {
   const navigate = useNavigate();
   const status = statusConfig[server.status];
@@ -145,6 +147,7 @@ export function ServerCard({
             size="sm"
             className="flex-1"
             onClick={() => onStop(server.id)}
+            disabled={disabled}
           >
             <FaStop className="h-3.5 w-3.5 mr-1.5" />
             Stop
@@ -155,6 +158,7 @@ export function ServerCard({
             size="sm"
             className="flex-1"
             onClick={() => onStart(server.id)}
+            disabled={disabled}
           >
             <FaPlay className="h-3.5 w-3.5 mr-1.5" />
             Start
@@ -169,7 +173,7 @@ export function ServerCard({
           size="icon"
           className="h-8 w-8 text-muted-foreground hover:text-destructive"
           onClick={() => onDelete(server.id)}
-          disabled={isRunning || isBusy}
+          disabled={isRunning || isBusy || disabled}
         >
           <FaTrashCan className="h-3.5 w-3.5" />
         </Button>

@@ -162,7 +162,7 @@ export function ServerDetail() {
     }
   }
 
-  if (loading) {
+  if (loading && !server) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <FaArrowsRotate className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -229,7 +229,7 @@ export function ServerDetail() {
                 variant="destructive"
                 size="sm"
                 onClick={handleStop}
-                disabled={actionLoading}
+                disabled={actionLoading || !isConnected}
               >
                 <FaStop className="h-4 w-4 mr-2" />
                 Stop Server
@@ -239,7 +239,7 @@ export function ServerDetail() {
                 variant="success"
                 size="sm"
                 onClick={handleStart}
-                disabled={actionLoading || isBusy}
+                disabled={actionLoading || isBusy || !isConnected}
               >
                 <FaPlay className="h-4 w-4 mr-2" />
                 Start Server
@@ -249,7 +249,7 @@ export function ServerDetail() {
               variant="outline"
               size="sm"
               onClick={() => loadServer(true)}
-              disabled={actionLoading}
+              disabled={actionLoading || !isConnected}
             >
               <FaArrowsRotate className="h-4 w-4" />
             </Button>

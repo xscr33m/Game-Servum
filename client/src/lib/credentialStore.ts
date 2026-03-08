@@ -16,17 +16,59 @@ export interface CredentialStore {
 
 const STORAGE_KEY = "game-servum-connections";
 
+// Max age for persisted updating/restarting status (5 minutes).
+// If the status is older than this, it's considered stale and discarded on load.
+const STATUS_MAX_AGE_MS = 5 * 60 * 1000;
+
 // ── Sanitize connections for storage ──
 
 function stripSensitiveSessionData(
   connections: BackendConnection[],
 ): Partial<BackendConnection>[] {
   return connections.map((conn) => {
-    const { sessionToken, tokenExpiresAt, status, ...rest } = conn;
+    const { sessionToken, tokenExpiresAt, ...rest } = conn;
     void sessionToken;
     void tokenExpiresAt;
+
+    // Persist "updating" / "restarting" status so the Dashboard knows
+    // to use unlimited retries after a refresh during an agent update.
+    if (conn.status === "updating" || conn.status === "restarting") {
+      return {
+        ...rest,
+        status: conn.status,
+        statusUpdatedAt: conn.statusUpdatedAt,
+      };
+    }
+
+    // All other statuses are transient — strip them
+    const { status, statusUpdatedAt, ...clean } = rest;
     void status;
-    return rest;
+    void statusUpdatedAt;
+    return clean;
+  });
+}
+
+/**
+ * Clean up stale persisted statuses on load.
+ * If a connection was saved with "updating" / "restarting" more than
+ * STATUS_MAX_AGE_MS ago, the update likely failed — discard the status.
+ */
+export function cleanStaleStatuses(
+  connections: BackendConnection[],
+): BackendConnection[] {
+  const now = Date.now();
+  return connections.map((conn) => {
+    if (
+      (conn.status === "updating" || conn.status === "restarting") &&
+      conn.statusUpdatedAt &&
+      now - conn.statusUpdatedAt > STATUS_MAX_AGE_MS
+    ) {
+      const { status, statusUpdatedAt, ...rest } = conn;
+      void status;
+      void statusUpdatedAt;
+      return rest as BackendConnection;
+    }
+    return conn;
   });
 }
 
@@ -37,7 +79,7 @@ export class LocalCredentialStore implements CredentialStore {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (!stored) return [];
-      return JSON.parse(stored);
+      return cleanStaleStatuses(JSON.parse(stored));
     } catch {
       return [];
     }
@@ -92,7 +134,7 @@ export class ElectronCredentialStore implements CredentialStore {
       console.log("[ElectronCredentialStore] Load result:", result);
 
       if (result.success && Array.isArray(result.data)) {
-        this.cache = result.data as BackendConnection[];
+        this.cache = cleanStaleStatuses(result.data as BackendConnection[]);
         console.log(
           "[ElectronCredentialStore] ✓ Loaded",
           this.cache.length,
@@ -127,7 +169,7 @@ export class ElectronCredentialStore implements CredentialStore {
     try {
       const result = await api.load();
       if (result.success && Array.isArray(result.data)) {
-        this.cache = result.data as BackendConnection[];
+        this.cache = cleanStaleStatuses(result.data as BackendConnection[]);
       }
     } catch {
       // Return cached data

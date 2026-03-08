@@ -48,10 +48,17 @@ export function AgentStatusBanner() {
   const { activeConnection, resetReconnectAttempts, removeConnection } =
     useBackend();
 
+  const isIntentional =
+    activeConnection?.status === "updating" ||
+    activeConnection?.status === "restarting";
+
   const shouldShow =
     !!activeConnection && activeConnection.status !== "connected";
 
-  const visible = useDelayedVisibility(shouldShow);
+  // Skip the delay for intentional disconnects (update/restart) — show immediately.
+  // Keep the delay for unexpected disconnects to avoid flicker on brief network blips.
+  const delayedVisible = useDelayedVisibility(shouldShow && !isIntentional);
+  const visible = isIntentional ? shouldShow : delayedVisible;
 
   if (!visible || !activeConnection || activeConnection.status === "connected")
     return null;

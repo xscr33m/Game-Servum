@@ -32,8 +32,8 @@ const RECONNECT_INITIAL_DELAY = 1_000;
 // Longer initial delay for intentional disconnects (updating/restarting)
 // to wait for the agent to fully shut down before polling
 const RECONNECT_INTENTIONAL_DELAY = 15_000;
-// Max reconnect attempts before giving up (3 attempts, then user must manually retry)
-const MAX_RECONNECT_ATTEMPTS = 3;
+// Max reconnect attempts before giving up (20 attempts ≈ 60s, then user must manually retry)
+const MAX_RECONNECT_ATTEMPTS = 20;
 
 // ── Provider ──
 
@@ -68,8 +68,9 @@ export function BackendProvider({ children }: { children: ReactNode }) {
   const activeConnection = connections.find((c) => c.id === activeId) || null;
 
   // ── Persist connections (only when credentials/tokens change, not status) ──
+  // Exception: "updating" / "restarting" status IS persisted so the Dashboard
+  // continues unlimited reconnect polling after a page refresh.
   const persistableSnapshot = useMemo(() => {
-    // Use JSON serialization for deep comparison (avoids triggering on object reference changes)
     const persistable = connections.map((c) => ({
       id: c.id,
       name: c.name,
@@ -80,6 +81,10 @@ export function BackendProvider({ children }: { children: ReactNode }) {
       tokenExpiresAt: c.tokenExpiresAt,
       isActive: c.isActive,
       agentInfo: c.agentInfo,
+      // Include updating/restarting status so it survives page refresh
+      ...(c.status === "updating" || c.status === "restarting"
+        ? { status: c.status, statusUpdatedAt: c.statusUpdatedAt }
+        : {}),
     }));
     return JSON.stringify(persistable);
   }, [connections]);
@@ -104,6 +109,18 @@ export function BackendProvider({ children }: { children: ReactNode }) {
     logger.info(`[Init] Connecting to ${stored.length} stored agent(s)...`);
 
     for (const conn of stored) {
+      // If this connection has a persisted "updating" / "restarting" status,
+      // skip the immediate health check — go straight to auto-reconnect
+      // polling which uses a longer initial delay and unlimited retries.
+      if (conn.status === "updating" || conn.status === "restarting") {
+        logger.info(
+          `[Init] Agent "${conn.name}" has persisted "${conn.status}" status — waiting for agent to come back...`,
+        );
+        // Status is already set from persisted data — auto-reconnect effect
+        // will pick it up since wsConnected starts as false
+        continue;
+      }
+
       (async () => {
         try {
           // Quick health check
@@ -363,9 +380,6 @@ export function BackendProvider({ children }: { children: ReactNode }) {
   // When the active connection loses WebSocket connectivity, poll the health
   // endpoint until the agent is back, then re-authenticate and reconnect.
   const isReconnecting = useRef(false);
-  // Cooldown after successful reconnect — prevents re-entering the polling
-  // branch while the WS manager is still connecting with the fresh token
-  const reconnectCooldownRef = useRef(false);
 
   useEffect(() => {
     if (!activeConnection) return;
@@ -378,7 +392,6 @@ export function BackendProvider({ children }: { children: ReactNode }) {
       }
       reconnectAttemptsRef.current = 0;
       isReconnecting.current = false;
-      reconnectCooldownRef.current = false;
       // Ensure status is "connected" — but don't override "updating"
       // (the agent is about to go down, WS just hasn't disconnected yet)
       if (
@@ -398,10 +411,6 @@ export function BackendProvider({ children }: { children: ReactNode }) {
     // WS disconnected — only start polling if we had a valid connection before
     // (has credentials stored, meaning it was previously connected)
     if (!activeConnection.apiKey || !activeConnection.password) return;
-
-    // After a successful reconnect, the token update recreates the WS manager.
-    // Give it time to connect before we start polling again.
-    if (reconnectCooldownRef.current) return;
 
     // Mark as reconnecting (distinguishes from initial connect / permanent disconnect)
     // Don't override "updating" status — that's handled separately with unlimited retries
@@ -574,20 +583,16 @@ export function BackendProvider({ children }: { children: ReactNode }) {
           toastSuccess(`Reconnected to ${connName}`);
         }
 
-        // Stop polling — set cooldown so the effect doesn't immediately
-        // restart polling while the WS manager connects with the new token
+        // Stop polling — the token update will trigger the activeConnection
+        // useEffect, which recreates the API client and WS manager with
+        // the new token. The WS connect will set wsConnected=true which
+        // stops this effect from re-entering the polling branch.
         if (reconnectTimerRef.current) {
           clearInterval(reconnectTimerRef.current);
           reconnectTimerRef.current = null;
         }
         reconnectAttemptsRef.current = 0;
         isReconnecting.current = false;
-        reconnectCooldownRef.current = true;
-
-        // Clear the cooldown after a generous window for WS to connect
-        setTimeout(() => {
-          reconnectCooldownRef.current = false;
-        }, 30_000);
 
         // The token update will trigger the activeConnection useEffect,
         // which recreates the API client and WS manager with the new token.
@@ -709,7 +714,20 @@ export function BackendProvider({ children }: { children: ReactNode }) {
   const updateConnectionStatus = useCallback(
     (id: string, status: BackendConnection["status"]) => {
       setConnections((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, status } : c)),
+        prev.map((c) =>
+          c.id === id
+            ? {
+                ...c,
+                status,
+                // Track timestamp for updating/restarting so stale statuses
+                // can be detected after page refresh
+                statusUpdatedAt:
+                  status === "updating" || status === "restarting"
+                    ? Date.now()
+                    : c.statusUpdatedAt,
+              }
+            : c,
+        ),
       );
     },
     [],

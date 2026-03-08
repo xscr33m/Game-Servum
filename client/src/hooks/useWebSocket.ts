@@ -57,11 +57,10 @@ class WebSocketManager {
       this.notifyConnection(false);
       this.ws = null;
 
-      // Auto-reconnect on abnormal closure
-      if (!this.destroyed && event.code !== 1000) {
-        if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-        this.reconnectTimer = window.setTimeout(() => this.doConnect(), 3000);
-      }
+      // Do NOT auto-reconnect here — BackendContext owns the reconnection
+      // lifecycle (health polling → re-auth → token refresh → WS recreation).
+      // The WS manager's blind reconnect with a stale token URL caused race
+      // conditions and duplicate connection attempts.
     };
 
     this.ws.onerror = () => {

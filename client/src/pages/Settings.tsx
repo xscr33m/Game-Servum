@@ -26,7 +26,7 @@ const isElectron = typeof window !== "undefined" && "electronAPI" in window;
 
 export function Settings() {
   const navigate = useNavigate();
-  const { api } = useBackend();
+  const { api, isConnected } = useBackend();
   const [isWindows, setIsWindows] = useState(false);
   const [monitoringEnabled, setMonitoringEnabled] = useState(() => {
     return (
@@ -173,6 +173,7 @@ export function Settings() {
                 <Switch
                   id="monitoring-toggle"
                   checked={monitoringEnabled}
+                  disabled={!isConnected}
                   onCheckedChange={async (checked) => {
                     try {
                       await api.system.updateSettings({
