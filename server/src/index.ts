@@ -12,6 +12,7 @@ import { spawn } from "child_process";
 import {
   restoreServerStates,
   shutdownAllServers,
+  getRunningServerIds,
 } from "./services/serverProcess.js";
 import { initializeSchedules } from "./services/scheduler.js";
 import { initializeMessageBroadcasters } from "./services/messageBroadcaster.js";
@@ -21,6 +22,7 @@ import {
 } from "./services/agentUpdater.js";
 import { SimpleLogger } from "./services/logger.js";
 import { DEFAULT_LOG_SETTINGS } from "@game-servum/shared";
+import { setAppSetting } from "./db/index.js";
 
 const config = getConfig();
 
@@ -155,6 +157,18 @@ async function main() {
 
     // Stop periodic update checks
     stopAutoUpdateCheck();
+
+    // Before stopping servers: if this is a restart, remember which servers
+    // were running so they can be auto-started after the agent comes back.
+    if (isRestart) {
+      const runningIds = getRunningServerIds();
+      if (runningIds.length > 0) {
+        setAppSetting("pending_restart_servers", JSON.stringify(runningIds));
+        logger.info(
+          `[Shutdown] Persisted ${runningIds.length} running server(s) for auto-restart: [${runningIds.join(", ")}]`,
+        );
+      }
+    }
 
     // Stop all running game servers
     await shutdownAllServers();

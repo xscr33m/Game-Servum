@@ -18,6 +18,8 @@ import {
   getServerById,
   updateServerStatus,
   getAllServers,
+  getAppSetting,
+  setAppSetting,
 } from "../db/index.js";
 import { getGameDefinition } from "./gameDefinitions.js";
 import { generateModParams } from "./modManager.js";
@@ -788,6 +790,51 @@ export function restoreServerStates(): void {
         );
         updateServerStatus(server.id, "stopped", null);
       }
+    }
+  }
+
+  // Auto-start servers that were running before an agent restart/update
+  const pendingRaw = getAppSetting("pending_restart_servers");
+  if (pendingRaw) {
+    // Delete immediately — one-shot, prevents infinite restart loops
+    setAppSetting("pending_restart_servers", "");
+
+    try {
+      const pendingIds: number[] = JSON.parse(pendingRaw);
+      if (pendingIds.length > 0) {
+        logger.info(
+          `[ServerProcess] Auto-starting ${pendingIds.length} server(s) from previous restart: [${pendingIds.join(", ")}]`,
+        );
+        for (const id of pendingIds) {
+          const server = getServerById(id);
+          if (!server) {
+            logger.warn(
+              `[ServerProcess] Skipping auto-start for server ${id} — not found in database`,
+            );
+            continue;
+          }
+          if (server.status !== "stopped") {
+            logger.info(
+              `[ServerProcess] Skipping auto-start for "${server.name}" — status is "${server.status}"`,
+            );
+            continue;
+          }
+          logger.info(
+            `[ServerProcess] Auto-starting server ${id} (${server.name})...`,
+          );
+          const result = startServer(id);
+          if (!result.success) {
+            logger.error(
+              `[ServerProcess] Failed to auto-start "${server.name}": ${result.message}`,
+            );
+          }
+        }
+      }
+    } catch (err) {
+      logger.error(
+        "[ServerProcess] Failed to parse pending_restart_servers",
+        err,
+      );
     }
   }
 }

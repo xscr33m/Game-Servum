@@ -5,6 +5,8 @@ import { execFileSync } from "child_process";
 import { APP_VERSION, compareSemVer } from "@game-servum/shared";
 import { getConfig } from "./config.js";
 import { logger, broadcast } from "../index.js";
+import { getRunningServerIds } from "./serverProcess.js";
+import { setAppSetting } from "../db/index.js";
 
 const SERVICE_NAME = "GameServumAgent";
 const GITHUB_OWNER = "xscr33m";
@@ -420,6 +422,17 @@ try {
 
   const psScriptPath = path.join(STAGING_DIR, "install-update.ps1");
   fs.writeFileSync(psScriptPath, psScript, "utf-8");
+
+  // Persist running server IDs so they can be auto-started after the update.
+  // The update path bypasses the normal gracefulShutdown persisting logic
+  // (WinSW receives Stop-Service from the PowerShell script).
+  const runningIds = getRunningServerIds();
+  if (runningIds.length > 0) {
+    setAppSetting("pending_restart_servers", JSON.stringify(runningIds));
+    logger.info(
+      `[AgentUpdater] Persisted ${runningIds.length} running server(s) for auto-restart after update: [${runningIds.join(", ")}]`,
+    );
+  }
 
   broadcast("update:restart", {
     version,
