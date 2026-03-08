@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useBackend } from "@/hooks/useBackend";
+import { useUptime } from "@/hooks/useUptime";
 import { toastSuccess } from "@/lib/toast";
 import { logger } from "@/lib/logger";
 import type { GameServer, GameDefinition } from "@/types";
@@ -259,6 +260,8 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
   const paramsChanged = launchParams !== (server.launchParams || "");
   const gameName = gameNames[server.gameId] || server.gameId;
   const createdDate = new Date(server.createdAt).toLocaleDateString();
+  const isRunning = server.status === "running";
+  const uptime = useUptime(isRunning ? server.startedAt : null);
 
   return (
     <div className="space-y-6">
@@ -271,7 +274,7 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
       )}
 
       {/* Server Info Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Game</CardTitle>
@@ -323,6 +326,21 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
                 PID: {server.pid}
               </p>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Uptime</CardTitle>
+            <FaClock className="h-4 w-4 text-ring" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold tabular-nums">
+              {uptime ?? "\u2014"}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {isRunning ? "Time running" : "Server offline"}
+            </p>
           </CardContent>
         </Card>
 

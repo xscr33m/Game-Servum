@@ -31,5 +31,6 @@ export interface GameServer {
   status: ServerStatus;
   pid: number | null;
   createdAt: string;
+  startedAt: string | null;
   installing?: boolean; // Set by API when install is in progress
 }

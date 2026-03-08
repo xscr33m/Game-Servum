@@ -204,6 +204,20 @@ function runMigrations(): void {
     `);
     logger.info("[DB] Migration: Created api_keys table");
   }
+
+  // Migration: Add started_at column to game_servers
+  const gsColumns = db.exec(`PRAGMA table_info(game_servers)`);
+  if (gsColumns.length > 0) {
+    const hasStartedAt = gsColumns[0].values.some(
+      (row) => row[1] === "started_at",
+    );
+    if (!hasStartedAt) {
+      db.run(
+        `ALTER TABLE game_servers ADD COLUMN started_at TEXT DEFAULT NULL`,
+      );
+      logger.info("[DB] Migration: Added started_at column to game_servers");
+    }
+  }
 }
 
 export function getDb(): SqlJsDatabase {
@@ -358,7 +372,7 @@ export function updateSteamConfig(
 // Game server queries
 export function getAllServers(): GameServer[] {
   const result = getDb().exec(
-    `SELECT id, game_id, name, app_id, install_path, executable, launch_params, port, query_port, profiles_path, auto_restart, status, pid, created_at 
+    `SELECT id, game_id, name, app_id, install_path, executable, launch_params, port, query_port, profiles_path, auto_restart, status, pid, created_at, started_at 
      FROM game_servers ORDER BY created_at ASC`,
   );
 
@@ -379,12 +393,13 @@ export function getAllServers(): GameServer[] {
     status: row[11] as GameServer["status"],
     pid: row[12] as number | null,
     createdAt: row[13] as string,
+    startedAt: (row[14] as string | null) ?? null,
   }));
 }
 
 export function getServerById(id: number): GameServer | null {
   const result = getDb().exec(
-    `SELECT id, game_id, name, app_id, install_path, executable, launch_params, port, query_port, profiles_path, auto_restart, status, pid, created_at 
+    `SELECT id, game_id, name, app_id, install_path, executable, launch_params, port, query_port, profiles_path, auto_restart, status, pid, created_at, started_at 
      FROM game_servers WHERE id = ?`,
     [id],
   );
@@ -407,6 +422,7 @@ export function getServerById(id: number): GameServer | null {
     status: row[11] as GameServer["status"],
     pid: row[12] as number | null,
     createdAt: row[13] as string,
+    startedAt: (row[14] as string | null) ?? null,
   };
 }
 
@@ -437,7 +453,7 @@ export function getUsedPorts(): Array<{
 export function createServer(
   server: Omit<
     GameServer,
-    "id" | "status" | "pid" | "createdAt" | "autoRestart"
+    "id" | "status" | "pid" | "createdAt" | "startedAt" | "autoRestart"
   >,
 ): number {
   getDb().run(
@@ -467,12 +483,12 @@ export function updateServerStatus(
   id: number,
   status: GameServer["status"],
   pid: number | null = null,
+  startedAt: string | null = null,
 ): void {
-  getDb().run("UPDATE game_servers SET status = ?, pid = ? WHERE id = ?", [
-    status,
-    pid,
-    id,
-  ]);
+  getDb().run(
+    "UPDATE game_servers SET status = ?, pid = ?, started_at = ? WHERE id = ?",
+    [status, pid, startedAt, id],
+  );
   saveDatabase();
 }
 

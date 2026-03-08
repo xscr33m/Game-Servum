@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { publicAsset } from "@/lib/assets";
+import { useUptime } from "@/hooks/useUptime";
 import type { GameServer } from "@/types";
 
 interface ServerCardProps {
@@ -60,6 +61,7 @@ export function ServerCard({
   const gameName = gameNames[server.gameId] || `App ${server.appId}`;
   const gameLogo = gameLogos[server.gameId] || null;
   const isRunning = server.status === "running";
+  const uptime = useUptime(isRunning ? server.startedAt : null);
   const isBusy =
     server.status === "installing" ||
     server.status === "updating" ||
@@ -120,6 +122,16 @@ export function ServerCard({
               </span>
               <span className="text-foreground font-mono">
                 {server.queryPort}
+              </span>
+            </div>
+          )}
+          {uptime && (
+            <div className="flex items-center gap-1.5">
+              <span className="uppercase tracking-wider font-medium">
+                Uptime
+              </span>
+              <span className="text-foreground font-mono tabular-nums">
+                {uptime}
               </span>
             </div>
           )}

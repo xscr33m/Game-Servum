@@ -244,8 +244,9 @@ export function startServer(serverId: number): StartResult {
     // Store the process
     runningProcesses.set(serverId, child);
 
-    // Update database with running status and PID
-    updateServerStatus(serverId, "running", child.pid);
+    // Update database with running status, PID, and start timestamp
+    const startedAt = new Date().toISOString();
+    updateServerStatus(serverId, "running", child.pid, startedAt);
 
     // Broadcast status update
     broadcast("server:status", {
