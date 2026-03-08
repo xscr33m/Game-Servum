@@ -228,9 +228,15 @@ Section "Install"
   DetailPrint "Starting ${PRODUCT_NAME} service..."
   nsExec::ExecToLog 'sc start ${SERVICE_NAME}'
 
-  ; Add Windows Firewall rule (TCP inbound port 3001)
-  DetailPrint "Adding firewall rule..."
-  nsExec::ExecToLog 'netsh advfirewall firewall add rule name="${FIREWALL_RULE_NAME}" dir=in action=allow protocol=TCP localport=3001'
+  ; Add Windows Firewall rule (TCP inbound port 3001) only if not already present
+  nsExec::ExecToLog 'netsh advfirewall firewall show rule name="${FIREWALL_RULE_NAME}"'
+  Pop $0
+  ${If} $0 != 0
+    DetailPrint "Adding firewall rule..."
+    nsExec::ExecToLog 'netsh advfirewall firewall add rule name="${FIREWALL_RULE_NAME}" dir=in action=allow protocol=TCP localport=3001'
+  ${Else}
+    DetailPrint "Firewall rule already exists, skipping..."
+  ${EndIf}
 
   ; Write uninstaller
   WriteUninstaller "$INSTDIR\Uninstall.exe"
