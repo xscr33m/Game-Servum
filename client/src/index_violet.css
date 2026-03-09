@@ -59,6 +59,7 @@
   /* Status indicators */
   --color-success: hsl(142 71% 45%);
   --color-warning: hsl(38 92% 50%);
+  --color-info: hsl(210 100% 56%);
 
   /* Terminal / code viewer surface */
   --color-terminal: hsl(270 22% 4%);
@@ -67,6 +68,28 @@
   --radius-lg: 0.5rem;
   --radius-md: calc(var(--radius-lg) - 2px);
   --radius-sm: calc(var(--radius-lg) - 4px);
+}
+
+/* ── Sonner toast icon colors ── */
+[data-sonner-toast][data-type="success"] [data-icon] {
+  color: var(--color-success);
+}
+[data-sonner-toast][data-type="error"] [data-icon] {
+  color: var(--color-destructive);
+}
+[data-sonner-toast][data-type="info"] [data-icon] {
+  color: var(--color-info);
+}
+[data-sonner-toast][data-type="warning"] [data-icon] {
+  color: var(--color-warning);
+}
+
+/* Custom toasts: remove Sonner wrapper background so Card corners render cleanly */
+[data-sonner-toast][data-styled="false"] {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
 }
 
 /* ── Base layer ── */
