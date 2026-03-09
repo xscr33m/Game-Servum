@@ -119,7 +119,7 @@ export function ConfigTab({ server }: ConfigTabProps) {
 
       {/* Config Editor */}
       <Tabs defaultValue="form">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between sticky top-0 z-10 bg-background/95 backdrop-blur-sm py-2 -mt-2">
           <TabsList>
             <TabsTrigger value="form">Form Editor</TabsTrigger>
             <TabsTrigger value="raw" className="gap-2">
