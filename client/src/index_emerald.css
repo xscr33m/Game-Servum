@@ -149,3 +149,25 @@
     font-family: var(--font-mono);
   }
 }
+
+/* ── Server card hover glow ── */
+@utility server-card-glow {
+  box-shadow:
+    0 0 30px -4px hsl(152 40% 40% / 0.25),
+    0 8px 24px -8px hsl(0 0% 0% / 0.3);
+  transform: translateY(-2px);
+}
+
+@utility server-card-glow-success {
+  box-shadow:
+    0 0 35px -4px hsl(142 71% 45% / 0.3),
+    0 8px 24px -8px hsl(0 0% 0% / 0.3);
+  transform: translateY(-2px);
+}
+
+@utility server-card-glow-error {
+  box-shadow:
+    0 0 35px -4px hsl(0 63% 45% / 0.3),
+    0 8px 24px -8px hsl(0 0% 0% / 0.3);
+  transform: translateY(-2px);
+}

@@ -70,6 +70,12 @@ export function ServerCard({
     server.status === "starting" ||
     server.status === "stopping";
 
+  const hoverGlowClass = isRunning
+    ? "hover:server-card-glow-success"
+    : server.status === "error"
+      ? "hover:server-card-glow-error"
+      : "hover:server-card-glow";
+
   function handleOpenServer() {
     if (disabled) return;
     navigate(`/server/${server.id}`);
@@ -77,21 +83,24 @@ export function ServerCard({
 
   return (
     <div
-      className={`group relative rounded-xl border bg-card text-card-foreground shadow overflow-hidden transition-all duration-200 ${disabled ? "opacity-75 cursor-default" : "hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 cursor-pointer"}`}
+      className={`group relative rounded-xl border bg-card text-card-foreground shadow-md overflow-hidden transition-all duration-300 ease-out ${disabled ? "opacity-75 cursor-default" : `${hoverGlowClass} cursor-pointer`}`}
       onClick={handleOpenServer}
     >
       {/* Running indicator glow */}
       {isRunning && (
         <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-success to-transparent" />
       )}
+      {server.status === "error" && (
+        <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-destructive to-transparent" />
+      )}
 
       {/* Top section — Logo banner + Status */}
-      <div className="relative h-24 bg-gradient-to-br from-secondary to-muted flex items-center px-5">
+      <div className="relative h-28 bg-gradient-to-br from-secondary/80 to-muted/60 flex items-center px-5">
         {gameLogo ? (
           <img
             src={publicAsset(gameLogo)}
             alt={gameName}
-            className="h-14 w-auto object-contain drop-shadow-lg"
+            className="h-16 w-auto object-contain drop-shadow-lg"
           />
         ) : (
           <span className="text-lg font-bold text-muted-foreground/60">
@@ -104,12 +113,12 @@ export function ServerCard({
       </div>
 
       {/* Server info */}
-      <div className="p-4 space-y-3">
+      <div className="px-5 pt-4 pb-2 space-y-3">
         <div>
           <h3 className="font-semibold text-base leading-tight truncate">
             {server.name}
           </h3>
-          <p className="text-xs text-muted-foreground mt-0.5">{gameName}</p>
+          <p className="text-xs text-muted-foreground mt-1">{gameName}</p>
         </div>
 
         <div className="flex items-center gap-4 text-xs text-muted-foreground">
@@ -140,9 +149,12 @@ export function ServerCard({
         </div>
       </div>
 
+      {/* Separator */}
+      <div className="mx-5 border-t border-border/50" />
+
       {/* Actions bar */}
       <div
-        className="flex items-center gap-2 px-4 pb-4"
+        className="flex items-center gap-2 px-5 py-3"
         onClick={(e) => e.stopPropagation()}
       >
         {isBusy ? (
