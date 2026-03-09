@@ -9,7 +9,6 @@ import {
   FaRotateLeft,
   FaCircleExclamation,
   FaPencil,
-  FaArrowUpRightFromSquare,
   FaChevronDown,
   FaFolder,
 } from "react-icons/fa6";
@@ -27,7 +26,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useBackend } from "@/hooks/useBackend";
 import { useUptime } from "@/hooks/useUptime";
 import { toastSuccess } from "@/lib/toast";
-import { logger } from "@/lib/logger";
 import { getGameName } from "@/lib/gameMetadata";
 import type { GameServer, GameDefinition } from "@/types";
 
@@ -167,14 +165,6 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
       .then((result) => setDiskUsage(result.sizeFormatted))
       .catch(() => setDiskUsage(null));
   }, [server.id, api.servers, isConnected]);
-
-  async function handleOpenFolder() {
-    try {
-      await api.servers.openFolder(server.id);
-    } catch (err) {
-      logger.error("Failed to open folder", err);
-    }
-  }
 
   const handleSaveProfilesPath = useCallback(async () => {
     setProfilesSaving(true);
@@ -344,15 +334,6 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
                 Installation path and launch configuration
               </CardDescription>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleOpenFolder}
-              title="Open server folder in Explorer"
-            >
-              <FaArrowUpRightFromSquare className="h-4 w-4 mr-2" />
-              Open Folder
-            </Button>
           </div>
         </CardHeader>
         <CardContent className="space-y-5">

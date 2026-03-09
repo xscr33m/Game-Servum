@@ -260,20 +260,6 @@ export function ModsTab({ server }: ModsTabProps) {
               Mods must be downloaded from external sources (e.g., Nexus Mods)
               and installed manually into the server directory.
             </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                try {
-                  await api.servers.openFolder(server.id);
-                } catch {
-                  // ignore
-                }
-              }}
-            >
-              <FaArrowUpRightFromSquare className="h-4 w-4 mr-2" />
-              Open Server Folder
-            </Button>
           </CardContent>
         </Card>
       )}
