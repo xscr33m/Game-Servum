@@ -511,7 +511,8 @@ export function Dashboard() {
         open={showAddServer}
         onOpenChange={setShowAddServer}
         onServerCreated={loadServers}
-        isLoggedIn={steamcmd?.loggedIn ?? false}
+        steamcmd={steamcmd}
+        onSteamStatusChange={loadSteamCMD}
       />
 
       {/* Delete Server Confirmation Dialog */}

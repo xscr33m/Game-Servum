@@ -47,6 +47,9 @@ import {
   installServer,
   cancelInstallation,
   isInstalling,
+  queueInstallation,
+  isQueued,
+  removeFromQueue,
 } from "../services/serverInstall.js";
 import {
   startServer,
@@ -303,8 +306,8 @@ router.post("/", async (req: Request, res: Response) => {
 
   const server = getServerById(serverId);
 
-  // Start installation in background
-  installServer({
+  // Start installation (queued if another install is in progress)
+  queueInstallation({
     serverId,
     gameId: body.gameId,
     appId: gameDef.appId,
@@ -313,8 +316,6 @@ router.post("/", async (req: Request, res: Response) => {
     useAnonymous: !gameDef.requiresLogin,
     username: steamConfig?.username,
     password: null, // Password is managed by SteamCMD session
-  }).catch((err) => {
-    logger.error("Installation error:", err);
   });
 
   // Add firewall rules in background (non-blocking)
@@ -395,6 +396,10 @@ router.post("/:id/start", async (req: Request, res: Response) => {
 
   if (server.status === "installing") {
     return res.status(400).json({ error: "Server is still installing" });
+  }
+
+  if (server.status === "queued") {
+    return res.status(400).json({ error: "Server is queued for installation" });
   }
 
   const result = startServer(id);
@@ -1406,6 +1411,10 @@ router.delete("/:id", async (req: Request, res: Response) => {
 
   if (isInstalling(id)) {
     cancelInstallation(id);
+  }
+
+  if (isQueued(id)) {
+    removeFromQueue(id);
   }
 
   // Remove firewall rules before deleting (non-blocking, don't fail deletion)

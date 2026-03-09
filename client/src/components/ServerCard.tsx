@@ -25,6 +25,7 @@ const statusConfig = {
   starting: { label: "Starting", variant: "warning" as const },
   running: { label: "Running", variant: "success" as const },
   stopping: { label: "Stopping", variant: "warning" as const },
+  queued: { label: "Queued", variant: "secondary" as const },
   installing: { label: "Installing", variant: "warning" as const },
   updating: { label: "Updating", variant: "warning" as const },
   error: { label: "Error", variant: "destructive" as const },
@@ -63,6 +64,7 @@ export function ServerCard({
   const isRunning = server.status === "running";
   const uptime = useUptime(isRunning ? server.startedAt : null);
   const isBusy =
+    server.status === "queued" ||
     server.status === "installing" ||
     server.status === "updating" ||
     server.status === "starting" ||
@@ -146,13 +148,15 @@ export function ServerCard({
         {isBusy ? (
           <Button variant="outline" size="sm" className="flex-1" disabled>
             <FaSpinner className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-            {server.status === "installing"
-              ? "Installing..."
-              : server.status === "updating"
-                ? "Updating..."
-                : server.status === "starting"
-                  ? "Starting..."
-                  : "Stopping..."}
+            {server.status === "queued"
+              ? "Queued..."
+              : server.status === "installing"
+                ? "Installing..."
+                : server.status === "updating"
+                  ? "Updating..."
+                  : server.status === "starting"
+                    ? "Starting..."
+                    : "Stopping..."}
           </Button>
         ) : isRunning ? (
           <Button

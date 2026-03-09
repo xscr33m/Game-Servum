@@ -11,6 +11,8 @@ import {
   FaFileLines,
   FaGauge,
   FaWrench,
+  FaSpinner,
+  FaTerminal,
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +41,7 @@ const statusConfig = {
   starting: { label: "Starting", variant: "warning" as const },
   running: { label: "Running", variant: "success" as const },
   stopping: { label: "Stopping", variant: "warning" as const },
+  queued: { label: "Queued", variant: "secondary" as const },
   installing: { label: "Installing", variant: "warning" as const },
   updating: { label: "Updating", variant: "warning" as const },
   error: { label: "Error", variant: "destructive" as const },
@@ -53,6 +56,9 @@ export function ServerDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [installProgress, setInstallProgress] = useState<string>("");
+  const [terminalOutput, setTerminalOutput] = useState<string[]>([]);
+  const terminalRef = useRef<HTMLDivElement>(null);
 
   const { api, subscribe, isConnected, activeConnection } = useBackend();
 
@@ -128,7 +134,7 @@ export function ServerDetail() {
     }
   }, [activeConnection?.status, navigate]);
 
-  // Subscribe to server status updates
+  // Subscribe to server status updates and installation progress
   useEffect(() => {
     const unsubscribe = subscribe((message) => {
       if (message.type === "server:status") {
@@ -142,6 +148,52 @@ export function ServerDetail() {
           if (payload.status === "error" && payload.message) {
             showDependencyError(payload.message);
           }
+          loadServer();
+        }
+      }
+      if (message.type === "install:progress") {
+        const payload = message.payload as {
+          serverId: number;
+          message: string;
+        };
+        if (payload.serverId === Number(id)) {
+          setInstallProgress(payload.message);
+        }
+      }
+      if (message.type === "steamcmd:output") {
+        const payload = message.payload as {
+          message: string;
+          serverId: number;
+        };
+        if (payload.message && payload.serverId === Number(id)) {
+          setTerminalOutput((prev) => [...prev.slice(-200), payload.message]);
+        }
+      }
+      if (message.type === "install:complete") {
+        const payload = message.payload as {
+          serverId: number;
+          success: boolean;
+          message: string;
+        };
+        if (payload.serverId === Number(id)) {
+          if (payload.success) {
+            toastSuccess("Installation complete");
+          } else {
+            toastError(payload.message || "Installation failed");
+          }
+          setInstallProgress("");
+          setTerminalOutput([]);
+          loadServer();
+        }
+      }
+      if (message.type === "install:error") {
+        const payload = message.payload as {
+          serverId: number;
+          message: string;
+        };
+        if (payload.serverId === Number(id)) {
+          toastError(payload.message || "Installation failed");
+          setInstallProgress("");
           loadServer();
         }
       }
@@ -177,6 +229,13 @@ export function ServerDetail() {
       setActionLoading(false);
     }
   }
+
+  // Auto-scroll terminal during installation
+  useEffect(() => {
+    if (terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    }
+  }, [terminalOutput]);
 
   if (loading && !server) {
     return (
@@ -217,6 +276,7 @@ export function ServerDetail() {
   const status = statusConfig[server.status];
   const isRunning = server.status === "running";
   const isBusy =
+    server.status === "queued" ||
     server.status === "installing" ||
     server.status === "updating" ||
     server.status === "starting" ||
@@ -281,67 +341,133 @@ export function ServerDetail() {
 
       <AgentStatusBanner />
 
-      {/* Main Content with Tabs */}
+      {/* Main Content */}
       <main className="flex-1 overflow-y-auto">
         <div className="container mx-auto px-4 py-6">
-          <Tabs
-            value={validTabs.includes(tab ?? "") ? tab : "overview"}
-            onValueChange={(value) =>
-              navigate(`/server/${id}/${value}`, { replace: true })
-            }
-            className="space-y-6"
-          >
-            <TabsList className="grid w-full grid-cols-6">
-              <TabsTrigger value="overview" className="gap-2">
-                <FaGauge className="h-4 w-4 text-ring/70" />
-                <span className="hidden sm:inline">Overview</span>
-              </TabsTrigger>
-              <TabsTrigger value="config" className="gap-2">
-                <FaGear className="h-4 w-4 text-ring/70" />
-                <span className="hidden sm:inline">Configuration</span>
-              </TabsTrigger>
-              <TabsTrigger value="mods" className="gap-2">
-                <FaCubes className="h-4 w-4 text-ring/70" />
-                <span className="hidden sm:inline">Mods</span>
-              </TabsTrigger>
-              <TabsTrigger value="players" className="gap-2">
-                <FaUsers className="h-4 w-4 text-ring/70" />
-                <span className="hidden sm:inline">Players</span>
-              </TabsTrigger>
-              <TabsTrigger value="logs" className="gap-2">
-                <FaFileLines className="h-4 w-4 text-ring/70" />
-                <span className="hidden sm:inline">Logs</span>
-              </TabsTrigger>
-              <TabsTrigger value="settings" className="gap-2">
-                <FaWrench className="h-4 w-4 text-ring/70" />
-                <span className="hidden sm:inline">Settings</span>
-              </TabsTrigger>
-            </TabsList>
+          {server.status === "queued" ? (
+            /* ── Queued View ── */
+            <div className="max-w-3xl mx-auto space-y-6">
+              <div className="rounded-xl border bg-card p-6 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                    <FaSpinner className="h-5 w-5 text-muted-foreground animate-spin" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold">
+                      Queued — {server.name}
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      Waiting for the current installation to finish.
+                      Installation will start automatically.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : server.status === "installing" ? (
+            /* ── Installation Progress View ── */
+            <div className="max-w-3xl mx-auto space-y-6">
+              <div className="rounded-xl border bg-card p-6 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-warning/20 flex items-center justify-center">
+                    <FaSpinner className="h-5 w-5 text-warning animate-spin" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold">
+                      Installing {server.name}
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      {installProgress ||
+                        "Starting installation via SteamCMD..."}
+                    </p>
+                  </div>
+                </div>
+              </div>
 
-            <TabsContent value="overview">
-              <OverviewTab server={server} onRefresh={loadServer} />
-            </TabsContent>
+              <div className="rounded-xl border bg-card p-6 space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <FaTerminal className="h-4 w-4" />
+                  Installation Output
+                </div>
+                <div
+                  ref={terminalRef}
+                  className="bg-terminal rounded-lg p-4 h-[400px] overflow-y-auto font-mono text-xs text-green-400"
+                >
+                  {terminalOutput.length === 0 ? (
+                    <span className="text-muted-foreground">
+                      Waiting for output...
+                    </span>
+                  ) : (
+                    terminalOutput.map((line, i) => (
+                      <div key={i} className="whitespace-pre-wrap">
+                        {line}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* ── Normal Tab View ── */
+            <Tabs
+              value={validTabs.includes(tab ?? "") ? tab : "overview"}
+              onValueChange={(value) =>
+                navigate(`/server/${id}/${value}`, { replace: true })
+              }
+              className="space-y-6"
+            >
+              <TabsList className="grid w-full grid-cols-6">
+                <TabsTrigger value="overview" className="gap-2">
+                  <FaGauge className="h-4 w-4 text-ring/70" />
+                  <span className="hidden sm:inline">Overview</span>
+                </TabsTrigger>
+                <TabsTrigger value="config" className="gap-2">
+                  <FaGear className="h-4 w-4 text-ring/70" />
+                  <span className="hidden sm:inline">Configuration</span>
+                </TabsTrigger>
+                <TabsTrigger value="mods" className="gap-2">
+                  <FaCubes className="h-4 w-4 text-ring/70" />
+                  <span className="hidden sm:inline">Mods</span>
+                </TabsTrigger>
+                <TabsTrigger value="players" className="gap-2">
+                  <FaUsers className="h-4 w-4 text-ring/70" />
+                  <span className="hidden sm:inline">Players</span>
+                </TabsTrigger>
+                <TabsTrigger value="logs" className="gap-2">
+                  <FaFileLines className="h-4 w-4 text-ring/70" />
+                  <span className="hidden sm:inline">Logs</span>
+                </TabsTrigger>
+                <TabsTrigger value="settings" className="gap-2">
+                  <FaWrench className="h-4 w-4 text-ring/70" />
+                  <span className="hidden sm:inline">Settings</span>
+                </TabsTrigger>
+              </TabsList>
 
-            <TabsContent value="config">
-              <ConfigTab server={server} />
-            </TabsContent>
+              <TabsContent value="overview">
+                <OverviewTab server={server} onRefresh={loadServer} />
+              </TabsContent>
 
-            <TabsContent value="mods">
-              <ModsTab server={server} />
-            </TabsContent>
+              <TabsContent value="config">
+                <ConfigTab server={server} />
+              </TabsContent>
 
-            <TabsContent value="players">
-              <PlayersTab server={server} />
-            </TabsContent>
+              <TabsContent value="mods">
+                <ModsTab server={server} />
+              </TabsContent>
 
-            <TabsContent value="logs">
-              <LogsTab server={server} />
-            </TabsContent>
+              <TabsContent value="players">
+                <PlayersTab server={server} />
+              </TabsContent>
 
-            <TabsContent value="settings">
-              <SettingsTab server={server} onRefresh={loadServer} />
-            </TabsContent>
-          </Tabs>
+              <TabsContent value="logs">
+                <LogsTab server={server} />
+              </TabsContent>
+
+              <TabsContent value="settings">
+                <SettingsTab server={server} onRefresh={loadServer} />
+              </TabsContent>
+            </Tabs>
+          )}
         </div>
       </main>
     </div>

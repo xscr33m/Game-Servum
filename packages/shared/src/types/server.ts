@@ -4,6 +4,7 @@ export type ServerStatus =
   | "starting"
   | "running"
   | "stopping"
+  | "queued"
   | "installing"
   | "updating"
   | "error";

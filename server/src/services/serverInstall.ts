@@ -26,6 +26,10 @@ const activeInstallations: Map<
   { process: ChildProcess; gameId: string }
 > = new Map();
 
+// Installation queue — ensures only one SteamCMD install runs at a time
+const installQueue: InstallOptions[] = [];
+let isProcessingQueue = false;
+
 export interface InstallOptions {
   serverId: number;
   gameId: string;
@@ -383,4 +387,73 @@ export async function updateServer(
     useAnonymous,
     username,
   });
+}
+
+/**
+ * Queue a server installation. If nothing is currently installing,
+ * it starts immediately. Otherwise the server is marked "queued" and
+ * will be processed when the current installation finishes.
+ */
+export function queueInstallation(options: InstallOptions): void {
+  if (isProcessingQueue || activeInstallations.size > 0) {
+    // Something is already installing — queue this one
+    logger.info(
+      `[Install] Queuing installation for server ${options.serverId} (${options.serverName})`,
+    );
+    updateServerStatus(options.serverId, "queued", null);
+    broadcast("server:status", {
+      serverId: options.serverId,
+      status: "queued",
+    });
+    installQueue.push(options);
+  } else {
+    // Nothing running — start immediately
+    processNextInstall(options);
+  }
+}
+
+/**
+ * Process the next install (either the provided options or the first item in the queue).
+ */
+function processNextInstall(options?: InstallOptions): void {
+  const next = options || installQueue.shift();
+  if (!next) {
+    isProcessingQueue = false;
+    return;
+  }
+
+  isProcessingQueue = true;
+  installServer(next)
+    .catch((err) => {
+      logger.error(
+        `[Install] Installation error for server ${next.serverId}:`,
+        err,
+      );
+    })
+    .finally(() => {
+      // Process next item in the queue
+      processNextInstall();
+    });
+}
+
+/**
+ * Check if a server is queued for installation
+ */
+export function isQueued(serverId: number): boolean {
+  return installQueue.some((item) => item.serverId === serverId);
+}
+
+/**
+ * Remove a server from the installation queue
+ */
+export function removeFromQueue(serverId: number): boolean {
+  const index = installQueue.findIndex((item) => item.serverId === serverId);
+  if (index !== -1) {
+    installQueue.splice(index, 1);
+    updateServerStatus(serverId, "stopped", null);
+    broadcast("server:status", { serverId, status: "stopped" });
+    logger.info(`[Install] Removed server ${serverId} from installation queue`);
+    return true;
+  }
+  return false;
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,37 +10,46 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import {
   FaSpinner,
   FaCircleExclamation,
-  FaTerminal,
   FaLock,
+  FaRightToBracket,
+  FaArrowLeft,
+  FaCheck,
 } from "react-icons/fa6";
 import { useBackend } from "@/hooks/useBackend";
-import type { GameDefinition, GameServer } from "@/types";
+import { SteamAccountDialog } from "@/components/SteamAccountDialog";
+import { publicAsset } from "@/lib/assets";
+import { toastSuccess } from "@/lib/toast";
+import type { GameDefinition, GameServer, SteamCMDStatus } from "@/types";
+
+type WizardStep = "select-game" | "steam-login" | "configure";
+
+const gameLogos: Record<string, string> = {
+  dayz: "game-logos/dayz.png",
+  "7dtd": "game-logos/7daystodie.png",
+  ark: "game-logos/ark.png",
+};
 
 interface AddServerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onServerCreated: () => void;
-  isLoggedIn: boolean;
+  steamcmd: SteamCMDStatus | null;
+  onSteamStatusChange: () => void;
 }
 
 export function AddServerDialog({
   open,
   onOpenChange,
   onServerCreated,
-  isLoggedIn,
+  steamcmd,
+  onSteamStatusChange,
 }: AddServerDialogProps) {
+  const [step, setStep] = useState<WizardStep>("select-game");
   const [games, setGames] = useState<GameDefinition[]>([]);
   const [existingServers, setExistingServers] = useState<GameServer[]>([]);
   const [selectedGame, setSelectedGame] = useState<GameDefinition | null>(null);
@@ -60,15 +69,11 @@ export function AddServerDialog({
   const [loading, setLoading] = useState(false);
   const [loadingGames, setLoadingGames] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [installing, setInstalling] = useState(false);
-  const [installingServerId, setInstallingServerId] = useState<number | null>(
-    null,
-  );
-  const [installProgress, setInstallProgress] = useState<string>("");
-  const [terminalOutput, setTerminalOutput] = useState<string[]>([]);
-  const terminalRef = useRef<HTMLDivElement>(null);
+  const [showSteamLogin, setShowSteamLogin] = useState(false);
 
-  const { api, subscribe } = useBackend();
+  const isLoggedIn = steamcmd?.loggedIn ?? false;
+
+  const { api } = useBackend();
 
   const loadGames = useCallback(async () => {
     setLoadingGames(true);
@@ -107,111 +112,17 @@ export function AddServerDialog({
       loadUsedPorts();
       loadExistingServers();
       // Reset state
+      setStep("select-game");
       setSelectedGame(null);
       setServerName("");
       setPort(undefined);
       setPortsUsed([]);
       setPortConflict(null);
       setError(null);
-      setInstalling(false);
-      setInstallingServerId(null);
-      setInstallProgress("");
-      setTerminalOutput([]);
+      setShowSteamLogin(false);
     }
   }, [open, loadGames, loadUsedPorts, loadExistingServers]);
 
-  // Subscribe to installation progress WebSocket messages
-  useEffect(() => {
-    const unsubscribe = subscribe((message) => {
-      if (message.type === "install:progress") {
-        const payload = message.payload as {
-          serverId: number;
-          status: string;
-          message: string;
-          percent?: number;
-        };
-        // Only update if it's for our server or we don't have a serverId yet
-        if (
-          installingServerId === null ||
-          payload.serverId === installingServerId
-        ) {
-          setInstallProgress(payload.message);
-        }
-      }
-
-      if (message.type === "steamcmd:output" && installing) {
-        const payload = message.payload as {
-          message: string;
-          serverId: number;
-        };
-        // Only show output for the server we're installing
-        if (
-          payload.message &&
-          (installingServerId === null ||
-            payload.serverId === installingServerId)
-        ) {
-          setTerminalOutput((prev) => [...prev.slice(-100), payload.message]);
-        }
-      }
-
-      if (message.type === "install:complete") {
-        const payload = message.payload as {
-          serverId: number;
-          success: boolean;
-          message: string;
-        };
-        // Only handle if it's for our server
-        if (
-          installingServerId === null ||
-          payload.serverId === installingServerId
-        ) {
-          setInstalling(false);
-          setInstallingServerId(null);
-          if (payload.success) {
-            onServerCreated();
-            onOpenChange(false);
-          } else {
-            setError(payload.message);
-          }
-        }
-      }
-
-      if (message.type === "install:error") {
-        const payload = message.payload as {
-          serverId: number;
-          message: string;
-        };
-        // Only handle if it's for our server
-        if (
-          installingServerId === null ||
-          payload.serverId === installingServerId
-        ) {
-          setInstalling(false);
-          setInstallingServerId(null);
-          setError(payload.message);
-        }
-      }
-    });
-
-    return unsubscribe;
-  }, [
-    subscribe,
-    installing,
-    installingServerId,
-    onServerCreated,
-    onOpenChange,
-  ]);
-
-  // Auto-scroll terminal
-  useEffect(() => {
-    if (terminalRef.current) {
-      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
-    }
-  }, [terminalOutput]);
-
-  /**
-   * Generate a unique server name like "DayZ Server #1", "DayZ Server #2", etc.
-   */
   function generateServerName(game: GameDefinition): string {
     const baseName = `${game.name} Server`;
     const existingNames = new Set(
@@ -224,14 +135,9 @@ export function AddServerDialog({
     return `${baseName} #${num}`;
   }
 
-  /**
-   * Build a Set of ALL ports occupied by existing servers,
-   * considering each game's portCount and queryPortOffset.
-   */
   function buildOccupiedPorts(): Set<number> {
     const occupied = new Set<number>();
     for (const s of usedPorts) {
-      // Find the game definition for this server to know its port range
       const gameDef = games.find((g) => g.id === s.gameId);
       if (gameDef) {
         for (let i = 0; i < gameDef.portCount; i++) {
@@ -248,10 +154,6 @@ export function AddServerDialog({
     return occupied;
   }
 
-  /**
-   * Calculate all ports that would be used for a given base port + game,
-   * and check for conflicts with existing servers.
-   */
   function calculatePorts(
     basePort: number | undefined,
     game: GameDefinition | null,
@@ -262,7 +164,6 @@ export function AddServerDialog({
       return;
     }
 
-    // Build list of ports this server would use
     const ports: number[] = [];
     for (let i = 0; i < game.portCount; i++) {
       ports.push(basePort + i);
@@ -272,7 +173,6 @@ export function AddServerDialog({
     }
     setPortsUsed(ports.sort((a, b) => a - b));
 
-    // Check conflicts
     const occupied = buildOccupiedPorts();
     const conflicts: string[] = [];
     for (const p of ports) {
@@ -296,24 +196,40 @@ export function AddServerDialog({
     setPortConflict(conflicts.length > 0 ? conflicts.join(". ") : null);
   }
 
-  async function handleGameSelect(gameId: string) {
-    const game = games.find((g) => g.id === gameId);
-    setSelectedGame(game || null);
-    if (game) {
-      // Auto-suggest server name
-      setServerName(generateServerName(game));
+  async function handleGameSelect(game: GameDefinition) {
+    setSelectedGame(game);
+    setError(null);
 
-      // Auto-suggest next available port
-      try {
-        const suggestion = await api.servers.suggestPorts(game.id);
-        setPort(suggestion.port);
-        setPortsUsed(suggestion.portsUsed);
-        setPortConflict(null);
-      } catch {
-        // Fallback to default port
-        setPort(game.defaultPort);
-        calculatePorts(game.defaultPort, game);
+    // Auto-suggest server name and port
+    setServerName(generateServerName(game));
+    try {
+      const suggestion = await api.servers.suggestPorts(game.id);
+      setPort(suggestion.port);
+      setPortsUsed(suggestion.portsUsed);
+      setPortConflict(null);
+    } catch {
+      setPort(game.defaultPort);
+      calculatePorts(game.defaultPort, game);
+    }
+
+    // Decide next step
+    if (game.requiresLogin && !isLoggedIn) {
+      setStep("steam-login");
+    } else {
+      setStep("configure");
+    }
+  }
+
+  function handleBack() {
+    setError(null);
+    if (step === "configure") {
+      if (selectedGame?.requiresLogin && !isLoggedIn) {
+        setStep("steam-login");
+      } else {
+        setStep("select-game");
       }
+    } else if (step === "steam-login") {
+      setStep("select-game");
     }
   }
 
@@ -332,7 +248,6 @@ export function AddServerDialog({
 
     setLoading(true);
     setError(null);
-    setTerminalOutput([]);
 
     try {
       const response = await api.servers.create({
@@ -345,14 +260,14 @@ export function AddServerDialog({
             : undefined,
       });
 
-      // Track the server ID for filtering WebSocket messages
-      setInstallingServerId(response.server.id);
-
-      // Installation started - switch to progress view
-      setInstalling(true);
-      setLoading(false);
+      toastSuccess(
+        `Installation started for ${response.server.name || serverName}`,
+      );
+      onServerCreated();
+      onOpenChange(false);
     } catch (err) {
       setError((err as Error).message);
+    } finally {
       setLoading(false);
     }
   }
@@ -363,211 +278,323 @@ export function AddServerDialog({
     !portConflict &&
     (!selectedGame.requiresLogin || isLoggedIn);
 
-  return (
-    <Dialog open={open} onOpenChange={installing ? undefined : onOpenChange}>
-      <DialogContent
-        className="sm:max-w-[600px]"
-        onOpenAutoFocus={(e) => e.preventDefault()}
-      >
-        <DialogHeader>
-          <DialogTitle>Add Game Server</DialogTitle>
-          <DialogDescription>
-            {installing
-              ? "Installing game server..."
-              : "Select a game and configure your server"}
-          </DialogDescription>
-        </DialogHeader>
+  const stepTitles: Record<WizardStep, { title: string; description: string }> =
+    {
+      "select-game": {
+        title: "Select a Game",
+        description: "Choose which game server you want to install",
+      },
+      "steam-login": {
+        title: "Steam Login Required",
+        description: `${selectedGame?.name || "This game"} requires a Steam account to download`,
+      },
+      configure: {
+        title: "Configure Server",
+        description: `Set up your ${selectedGame?.name || ""} server`,
+      },
+    };
 
-        {!installing ? (
-          <div className="space-y-4 py-4">
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent
+          className="sm:max-w-[600px]"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle>{stepTitles[step].title}</DialogTitle>
+            <DialogDescription>
+              {stepTitles[step].description}
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Step indicator */}
+          <div className="flex items-center gap-2 px-1">
+            {(["select-game", "steam-login", "configure"] as const)
+              .filter(
+                (s) =>
+                  s !== "steam-login" ||
+                  (selectedGame?.requiresLogin && !isLoggedIn),
+              )
+              .map((s, i, arr) => {
+                const stepIndex = arr.indexOf(step);
+                const thisIndex = i;
+                const isActive = s === step;
+                const isDone = thisIndex < stepIndex;
+                return (
+                  <div key={s} className="flex items-center gap-2 flex-1">
+                    <div
+                      className={`h-1.5 flex-1 rounded-full transition-colors ${
+                        isActive || isDone ? "bg-primary" : "bg-muted"
+                      }`}
+                    />
+                    {i < arr.length - 1 && <div className="w-1" />}
+                  </div>
+                );
+              })}
+          </div>
+
+          <div className="py-2">
             {error && (
-              <Alert variant="destructive">
+              <Alert variant="destructive" className="mb-4">
                 <FaCircleExclamation className="h-4 w-4" />
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
 
-            {/* Game Selection */}
-            <div className="space-y-2">
-              <Label htmlFor="game">Game</Label>
-              {loadingGames ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <FaSpinner className="h-4 w-4 animate-spin" />
-                  Loading available games...
-                </div>
-              ) : (
-                <Select onValueChange={handleGameSelect}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a game..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {games.map((game) => (
-                      <SelectItem key={game.id} value={game.id}>
-                        <div className="flex items-center gap-2">
-                          <span>{game.name}</span>
+            {/* Step 1: Game Selection Grid */}
+            {step === "select-game" && (
+              <div className="space-y-3">
+                {loadingGames ? (
+                  <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+                    <FaSpinner className="h-5 w-5 animate-spin mr-2" />
+                    Loading available games...
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    {games.map((game) => {
+                      const logo = gameLogos[game.id];
+                      return (
+                        <button
+                          key={game.id}
+                          type="button"
+                          onClick={() => handleGameSelect(game)}
+                          className={`group relative rounded-xl border-2 p-4 text-left transition-all hover:border-primary/50 hover:shadow-md ${
+                            selectedGame?.id === game.id
+                              ? "border-primary bg-primary/5"
+                              : "border-border bg-card"
+                          }`}
+                        >
+                          <div className="flex flex-col items-center gap-3">
+                            {logo ? (
+                              <img
+                                src={publicAsset(logo)}
+                                alt={game.name}
+                                className="h-12 w-auto object-contain"
+                              />
+                            ) : (
+                              <div className="h-12 flex items-center justify-center">
+                                <span className="text-lg font-bold text-muted-foreground/60">
+                                  {game.name}
+                                </span>
+                              </div>
+                            )}
+                            <div className="text-center w-full">
+                              <div className="font-medium text-sm">
+                                {game.name}
+                              </div>
+                              <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                                {game.description}
+                              </div>
+                            </div>
+                          </div>
                           {game.requiresLogin && (
-                            <FaLock className="h-3 w-3 text-muted-foreground" />
+                            <div className="absolute top-2 right-2">
+                              <FaLock className="h-3 w-3 text-muted-foreground" />
+                            </div>
                           )}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
-            {/* Game Info */}
-            {selectedGame && (
-              <div className="rounded-lg border p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">{selectedGame.name}</span>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary">
-                      App ID: {selectedGame.appId}
-                    </Badge>
-                    {selectedGame.requiresLogin ? (
-                      <Badge
-                        variant="secondary"
-                        className="flex items-center gap-1"
-                      >
-                        <FaLock className="h-3 w-3" />
-                        Login Required
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline">Anonymous</Badge>
+            {/* Step 2: Steam Login (conditional) */}
+            {step === "steam-login" && selectedGame && (
+              <div className="space-y-4">
+                <div className="rounded-lg border p-4 space-y-3">
+                  <div className="flex items-center gap-3">
+                    {gameLogos[selectedGame.id] && (
+                      <img
+                        src={publicAsset(gameLogos[selectedGame.id])}
+                        alt={selectedGame.name}
+                        className="h-10 w-auto object-contain"
+                      />
                     )}
+                    <div>
+                      <span className="font-medium">{selectedGame.name}</span>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant="secondary">
+                          App ID: {selectedGame.appId}
+                        </Badge>
+                        <Badge
+                          variant="secondary"
+                          className="flex items-center gap-1"
+                        >
+                          <FaLock className="h-3 w-3" />
+                          Login Required
+                        </Badge>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  {selectedGame.description}
-                </p>
 
-                {selectedGame.requiresLogin && !isLoggedIn && (
-                  <Alert variant="destructive" className="mt-2">
+                {isLoggedIn ? (
+                  <Alert>
+                    <FaCheck className="h-4 w-4 text-success" />
+                    <AlertDescription className="flex items-center justify-between gap-2">
+                      <span>
+                        Logged in as <strong>{steamcmd?.username}</strong>
+                      </span>
+                      <Button size="sm" onClick={() => setStep("configure")}>
+                        Continue
+                      </Button>
+                    </AlertDescription>
+                  </Alert>
+                ) : (
+                  <Alert className="border-warning/50 text-warning [&>svg]:text-warning">
                     <FaCircleExclamation className="h-4 w-4" />
-                    <AlertDescription>
-                      This game requires Steam login. Please login from the
-                      dashboard first.
+                    <AlertDescription className="flex items-center justify-between gap-2">
+                      <span>This game requires a Steam login to download.</span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="shrink-0"
+                        onClick={() => setShowSteamLogin(true)}
+                      >
+                        <FaRightToBracket className="h-3.5 w-3.5 mr-1.5" />
+                        Log in
+                      </Button>
                     </AlertDescription>
                   </Alert>
                 )}
               </div>
             )}
 
-            {/* Server Name */}
-            <div className="space-y-2">
-              <Label htmlFor="name">Server Name</Label>
-              <Input
-                id="name"
-                placeholder="My DayZ Server"
-                value={serverName}
-                onChange={(e) => setServerName(e.target.value)}
-                disabled={loading}
-              />
-              <p className="text-xs text-muted-foreground">
-                This will also be used as the installation folder name
-              </p>
-            </div>
-
-            {/* Port */}
-            <div className="space-y-2">
-              <Label htmlFor="port">Game Port</Label>
-              <Input
-                id="port"
-                type="number"
-                placeholder={selectedGame?.defaultPort.toString() || "2302"}
-                value={port || ""}
-                onChange={(e) => {
-                  const newPort = e.target.value
-                    ? parseInt(e.target.value, 10)
-                    : undefined;
-                  setPort(newPort);
-                  calculatePorts(newPort, selectedGame);
-                }}
-                disabled={loading}
-              />
-              {portsUsed.length > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  Ports used:{" "}
-                  {portsUsed.map((p, i) => (
-                    <span key={p}>
-                      {i > 0 && ", "}
-                      <span className="font-mono">{p}</span>
-                    </span>
-                  ))}
-                </p>
-              )}
-              {portConflict && (
-                <p className="text-xs text-destructive font-medium">
-                  {portConflict}
-                </p>
-              )}
-            </div>
-          </div>
-        ) : (
-          // Installation Progress View
-          <div className="space-y-4 py-4">
-            <div className="flex items-center gap-2">
-              <FaSpinner className="h-4 w-4 animate-spin" />
-              <span className="font-medium">
-                {installProgress || "Starting installation..."}
-              </span>
-            </div>
-
-            {/* Terminal Output */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <FaTerminal className="h-4 w-4" />
-                Installation Output
-              </Label>
-              <div
-                ref={terminalRef}
-                className="bg-terminal rounded-md p-3 h-[200px] overflow-y-auto font-mono text-xs text-green-400"
-              >
-                {terminalOutput.length === 0 ? (
-                  <span className="text-muted-foreground">
-                    Waiting for output...
-                  </span>
-                ) : (
-                  terminalOutput.map((line, i) => (
-                    <div key={i} className="whitespace-pre-wrap">
-                      {line}
+            {/* Step 3: Server Configuration */}
+            {step === "configure" && selectedGame && (
+              <div className="space-y-4">
+                {/* Selected game summary */}
+                <div className="rounded-lg border p-3">
+                  <div className="flex items-center gap-3">
+                    {gameLogos[selectedGame.id] && (
+                      <img
+                        src={publicAsset(gameLogos[selectedGame.id])}
+                        alt={selectedGame.name}
+                        className="h-8 w-auto object-contain"
+                      />
+                    )}
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{selectedGame.name}</span>
+                      <Badge variant="secondary">
+                        App ID: {selectedGame.appId}
+                      </Badge>
+                      {selectedGame.requiresLogin ? (
+                        <Badge
+                          variant="secondary"
+                          className="flex items-center gap-1"
+                        >
+                          <FaLock className="h-3 w-3" />
+                          Login Required
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline">Anonymous</Badge>
+                      )}
                     </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+                  </div>
+                </div>
 
-        <DialogFooter>
-          {!installing ? (
-            <>
-              <Button
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={loading}
-              >
+                {/* Server Name */}
+                <div className="space-y-2">
+                  <Label htmlFor="name">Server Name</Label>
+                  <Input
+                    id="name"
+                    placeholder="My DayZ Server"
+                    value={serverName}
+                    onChange={(e) => setServerName(e.target.value)}
+                    disabled={loading}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    This will also be used as the installation folder name
+                  </p>
+                </div>
+
+                {/* Port */}
+                <div className="space-y-2">
+                  <Label htmlFor="port">Game Port</Label>
+                  <Input
+                    id="port"
+                    type="number"
+                    placeholder={selectedGame?.defaultPort.toString() || "2302"}
+                    value={port || ""}
+                    onChange={(e) => {
+                      const newPort = e.target.value
+                        ? parseInt(e.target.value, 10)
+                        : undefined;
+                      setPort(newPort);
+                      calculatePorts(newPort, selectedGame);
+                    }}
+                    disabled={loading}
+                  />
+                  {portsUsed.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Ports used:{" "}
+                      {portsUsed.map((p, i) => (
+                        <span key={p}>
+                          {i > 0 && ", "}
+                          <span className="font-mono">{p}</span>
+                        </span>
+                      ))}
+                    </p>
+                  )}
+                  {portConflict && (
+                    <p className="text-xs text-destructive font-medium">
+                      {portConflict}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            {step === "select-game" ? (
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleCreate} disabled={!canCreate || loading}>
-                {loading ? (
-                  <>
-                    <FaSpinner className="mr-2 h-4 w-4 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  "Install Server"
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={handleBack}
+                  disabled={loading}
+                >
+                  <FaArrowLeft className="h-3.5 w-3.5 mr-1.5" />
+                  Back
+                </Button>
+                {step === "steam-login" && isLoggedIn && (
+                  <Button onClick={() => setStep("configure")}>Continue</Button>
                 )}
-              </Button>
-            </>
-          ) : (
-            <Button variant="outline" disabled>
-              Installation in progress...
-            </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+                {step === "configure" && (
+                  <Button
+                    onClick={handleCreate}
+                    disabled={!canCreate || loading}
+                  >
+                    {loading ? (
+                      <>
+                        <FaSpinner className="mr-2 h-4 w-4 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      "Install Server"
+                    )}
+                  </Button>
+                )}
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Steam Account Dialog — opens as overlay on top of AddServerDialog */}
+      <SteamAccountDialog
+        open={showSteamLogin}
+        onOpenChange={setShowSteamLogin}
+        steamcmd={steamcmd}
+        onStatusChange={onSteamStatusChange}
+      />
+    </>
   );
 }

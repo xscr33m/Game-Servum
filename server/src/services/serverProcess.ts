@@ -759,7 +759,12 @@ export function restoreServerStates(): void {
 
   for (const server of servers) {
     // Reset stale transitional states on startup
-    if (server.status === "starting" || server.status === "stopping") {
+    if (
+      server.status === "starting" ||
+      server.status === "stopping" ||
+      server.status === "installing" ||
+      server.status === "queued"
+    ) {
       logger.info(
         `[ServerProcess] Server ${server.id} (${server.name}) was in "${server.status}" state — resetting to stopped`,
       );
