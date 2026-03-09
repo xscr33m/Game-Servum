@@ -88,6 +88,17 @@ import type { CreateServerRequest } from "../types/index.js";
 
 const router = Router();
 
+/**
+ * Sanitize a string for use as a Windows directory name.
+ * Replaces characters illegal in Windows filenames: < > : " | ? *
+ */
+function sanitizeDirName(name: string): string {
+  return name
+    .replace(/[<>:"|?*]/g, "") // Remove illegal characters
+    .replace(/_+/g, "_") // Replace multiple underscores with a single one
+    .trim(); // Trim leading/trailing whitespace
+}
+
 // GET /api/servers/games - List all available game definitions
 router.get("/games", (_req: Request, res: Response) => {
   const games = getAllGameDefinitions().map((game) => ({
@@ -210,9 +221,10 @@ router.post("/", async (req: Request, res: Response) => {
     });
   }
 
-  // Default install path
+  // Default install path (sanitize name for Windows filesystem compatibility)
   const installPath =
-    body.installPath || path.join(config.serversPath, body.name);
+    body.installPath ||
+    path.join(config.serversPath, sanitizeDirName(body.name));
 
   // Check for port conflicts with existing servers (using full port ranges)
   const requestedPort = body.port || gameDef.defaultPort;
