@@ -28,6 +28,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useBackend } from "@/hooks/useBackend";
+import { useGameCapabilities } from "@/hooks/useGameCapabilities";
 import { toastSuccess, toastError } from "@/lib/toast";
 import type { GameServer, PlayerSummary } from "@/types";
 
@@ -96,6 +97,10 @@ export function PlayersTab({ server }: PlayersTabProps) {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const { api, subscribe, isConnected } = useBackend();
+  const { capabilities } = useGameCapabilities(server.gameId);
+
+  const hasWhitelist = capabilities?.whitelist !== false;
+  const hasBanList = capabilities?.banList !== false;
 
   /**
    * Check if a character ID is present in the whitelist content
@@ -127,15 +132,27 @@ export function PlayersTab({ server }: PlayersTabProps) {
     }
   }, [server.id, api.servers]);
 
-  // Load whitelist/ban files
+  // Load whitelist/ban files (only for games that support them)
   const loadFiles = useCallback(async () => {
+    if (!hasWhitelist && !hasBanList) {
+      setFilesLoading(false);
+      return;
+    }
     setFilesLoading(true);
     setError(null);
     try {
-      const [whitelist, ban] = await Promise.all([
-        api.servers.getFile(server.id, "whitelist.txt"),
-        api.servers.getFile(server.id, "ban.txt"),
-      ]);
+      const promises: Promise<{ content: string }>[] = [];
+      if (hasWhitelist) {
+        promises.push(api.servers.getFile(server.id, "whitelist.txt"));
+      } else {
+        promises.push(Promise.resolve({ content: "" }));
+      }
+      if (hasBanList) {
+        promises.push(api.servers.getFile(server.id, "ban.txt"));
+      } else {
+        promises.push(Promise.resolve({ content: "" }));
+      }
+      const [whitelist, ban] = await Promise.all(promises);
 
       setWhitelistContent(whitelist.content);
       setBanContent(ban.content);
@@ -146,7 +163,7 @@ export function PlayersTab({ server }: PlayersTabProps) {
     } finally {
       setFilesLoading(false);
     }
-  }, [server.id, api.servers]);
+  }, [server.id, api.servers, hasWhitelist, hasBanList]);
 
   useEffect(() => {
     if (!isConnected) return;
@@ -316,7 +333,9 @@ export function PlayersTab({ server }: PlayersTabProps) {
       )}
 
       <Tabs defaultValue="overview">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList
+          className={`grid w-full ${hasWhitelist && hasBanList ? "grid-cols-3" : hasWhitelist || hasBanList ? "grid-cols-2" : "grid-cols-1"}`}
+        >
           <TabsTrigger value="overview" className="gap-2">
             <FaUsers className="h-4 w-4 text-ring/70" />
             Players
@@ -326,24 +345,28 @@ export function PlayersTab({ server }: PlayersTabProps) {
               </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="whitelist" className="gap-2">
-            <FaShield className="h-4 w-4 text-ring/70" />
-            Whitelist
-            {whitelistChanged && (
-              <Badge variant="warning" className="ml-1">
-                Modified
-              </Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="ban" className="gap-2">
-            <FaBan className="h-4 w-4 text-ring/70" />
-            Ban List
-            {banChanged && (
-              <Badge variant="warning" className="ml-1">
-                Modified
-              </Badge>
-            )}
-          </TabsTrigger>
+          {hasWhitelist && (
+            <TabsTrigger value="whitelist" className="gap-2">
+              <FaShield className="h-4 w-4 text-ring/70" />
+              Whitelist
+              {whitelistChanged && (
+                <Badge variant="warning" className="ml-1">
+                  Modified
+                </Badge>
+              )}
+            </TabsTrigger>
+          )}
+          {hasBanList && (
+            <TabsTrigger value="ban" className="gap-2">
+              <FaBan className="h-4 w-4 text-ring/70" />
+              Ban List
+              {banChanged && (
+                <Badge variant="warning" className="ml-1">
+                  Modified
+                </Badge>
+              )}
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* Player Overview Tab */}
@@ -563,8 +586,8 @@ export function PlayersTab({ server }: PlayersTabProps) {
                   <FaUsers className="h-8 w-8 mx-auto mb-2 opacity-50" />
                   <p>No player history yet</p>
                   <p className="text-sm mt-1">
-                    Player data is collected from server logs while the server
-                    is running.
+                    Player data is collected via RCON while the server is
+                    running.
                   </p>
                 </div>
               ) : (
@@ -574,11 +597,15 @@ export function PlayersTab({ server }: PlayersTabProps) {
                       <tr className="border-b text-left text-muted-foreground">
                         <th className="pb-2 pr-4">Status</th>
                         <th className="pb-2 pr-4">Player Name</th>
-                        <th className="pb-2 pr-4">Character ID</th>
+                        {capabilities?.logParsing && (
+                          <th className="pb-2 pr-4">Character ID</th>
+                        )}
                         <th className="pb-2 pr-4">Total Playtime</th>
                         <th className="pb-2 pr-4">Sessions</th>
                         <th className="pb-2 pr-4">Last Seen</th>
-                        <th className="pb-2">Actions</th>
+                        {(hasWhitelist || hasBanList) && (
+                          <th className="pb-2">Actions</th>
+                        )}
                       </tr>
                     </thead>
                     <tbody>
@@ -621,33 +648,35 @@ export function PlayersTab({ server }: PlayersTabProps) {
                           <td className="py-2.5 pr-4 font-medium">
                             {player.playerName}
                           </td>
-                          <td className="py-2.5 pr-4">
-                            {player.characterId ? (
-                              <div className="flex items-center gap-1">
-                                <span
-                                  className="font-mono text-xs truncate max-w-[200px]"
-                                  title={player.characterId}
-                                >
-                                  {player.characterId}
+                          {capabilities?.logParsing && (
+                            <td className="py-2.5 pr-4">
+                              {player.characterId ? (
+                                <div className="flex items-center gap-1">
+                                  <span
+                                    className="font-mono text-xs truncate max-w-[200px]"
+                                    title={player.characterId}
+                                  >
+                                    {player.characterId}
+                                  </span>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-5 w-5 p-0"
+                                    onClick={() =>
+                                      handleCopyId(player.characterId!)
+                                    }
+                                    title="Copy Character ID"
+                                  >
+                                    <FaCopy className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground/50">
+                                  —
                                 </span>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-5 w-5 p-0"
-                                  onClick={() =>
-                                    handleCopyId(player.characterId!)
-                                  }
-                                  title="Copy Character ID"
-                                >
-                                  <FaCopy className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <span className="text-xs text-muted-foreground/50">
-                                —
-                              </span>
-                            )}
-                          </td>
+                              )}
+                            </td>
+                          )}
                           <td className="py-2.5 pr-4">
                             {formatPlaytime(player.totalPlaytimeSeconds)}
                           </td>
@@ -657,82 +686,84 @@ export function PlayersTab({ server }: PlayersTabProps) {
                               ? "Now"
                               : formatLastSeen(player.lastSeen)}
                           </td>
-                          <td className="py-2.5">
-                            {player.characterId ? (
-                              <div className="flex items-center gap-0.5">
-                                {isWhitelisted(player.characterId) ? (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 w-7 p-0 text-blue-500 hover:text-blue-600"
-                                    onClick={() =>
-                                      handleRemoveFromWhitelist(
-                                        player.characterId!,
-                                        player.playerName,
-                                      )
-                                    }
-                                    disabled={actionLoading !== null}
-                                    title="Remove from whitelist"
-                                  >
-                                    <FaShieldHalved className="h-3.5 w-3.5" />
-                                  </Button>
-                                ) : (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-blue-500"
-                                    onClick={() =>
-                                      handleAddToWhitelist(
-                                        player.characterId!,
-                                        player.playerName,
-                                      )
-                                    }
-                                    disabled={actionLoading !== null}
-                                    title="Add to whitelist"
-                                  >
-                                    <FaUserShield className="h-3.5 w-3.5" />
-                                  </Button>
-                                )}
-                                {isBanned(player.characterId) ? (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 w-7 p-0 text-red-500 hover:text-red-600"
-                                    onClick={() =>
-                                      handleRemoveFromBanList(
-                                        player.characterId!,
-                                        player.playerName,
-                                      )
-                                    }
-                                    disabled={actionLoading !== null}
-                                    title="Remove from ban list"
-                                  >
-                                    <FaUserMinus className="h-3.5 w-3.5" />
-                                  </Button>
-                                ) : (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500"
-                                    onClick={() =>
-                                      handleAddToBanList(
-                                        player.characterId!,
-                                        player.playerName,
-                                      )
-                                    }
-                                    disabled={actionLoading !== null}
-                                    title="Add to ban list"
-                                  >
-                                    <FaUserPlus className="h-3.5 w-3.5" />
-                                  </Button>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="text-xs text-muted-foreground/50">
-                                —
-                              </span>
-                            )}
-                          </td>
+                          {(hasWhitelist || hasBanList) && (
+                            <td className="py-2.5">
+                              {player.characterId ? (
+                                <div className="flex items-center gap-0.5">
+                                  {isWhitelisted(player.characterId) ? (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 w-7 p-0 text-blue-500 hover:text-blue-600"
+                                      onClick={() =>
+                                        handleRemoveFromWhitelist(
+                                          player.characterId!,
+                                          player.playerName,
+                                        )
+                                      }
+                                      disabled={actionLoading !== null}
+                                      title="Remove from whitelist"
+                                    >
+                                      <FaShieldHalved className="h-3.5 w-3.5" />
+                                    </Button>
+                                  ) : (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 w-7 p-0 text-muted-foreground hover:text-blue-500"
+                                      onClick={() =>
+                                        handleAddToWhitelist(
+                                          player.characterId!,
+                                          player.playerName,
+                                        )
+                                      }
+                                      disabled={actionLoading !== null}
+                                      title="Add to whitelist"
+                                    >
+                                      <FaUserShield className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
+                                  {isBanned(player.characterId) ? (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 w-7 p-0 text-red-500 hover:text-red-600"
+                                      onClick={() =>
+                                        handleRemoveFromBanList(
+                                          player.characterId!,
+                                          player.playerName,
+                                        )
+                                      }
+                                      disabled={actionLoading !== null}
+                                      title="Remove from ban list"
+                                    >
+                                      <FaUserMinus className="h-3.5 w-3.5" />
+                                    </Button>
+                                  ) : (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500"
+                                      onClick={() =>
+                                        handleAddToBanList(
+                                          player.characterId!,
+                                          player.playerName,
+                                        )
+                                      }
+                                      disabled={actionLoading !== null}
+                                      title="Add to ban list"
+                                    >
+                                      <FaUserPlus className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground/50">
+                                  —
+                                </span>
+                              )}
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -744,125 +775,129 @@ export function PlayersTab({ server }: PlayersTabProps) {
         </TabsContent>
 
         {/* Whitelist Tab */}
-        <TabsContent value="whitelist">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <FaShield className="h-5 w-5 text-ring" />
-                    Whitelist
-                  </CardTitle>
-                  <CardDescription>
-                    Players with priority queue access (
-                    {countEntries(whitelistContent)} entries)
-                  </CardDescription>
+        {hasWhitelist && (
+          <TabsContent value="whitelist">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <FaShield className="h-5 w-5 text-ring" />
+                      Whitelist
+                    </CardTitle>
+                    <CardDescription>
+                      Players with priority queue access (
+                      {countEntries(whitelistContent)} entries)
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setWhitelistContent(originalWhitelist)}
+                      disabled={!whitelistChanged || saving}
+                    >
+                      <FaRotateLeft className="h-4 w-4 mr-2" />
+                      Reset
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSaveWhitelist}
+                      disabled={!whitelistChanged || saving}
+                    >
+                      <FaFloppyDisk className="h-4 w-4 mr-2" />
+                      {saving ? "Saving..." : "Save"}
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setWhitelistContent(originalWhitelist)}
-                    disabled={!whitelistChanged || saving}
-                  >
-                    <FaRotateLeft className="h-4 w-4 mr-2" />
-                    Reset
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleSaveWhitelist}
-                    disabled={!whitelistChanged || saving}
-                  >
-                    <FaFloppyDisk className="h-4 w-4 mr-2" />
-                    {saving ? "Saving..." : "Save"}
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {filesLoading ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  Loading...
-                </div>
-              ) : (
-                <>
-                  <Textarea
-                    className="font-mono text-sm h-[400px]"
-                    value={whitelistContent}
-                    onChange={(e) => setWhitelistContent(e.target.value)}
-                    placeholder="// Add Character IDs here (one per line)&#10;// The 44-character ID can be found in the ADM log file"
-                    spellCheck={false}
-                  />
-                  <p className="text-sm text-muted-foreground">
-                    Add one Character ID per line. Lines starting with // are
-                    comments. You can also use the player action buttons to
-                    add/remove players.
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {filesLoading ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Loading...
+                  </div>
+                ) : (
+                  <>
+                    <Textarea
+                      className="font-mono text-sm h-[400px]"
+                      value={whitelistContent}
+                      onChange={(e) => setWhitelistContent(e.target.value)}
+                      placeholder="// Add Character IDs here (one per line)&#10;// The 44-character ID can be found in the ADM log file"
+                      spellCheck={false}
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      Add one Character ID per line. Lines starting with // are
+                      comments. You can also use the player action buttons to
+                      add/remove players.
+                    </p>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
         {/* Ban List Tab */}
-        <TabsContent value="ban">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <FaBan className="h-5 w-5 text-ring" />
-                    Ban List
-                  </CardTitle>
-                  <CardDescription>
-                    Banned players ({countEntries(banContent)} entries)
-                  </CardDescription>
+        {hasBanList && (
+          <TabsContent value="ban">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <FaBan className="h-5 w-5 text-ring" />
+                      Ban List
+                    </CardTitle>
+                    <CardDescription>
+                      Banned players ({countEntries(banContent)} entries)
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setBanContent(originalBan)}
+                      disabled={!banChanged || saving}
+                    >
+                      <FaRotateLeft className="h-4 w-4 mr-2" />
+                      Reset
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSaveBan}
+                      disabled={!banChanged || saving}
+                    >
+                      <FaFloppyDisk className="h-4 w-4 mr-2" />
+                      {saving ? "Saving..." : "Save"}
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setBanContent(originalBan)}
-                    disabled={!banChanged || saving}
-                  >
-                    <FaRotateLeft className="h-4 w-4 mr-2" />
-                    Reset
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleSaveBan}
-                    disabled={!banChanged || saving}
-                  >
-                    <FaFloppyDisk className="h-4 w-4 mr-2" />
-                    {saving ? "Saving..." : "Save"}
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {filesLoading ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  Loading...
-                </div>
-              ) : (
-                <>
-                  <Textarea
-                    className="font-mono text-sm h-[400px]"
-                    value={banContent}
-                    onChange={(e) => setBanContent(e.target.value)}
-                    placeholder="// Add Character IDs of banned players here (one per line)&#10;// The 44-character ID can be found in the ADM log file"
-                    spellCheck={false}
-                  />
-                  <p className="text-sm text-muted-foreground">
-                    Add one Character ID per line. Lines starting with // are
-                    comments. You can also use the player action buttons to
-                    add/remove players.
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {filesLoading ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Loading...
+                  </div>
+                ) : (
+                  <>
+                    <Textarea
+                      className="font-mono text-sm h-[400px]"
+                      value={banContent}
+                      onChange={(e) => setBanContent(e.target.value)}
+                      placeholder="// Add Character IDs of banned players here (one per line)&#10;// The 44-character ID can be found in the ADM log file"
+                      spellCheck={false}
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      Add one Character ID per line. Lines starting with // are
+                      comments. You can also use the player action buttons to
+                      add/remove players.
+                    </p>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

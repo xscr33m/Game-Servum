@@ -26,15 +26,17 @@ import {
   lookupCharacterId,
   updateCharacterIds,
 } from "../db/index.js";
-import { BattlEyeRcon, type RconPlayer } from "./rcon.js";
+import { createRconClient, type RconClient } from "./rcon/index.js";
+import { getGameDefinition } from "./gameDefinitions.js";
+import { getServerById as dbGetServerById } from "../db/index.js";
 
 // Active RCON connections per server
-const rconConnections = new Map<number, BattlEyeRcon>();
+const rconConnections = new Map<number, RconClient>();
 
 /**
  * Get an active RCON connection for a server (used by scheduler for in-game warnings)
  */
-export function getRconConnection(serverId: number): BattlEyeRcon | undefined {
+export function getRconConnection(serverId: number): RconClient | undefined {
   return rconConnections.get(serverId);
 }
 
@@ -53,6 +55,7 @@ const serverInfo = new Map<
   {
     installPath: string;
     port: number;
+    gameId: string;
     rconConfig?: { password: string; port: number };
   }
 >();
@@ -113,7 +116,8 @@ export function readBattlEyeConfig(
 
 /**
  * Start player tracking for a server.
- * First backfills history from ADM logs, then connects via RCON for live tracking.
+ * For DayZ: backfills history from ADM logs, then connects via RCON for live tracking.
+ * For other games: connects via appropriate RCON protocol for live tracking.
  */
 export function startPlayerTracking(
   serverId: number,
@@ -124,18 +128,27 @@ export function startPlayerTracking(
   // Stop any existing tracking
   stopPlayerTracking(serverId);
 
-  logger.info(`[PlayerTracker] Starting tracking for server ${serverId}`);
+  // Look up the game ID for this server
+  const server = dbGetServerById(serverId);
+  const gameId = server?.gameId || "dayz";
+
+  logger.info(
+    `[PlayerTracker] Starting tracking for server ${serverId} (${gameId})`,
+  );
 
   // Store server info for reconnection (including pre-read RCON config)
-  serverInfo.set(serverId, { installPath, port: gamePort, rconConfig });
+  serverInfo.set(serverId, { installPath, port: gamePort, gameId, rconConfig });
 
   // Initialize player state
   lastKnownPlayers.set(serverId, new Map());
 
-  // Step 1: Try to backfill history from ADM logs (best effort, files may be locked)
-  backfillFromLogs(serverId, installPath);
+  // DayZ-specific: Try to backfill history from ADM logs (best effort, files may be locked)
+  const gameDef = getGameDefinition(gameId);
+  if (gameDef?.capabilities.logParsing) {
+    backfillFromLogs(serverId, installPath);
+  }
 
-  // Step 1b: Reset all sessions to offline after backfill.
+  // Reset all sessions to offline after backfill.
   // ADM logs use base64 player IDs while RCON uses hex BattlEye GUIDs — these are
   // different identifiers, so backfill-created "online" sessions would never get
   // closed by RCON disconnect events. RCON polling will establish the true live state.
@@ -188,7 +201,8 @@ export function stopPlayerTracking(serverId: number): void {
 }
 
 /**
- * Connect to RCON and start polling
+ * Connect to RCON and start polling.
+ * Supports BattlEye (DayZ), Telnet (7DTD), and Source RCON (ARK).
  */
 async function connectRcon(
   serverId: number,
@@ -196,24 +210,38 @@ async function connectRcon(
   gamePort: number,
   rconConfig?: { password: string; port: number },
 ): Promise<void> {
-  // Use pre-read config (passed before server start) or try reading from file
-  const beConfig = rconConfig || readBattlEyeConfig(installPath);
-  if (!beConfig) {
+  const info = serverInfo.get(serverId);
+  const gameId = info?.gameId || "dayz";
+  const gameDef = getGameDefinition(gameId);
+  const rconProtocol = gameDef?.capabilities.rcon;
+
+  if (!rconProtocol) {
     logger.warn(
-      `[PlayerTracker] No BattlEye config found for server ${serverId}, RCON tracking unavailable`,
+      `[PlayerTracker] Game ${gameId} does not support RCON, tracking unavailable for server ${serverId}`,
     );
     return;
   }
 
-  const rcon = new BattlEyeRcon({
+  // Resolve RCON connection config
+  const config =
+    rconConfig ||
+    (rconProtocol === "battleye" ? readBattlEyeConfig(installPath) : null);
+  if (!config) {
+    logger.warn(
+      `[PlayerTracker] No RCON config found for server ${serverId} (${gameId}), RCON tracking unavailable`,
+    );
+    return;
+  }
+
+  const rcon = createRconClient(rconProtocol, {
     host: "127.0.0.1",
-    port: beConfig.port,
-    password: beConfig.password,
+    port: config.port,
+    password: config.password,
   });
 
   try {
     logger.info(
-      `[PlayerTracker] Connecting RCON to 127.0.0.1:${beConfig.port} for server ${serverId}...`,
+      `[PlayerTracker] Connecting ${rconProtocol} RCON to 127.0.0.1:${config.port} for server ${serverId}...`,
     );
     const success = await rcon.connect();
 
@@ -293,39 +321,36 @@ function scheduleReconnect(serverId: number): void {
 /**
  * Poll RCON for current players and detect connect/disconnect events
  */
-async function pollPlayers(
-  serverId: number,
-  rcon: BattlEyeRcon,
-): Promise<void> {
+async function pollPlayers(serverId: number, rcon: RconClient): Promise<void> {
   try {
     const currentPlayers = await rcon.getPlayers();
     const currentMap = new Map<string, string>();
 
     for (const player of currentPlayers) {
-      currentMap.set(player.guid, player.name);
+      currentMap.set(player.id, player.name);
     }
 
     const previousMap =
       lastKnownPlayers.get(serverId) || new Map<string, string>();
 
     // Detect new connections (in current but not in previous)
-    for (const [guid, name] of currentMap) {
-      if (!previousMap.has(guid)) {
+    for (const [playerId, name] of currentMap) {
+      if (!previousMap.has(playerId)) {
         // Try to find the character ID from previous sessions or ADM logs
         const characterId = lookupCharacterId(serverId, name);
         logger.info(
-          `[PlayerTracker] Player connected: ${name} (${guid}${characterId ? `, charId=${characterId}` : ""}) on server ${serverId}`,
+          `[PlayerTracker] Player connected: ${name} (${playerId}${characterId ? `, charId=${characterId}` : ""}) on server ${serverId}`,
         );
         recordPlayerConnect(
           serverId,
-          guid,
+          playerId,
           name,
           undefined,
           characterId || undefined,
         );
         broadcast("player:connected", {
           serverId,
-          steamId: guid,
+          steamId: playerId,
           playerName: name,
           characterId,
         });
@@ -333,15 +358,15 @@ async function pollPlayers(
     }
 
     // Detect disconnections (in previous but not in current)
-    for (const [guid, name] of previousMap) {
-      if (!currentMap.has(guid)) {
+    for (const [playerId, name] of previousMap) {
+      if (!currentMap.has(playerId)) {
         logger.info(
-          `[PlayerTracker] Player disconnected: ${name} (${guid}) on server ${serverId}`,
+          `[PlayerTracker] Player disconnected: ${name} (${playerId}) on server ${serverId}`,
         );
-        recordPlayerDisconnect(serverId, guid);
+        recordPlayerDisconnect(serverId, playerId);
         broadcast("player:disconnected", {
           serverId,
-          steamId: guid,
+          steamId: playerId,
           playerName: name,
         });
       }
@@ -349,12 +374,13 @@ async function pollPlayers(
 
     lastKnownPlayers.set(serverId, currentMap);
 
-    // Periodically try to sync character IDs from ADM logs
-    const counter = (pollCounters.get(serverId) || 0) + 1;
-    pollCounters.set(serverId, counter);
-    if (counter % CHARACTER_ID_SYNC_INTERVAL === 0) {
-      const info = serverInfo.get(serverId);
-      if (info) {
+    // DayZ-specific: Periodically try to sync character IDs from ADM logs
+    const info = serverInfo.get(serverId);
+    const gameDef = info ? getGameDefinition(info.gameId) : null;
+    if (gameDef?.capabilities.logParsing) {
+      const counter = (pollCounters.get(serverId) || 0) + 1;
+      pollCounters.set(serverId, counter);
+      if (counter % CHARACTER_ID_SYNC_INTERVAL === 0 && info) {
         syncCharacterIdsFromLog(serverId, info.installPath);
       }
     }

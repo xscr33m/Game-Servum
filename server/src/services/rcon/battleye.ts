@@ -1,8 +1,8 @@
 /**
- * BattlEye RCON Client
+ * BattlEye RCON Client (DayZ)
  *
  * Implements the BattlEye RCon protocol (UDP-based) for communicating with
- * DayZ game servers. Used primarily for player tracking via the `players` command.
+ * DayZ game servers. Used for player tracking, scheduled messages, and server management.
  *
  * Protocol reference: https://www.battleye.com/downloads/ (BERConProtocol.txt)
  *
@@ -18,8 +18,12 @@
  */
 
 import dgram from "dgram";
-import { createHash } from "crypto";
-import { logger } from "../index.js";
+import { logger } from "../../index.js";
+import type {
+  RconClient,
+  GenericRconPlayer,
+  RconConnectionOptions,
+} from "./types.js";
 
 // CRC32 lookup table
 const crc32Table = new Uint32Array(256);
@@ -40,16 +44,13 @@ function crc32(data: Buffer): number {
 }
 
 function buildPacket(type: number, payload: Buffer): Buffer {
-  // Content after the header: 0xFF | type | payload
   const content = Buffer.alloc(2 + payload.length);
   content[0] = 0xff;
   content[1] = type;
   payload.copy(content, 2);
 
-  // Calculate CRC32 of content
   const checksum = crc32(content);
 
-  // Build full packet: 'B' 'E' CRC32(4 bytes LE) content
   const packet = Buffer.alloc(6 + content.length);
   packet[0] = 0x42; // 'B'
   packet[1] = 0x45; // 'E'
@@ -76,7 +77,8 @@ function buildAckPacket(seq: number): Buffer {
   return buildPacket(0x02, payload);
 }
 
-export interface RconPlayer {
+/** BattlEye-specific player info (superset of GenericRconPlayer) */
+export interface BattlEyePlayer {
   index: number;
   ip: string;
   port: number;
@@ -86,21 +88,15 @@ export interface RconPlayer {
   verified: boolean;
 }
 
-export interface RconConnectionOptions {
-  host: string;
-  port: number;
-  password: string;
-}
-
 type CommandCallback = {
   resolve: (response: string) => void;
   reject: (error: Error) => void;
   timer: ReturnType<typeof setTimeout>;
-  parts: Map<number, string>; // for multipart responses
+  parts: Map<number, string>;
   totalParts: number;
 };
 
-export class BattlEyeRcon {
+export class BattlEyeRcon implements RconClient {
   private socket: dgram.Socket | null = null;
   private host: string;
   private port: number;
@@ -125,9 +121,6 @@ export class BattlEyeRcon {
     this.password = options.password;
   }
 
-  /**
-   * Connect and authenticate with the BattlEye RCON server
-   */
   async connect(): Promise<boolean> {
     if (this.connected) return true;
 
@@ -151,7 +144,6 @@ export class BattlEyeRcon {
         if (this.onDisconnect) this.onDisconnect();
       });
 
-      // Send login packet
       this.loginCallback = { resolve, reject };
       const loginPacket = buildLoginPacket(this.password);
 
@@ -163,7 +155,6 @@ export class BattlEyeRcon {
         }
       });
 
-      // Timeout for login
       setTimeout(() => {
         if (this.loginCallback) {
           this.loginCallback.reject(new Error("RCON login timeout after 10s"));
@@ -174,16 +165,10 @@ export class BattlEyeRcon {
     });
   }
 
-  /**
-   * Disconnect from the RCON server
-   */
   disconnect(): void {
     this.cleanup();
   }
 
-  /**
-   * Send a command and return the response
-   */
   async sendCommand(command: string, timeoutMs = 10000): Promise<string> {
     if (!this.connected || !this.authenticated || !this.socket) {
       throw new Error("Not connected to RCON");
@@ -217,24 +202,30 @@ export class BattlEyeRcon {
     });
   }
 
-  /**
-   * Get list of connected players via the `players` command
-   */
-  async getPlayers(): Promise<RconPlayer[]> {
+  async getPlayers(): Promise<GenericRconPlayer[]> {
     const response = await this.sendCommand("players");
-    return parsePlayersResponse(response);
+    return parseBattlEyePlayersResponse(response).map((p) => ({
+      id: p.guid,
+      name: p.name,
+      ping: p.ping,
+      ip: p.ip,
+    }));
   }
 
-  /**
-   * Set a handler for server messages (console output pushed by server)
-   */
+  /** Get BattlEye-specific player data (includes guid, index, verified status) */
+  async getBattlEyePlayers(): Promise<BattlEyePlayer[]> {
+    const response = await this.sendCommand("players");
+    return parseBattlEyePlayersResponse(response);
+  }
+
+  async broadcastMessage(message: string): Promise<void> {
+    await this.sendCommand(`say -1 ${message}`);
+  }
+
   onMessage(handler: (message: string) => void): void {
     this.onServerMessage = handler;
   }
 
-  /**
-   * Set a handler for disconnect events
-   */
   onClose(handler: () => void): void {
     this.onDisconnect = handler;
   }
@@ -244,12 +235,10 @@ export class BattlEyeRcon {
   }
 
   private handleMessage(msg: Buffer): void {
-    // Validate header
     if (msg.length < 7 || msg[0] !== 0x42 || msg[1] !== 0x45) {
       return;
     }
 
-    // Verify CRC32
     const receivedCrc = msg.readUInt32LE(2);
     const content = msg.subarray(6);
     const calculatedCrc = crc32(content);
@@ -282,7 +271,6 @@ export class BattlEyeRcon {
       this.connected = true;
       this.authenticated = true;
 
-      // Start keep-alive timer (every 30s, protocol requires ≤45s)
       this.keepAliveTimer = setInterval(() => {
         if (this.socket && this.connected) {
           const keepAlive = buildCommandPacket(this.seq, "");
@@ -304,9 +292,7 @@ export class BattlEyeRcon {
 
     if (!pending) return;
 
-    // Check if this is a multipart response
     if (content.length > 3 && content[3] === 0x00) {
-      // Multipart: 0x01 | seq | 0x00 | total_packets | packet_index | body
       const totalParts = content[4];
       const partIndex = content[5];
       const body = content.subarray(6).toString("ascii");
@@ -314,12 +300,10 @@ export class BattlEyeRcon {
       pending.totalParts = totalParts;
       pending.parts.set(partIndex, body);
 
-      // Check if all parts received
       if (pending.parts.size >= totalParts) {
         clearTimeout(pending.timer);
         this.pendingCommands.delete(seq);
 
-        // Reassemble in order
         let full = "";
         for (let i = 0; i < totalParts; i++) {
           full += pending.parts.get(i) || "";
@@ -327,7 +311,6 @@ export class BattlEyeRcon {
         pending.resolve(full);
       }
     } else {
-      // Single-part response
       const body = content.subarray(3).toString("ascii");
       clearTimeout(pending.timer);
       this.pendingCommands.delete(seq);
@@ -339,7 +322,6 @@ export class BattlEyeRcon {
     const seq = content[2];
     const message = content.subarray(3).toString("ascii");
 
-    // Must ACK server messages
     if (this.socket && this.connected) {
       const ack = buildAckPacket(seq);
       this.socket.send(ack, this.port, this.host);
@@ -356,7 +338,6 @@ export class BattlEyeRcon {
       this.keepAliveTimer = null;
     }
 
-    // Reject all pending commands
     for (const [, pending] of this.pendingCommands) {
       clearTimeout(pending.timer);
       pending.reject(new Error("RCON connection closed"));
@@ -380,26 +361,18 @@ export class BattlEyeRcon {
 
 /**
  * Parse the response from the BattlEye `players` command
- *
- * Example response:
- *   Players on server:
- *   [#] [IP Address]:[Port] [Ping] [GUID] [Name]
- *   --------------------------------------------------
- *   0   192.168.1.10:2304    32     abc123def456(OK) PlayerName
- *   1   192.168.1.11:2304    45     def789ghi012(OK) AnotherPlayer
- *   (2 players in total)
  */
-export function parsePlayersResponse(response: string): RconPlayer[] {
-  const players: RconPlayer[] = [];
+export function parseBattlEyePlayersResponse(
+  response: string,
+): BattlEyePlayer[] {
+  const players: BattlEyePlayer[] = [];
   const lines = response.split("\n");
 
   for (const line of lines) {
-    // Match player lines: index  IP:Port  Ping  GUID(Status) Name
     const match = line.match(
       /^\s*(\d+)\s+([\d.]+):(\d+)\s+(\d+)\s+([a-f0-9]+)\((\w+)\)\s+(.+?)\s*$/i,
     );
     if (match) {
-      // Strip BattlEye suffixes like "(Lobby)" from player names
       const rawName = match[7].trim().replace(/\s*\(Lobby\)\s*$/i, "");
       players.push({
         index: parseInt(match[1], 10),

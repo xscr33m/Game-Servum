@@ -27,6 +27,8 @@ export type {
   FirewallRuleStatus,
   FirewallStatus,
   FirewallResult,
+  GameCapabilities,
+  RconProtocol,
 } from "@game-servum/shared";
 
 // Client-only types
@@ -66,6 +68,7 @@ export interface GameDefinition {
   id: string;
   name: string;
   appId: number;
+  workshopAppId?: number;
   defaultPort: number;
   portCount: number;
   queryPort?: number;
@@ -74,4 +77,5 @@ export interface GameDefinition {
   description: string;
   defaultLaunchParams: string;
   firewallRules?: import("@game-servum/shared").FirewallRuleDefinition[];
+  capabilities: import("@game-servum/shared").GameCapabilities;
 }

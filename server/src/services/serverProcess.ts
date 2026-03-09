@@ -21,7 +21,7 @@ import {
   getAppSetting,
   setAppSetting,
 } from "../db/index.js";
-import { getGameDefinition } from "./gameDefinitions.js";
+import { getGameDefinition, type GameDefinition } from "./gameDefinitions.js";
 import { generateModParams } from "./modManager.js";
 import {
   startPlayerTracking,
@@ -46,6 +46,71 @@ const crashHistory: Map<number, number[]> = new Map();
 const MAX_CRASHES = 3;
 const CRASH_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 const AUTO_RESTART_DELAY_MS = 10000; // 10 seconds delay before restart
+
+/**
+ * Read RCON connection config for a server (game-specific).
+ * - DayZ: reads BEServer_x64.cfg for BattlEye RCON
+ * - 7DTD: reads serverconfig.xml for Telnet port/password
+ * - ARK: derives from launch params (RCONPort + ServerAdminPassword)
+ */
+function readRconConfig(
+  server: GameServer,
+  gameDef?: GameDefinition,
+): { password: string; port: number } | null {
+  const rconProtocol = gameDef?.capabilities.rcon;
+  if (!rconProtocol) return null;
+
+  switch (rconProtocol) {
+    case "battleye":
+      return readBattlEyeConfig(server.installPath, server.profilesPath);
+
+    case "telnet": {
+      // 7DTD: parse serverconfig.xml for TelnetPort and TelnetPassword
+      const configPath = path.join(
+        server.installPath,
+        gameDef!.configFiles?.[0] || "serverconfig.xml",
+      );
+      try {
+        if (!fs.existsSync(configPath)) return null;
+        const content = fs.readFileSync(configPath, "utf-8");
+        const portMatch = content.match(
+          /<property\s+name="TelnetPort"\s+value="(\d+)"/i,
+        );
+        const passMatch = content.match(
+          /<property\s+name="TelnetPassword"\s+value="([^"]*)"/i,
+        );
+        if (passMatch) {
+          return {
+            password: passMatch[1],
+            port: portMatch ? parseInt(portMatch[1], 10) : 8081,
+          };
+        }
+      } catch {
+        // Config may not exist yet
+      }
+      return null;
+    }
+
+    case "source": {
+      // ARK: derive RCON port and password from launch params
+      const launchParams = server.launchParams || "";
+      const portMatch = launchParams.match(/RCONPort=(\d+)/i);
+      const passMatch = launchParams.match(/ServerAdminPassword=(\S+)/i);
+      if (passMatch) {
+        return {
+          password: passMatch[1],
+          port: portMatch
+            ? parseInt(portMatch[1], 10)
+            : server.port + (gameDef!.rconPortOffset || 0),
+        };
+      }
+      return null;
+    }
+
+    default:
+      return null;
+  }
+}
 
 export interface StartResult {
   success: boolean;
@@ -204,10 +269,12 @@ export function startServer(serverId: number): StartResult {
     );
   }
 
-  // Read BattlEye RCON config BEFORE spawn — DayZ renames the file on startup
-  const beConfig = readBattlEyeConfig(server.installPath, server.profilesPath);
-  if (beConfig) {
-    logger.debug(`[ServerProcess] Pre-read RCON config: port=${beConfig.port}`);
+  // Read RCON config BEFORE spawn (game-specific)
+  const rconConfig = readRconConfig(server, gameDef);
+  if (rconConfig) {
+    logger.debug(
+      `[ServerProcess] Pre-read RCON config: port=${rconConfig.port}`,
+    );
   }
 
   // Parse arguments - same for all platforms
@@ -261,7 +328,7 @@ export function startServer(serverId: number): StartResult {
       serverId,
       server.installPath,
       server.port,
-      beConfig || undefined,
+      rconConfig || undefined,
     );
 
     // Collect stderr output for error reporting
@@ -639,9 +706,9 @@ export function checkServerRequirements(serverId: number): RequirementsResult {
     });
   }
 
-  // Check 2: Config file exists (game-specific)
-  if (server.gameId === "dayz") {
-    const configPath = path.join(server.installPath, "serverDZ.cfg");
+  // Check 2: Config file exists (derived from game definition)
+  if (gameDef?.configFiles?.[0]) {
+    const configPath = path.join(server.installPath, gameDef.configFiles[0]);
     if (fs.existsSync(configPath)) {
       checks.push({
         name: "Configuration",
@@ -652,7 +719,7 @@ export function checkServerRequirements(serverId: number): RequirementsResult {
       checks.push({
         name: "Configuration",
         status: "error",
-        message: "serverDZ.cfg not found. Server may need reinstallation.",
+        message: `${path.basename(gameDef.configFiles[0])} not found. Server may need reinstallation.`,
       });
     }
   }
@@ -713,8 +780,8 @@ export function checkServerRequirements(serverId: number): RequirementsResult {
     }
   }
 
-  // Check 5: BattlEye (for DayZ)
-  if (server.gameId === "dayz") {
+  // Check 5: BattlEye (only for games using BattlEye RCON)
+  if (gameDef?.capabilities.rcon === "battleye") {
     const battleEyePath = path.join(server.installPath, "battleye");
     const beDll = path.join(battleEyePath, "BEServer_x64.dll");
     if (fs.existsSync(beDll)) {
@@ -778,17 +845,15 @@ export function restoreServerStates(): void {
         logger.info(
           `[ServerProcess] Server ${server.id} (${server.name}) is still running with PID ${server.pid}`,
         );
-        // Read BattlEye config using the server's profiles path
-        const beConfig = readBattlEyeConfig(
-          server.installPath,
-          server.profilesPath,
-        );
+        // Read RCON config for the still-running server (game-specific)
+        const serverGameDef = getGameDefinition(server.gameId);
+        const restoredRconConfig = readRconConfig(server, serverGameDef);
         // Start player tracking for the still-running server
         startPlayerTracking(
           server.id,
           server.installPath,
           server.port,
-          beConfig ?? undefined,
+          restoredRconConfig ?? undefined,
         );
       } else {
         logger.info(

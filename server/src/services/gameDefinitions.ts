@@ -12,7 +12,10 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import { logger } from "../index.js";
-import type { FirewallRuleDefinition } from "@game-servum/shared";
+import type {
+  FirewallRuleDefinition,
+  GameCapabilities,
+} from "@game-servum/shared";
 
 export interface GameDefinition {
   id: string; // Unique identifier (e.g., "dayz", "7dtd")
@@ -30,6 +33,10 @@ export interface GameDefinition {
   description: string; // Brief description
   configFiles?: string[]; // Important config files to note
   firewallRules?: FirewallRuleDefinition[]; // Port/protocol rules for Windows Firewall
+  capabilities: GameCapabilities; // Feature flags for this game
+  broadcastCommand?: string; // RCON command template to broadcast a message (use {MESSAGE} placeholder)
+  playerListCommand?: string; // RCON command to list players
+  rconPortOffset?: number; // RCON port = base port + offset (for auto-calculation)
   postInstall?: (installPath: string, serverName: string) => Promise<void>; // Post-install hook
 }
 
@@ -198,6 +205,19 @@ export const GAME_DEFINITIONS: Record<string, GameDefinition> = {
         description: "Steam Query",
       },
     ],
+    capabilities: {
+      rcon: "battleye",
+      workshopMods: true,
+      configEditor: true,
+      playerTracking: true,
+      scheduledMessages: true,
+      whitelist: "file",
+      banList: "file",
+      logParsing: true,
+    },
+    broadcastCommand: "say -1 {MESSAGE}",
+    playerListCommand: "players",
+    rconPortOffset: 4,
     postInstall: dayZPostInstall,
   },
 
@@ -224,6 +244,19 @@ export const GAME_DEFINITIONS: Record<string, GameDefinition> = {
         description: "Game + Network",
       },
     ],
+    capabilities: {
+      rcon: "telnet",
+      workshopMods: false,
+      configEditor: true,
+      playerTracking: true,
+      scheduledMessages: true,
+      whitelist: false,
+      banList: false,
+      logParsing: false,
+    },
+    broadcastCommand: 'say "{MESSAGE}"',
+    playerListCommand: "listplayers",
+    rconPortOffset: undefined, // RCON port configured in serverconfig.xml (TelnetPort, default 8081)
     postInstall: sevenDaysPostInstall,
   },
 
@@ -258,6 +291,19 @@ export const GAME_DEFINITIONS: Record<string, GameDefinition> = {
       },
       { portOffset: 19243, portCount: 1, protocol: "TCP", description: "RCON" },
     ],
+    capabilities: {
+      rcon: "source",
+      workshopMods: true,
+      configEditor: true,
+      playerTracking: true,
+      scheduledMessages: true,
+      whitelist: false,
+      banList: false,
+      logParsing: false,
+    },
+    broadcastCommand: "ServerChat {MESSAGE}",
+    playerListCommand: "ListPlayers",
+    rconPortOffset: 19243, // Default RCON port 27020 = 7777 + 19243
     postInstall: arkPostInstall,
   },
 };

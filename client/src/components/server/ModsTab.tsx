@@ -35,7 +35,9 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { useBackend } from "@/hooks/useBackend";
+import { useGameCapabilities } from "@/hooks/useGameCapabilities";
 import { toastSuccess } from "@/lib/toast";
+import { getGameName, getWorkshopUrl } from "@/lib/gameMetadata";
 import type { GameServer, ServerMod } from "@/types";
 
 interface ModsTabProps {
@@ -78,6 +80,7 @@ export function ModsTab({ server }: ModsTabProps) {
   const [serverModParam, setServerModParam] = useState("");
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
+  const { capabilities, gameDefinition } = useGameCapabilities(server.gameId);
   const [error, setError] = useState<string | null>(null);
   const [persistentError, setPersistentError] = useState<string | null>(null);
   const [actionInProgress, setActionInProgress] = useState<number | null>(null);
@@ -239,342 +242,386 @@ export function ModsTab({ server }: ModsTabProps) {
 
   return (
     <div className="space-y-6">
-      {/* Warning if server is running */}
-      {isRunning && (
-        <Alert variant="destructive">
-          <FaCircleExclamation className="h-4 w-4" />
-          <AlertDescription>
-            Server is running. Stop the server before modifying mods.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {/* Error display */}
-      {(error || persistentError) && (
-        <Alert variant="destructive">
-          <FaCircleExclamation className="h-4 w-4" />
-          <AlertDescription className="flex items-center justify-between">
-            <span>{error || persistentError}</span>
-            {persistentError && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-destructive-foreground hover:bg-destructive/20"
-                onClick={() => setPersistentError(null)}
-              >
-                Dismiss
-              </Button>
-            )}
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {/* Add Mod Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FaPlus className="h-5 w-5 text-ring" />
-            Add Workshop Mod
-          </CardTitle>
-          <CardDescription>
-            Enter a Steam Workshop ID or URL to download a mod
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <Label htmlFor="workshopInput" className="sr-only">
-                Workshop ID or URL
-              </Label>
-              <Input
-                id="workshopInput"
-                placeholder="Workshop ID or URL (e.g., 2116157322 or https://steamcommunity.com/...)"
-                value={workshopInput}
-                onChange={(e) => setWorkshopInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (
-                    e.key === "Enter" &&
-                    isValidInput &&
-                    !adding &&
-                    !isRunning
-                  ) {
-                    handleAddMod();
-                  }
-                }}
-                disabled={isRunning}
-              />
-            </div>
+      {/* No Workshop support — show info message */}
+      {capabilities && !capabilities.workshopMods && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FaCubes className="h-5 w-5 text-ring" />
+              Mod Management
+            </CardTitle>
+            <CardDescription>
+              Steam Workshop is not available for {getGameName(server.gameId)}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              This game doesn't support Steam Workshop mods through Game Servum.
+              Mods must be downloaded from external sources (e.g., Nexus Mods)
+              and installed manually into the server directory.
+            </p>
             <Button
-              onClick={handleAddMod}
-              disabled={!isValidInput || adding || isRunning}
-            >
-              {adding ? (
-                <FaSpinner className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <FaPlus className="h-4 w-4 mr-2" />
-              )}
-              Add Mod
-            </Button>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isServerMod}
-                onChange={(e) => setIsServerMod(e.target.checked)}
-                className="rounded border-input hover:cursor-pointer"
-                disabled={isRunning}
-              />
-              <FaServer className="h-4 w-4 text-muted-foreground" />
-              Server-side only mod
-            </label>
-          </div>
-
-          <p className="text-sm text-muted-foreground">
-            Find mods on the{" "}
-            <a
-              href="https://steamcommunity.com/app/221100/workshop/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:underline inline-flex items-center gap-1"
-            >
-              DayZ Steam Workshop
-              <FaArrowUpRightFromSquare className="h-3 w-3" />
-            </a>
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* Installed Mods Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FaCubes className="h-5 w-5 text-ring" />
-            Installed Mods
-            {mods.length > 0 && (
-              <Badge variant="secondary">{mods.length}</Badge>
-            )}
-          </CardTitle>
-          <CardDescription>
-            Manage installed mods and their load order
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {mods.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <FaCubes className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No mods installed yet.</p>
-              <p className="text-sm mt-1">Add mods using the form above.</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {mods.map((mod, index) => {
-                const statusCfg = statusConfig[mod.status];
-                const StatusIcon = statusCfg.icon;
-                const isProcessing = actionInProgress === mod.id;
-
-                return (
-                  <div
-                    key={mod.id}
-                    className={`flex items-center gap-3 p-3 rounded-lg border ${
-                      mod.enabled
-                        ? "bg-muted/50 border-border"
-                        : "bg-muted/20 border-border/50 opacity-60"
-                    }`}
-                  >
-                    {/* Load order & move buttons */}
-                    <div className="flex flex-col items-center gap-0.5 shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-5 w-5"
-                        onClick={() => handleMoveMod(mod.id, "up")}
-                        disabled={index === 0 || isRunning}
-                        title="Move up"
-                      >
-                        <FaChevronUp className="h-3.5 w-3.5" />
-                      </Button>
-                      <span className="text-xs font-mono text-muted-foreground w-5 text-center">
-                        {index + 1}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-5 w-5"
-                        onClick={() => handleMoveMod(mod.id, "down")}
-                        disabled={index === mods.length - 1 || isRunning}
-                        title="Move down"
-                      >
-                        <FaChevronDown className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium truncate">{mod.name}</p>
-                        {mod.isServerMod && (
-                          <Badge variant="outline" className="text-xs">
-                            <FaServer className="h-3 w-3 mr-1" />
-                            Server
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <span>ID: {mod.workshopId}</span>
-                        <a
-                          href={`https://steamcommunity.com/sharedfiles/filedetails/?id=${mod.workshopId}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary hover:underline inline-flex items-center gap-1"
-                        >
-                          <FaArrowUpRightFromSquare className="h-3 w-3" />
-                        </a>
-                      </div>
-                    </div>
-
-                    <Badge variant={statusCfg.variant} className="shrink-0">
-                      <StatusIcon
-                        className={`h-3 w-3 mr-1 ${
-                          mod.status === "downloading" ? "animate-spin" : ""
-                        }`}
-                      />
-                      {statusCfg.label}
-                    </Badge>
-
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleToggleMod(mod)}
-                        disabled={
-                          isRunning ||
-                          isProcessing ||
-                          (mod.status !== "installed" &&
-                            mod.status !== "update_available")
-                        }
-                        title={mod.enabled ? "Disable mod" : "Enable mod"}
-                      >
-                        {mod.enabled ? "Disable" : "Enable"}
-                      </Button>
-
-                      {mod.status === "error" && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleReinstallMod(mod)}
-                          disabled={isRunning || isProcessing}
-                          title="Retry installation"
-                        >
-                          <FaArrowsRotate className="h-4 w-4" />
-                        </Button>
-                      )}
-
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setModToRemove(mod)}
-                        disabled={isRunning || isProcessing}
-                        title="Remove mod"
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <FaTrashCan className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Launch Parameters Info */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Launch Parameters</CardTitle>
-          <CardDescription>
-            Mod parameters that will be used when starting the server
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {clientMods.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-2 text-sm font-medium">
-                <FaUsers className="h-4 w-4 text-ring" />
-                Client Mods ({clientMods.length})
-              </div>
-              <div className="bg-muted p-3 rounded-lg font-mono text-sm break-all">
-                {modParam || "-mod="}
-              </div>
-            </div>
-          )}
-
-          {serverMods.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-2 text-sm font-medium">
-                <FaServer className="h-4 w-4 text-ring" />
-                Server-side Mods ({serverMods.length})
-              </div>
-              <div className="bg-muted p-3 rounded-lg font-mono text-sm break-all">
-                {serverModParam || "-serverMod="}
-              </div>
-            </div>
-          )}
-
-          {installedMods.length === 0 && (
-            <div className="bg-muted p-3 rounded-lg font-mono text-sm text-muted-foreground">
-              No mods configured
-            </div>
-          )}
-
-          {installedMods.length > 0 &&
-            clientMods.length === 0 &&
-            serverMods.length === 0 && (
-              <div className="bg-muted p-3 rounded-lg font-mono text-sm text-muted-foreground">
-                All mods are disabled
-              </div>
-            )}
-        </CardContent>
-      </Card>
-
-      {/* Remove Mod Confirmation Dialog */}
-      <Dialog
-        open={!!modToRemove}
-        onOpenChange={(open) => !open && setModToRemove(null)}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FaTrashCan className="h-5 w-5 text-destructive" />
-              Remove Mod
-            </DialogTitle>
-            <DialogDescription>
-              Are you sure you want to remove{" "}
-              <span className="font-semibold text-foreground">
-                {modToRemove?.name}
-              </span>
-              ?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setModToRemove(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                if (modToRemove) {
-                  handleRemoveMod(modToRemove);
-                  setModToRemove(null);
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  await api.servers.openFolder(server.id);
+                } catch {
+                  // ignore
                 }
               }}
             >
-              Remove
+              <FaArrowUpRightFromSquare className="h-4 w-4 mr-2" />
+              Open Server Folder
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Workshop mod management — only when workshop is supported */}
+      {(!capabilities || capabilities.workshopMods) && (
+        <>
+          {/* Warning if server is running */}
+          {isRunning && (
+            <Alert variant="destructive">
+              <FaCircleExclamation className="h-4 w-4" />
+              <AlertDescription>
+                Server is running. Stop the server before modifying mods.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Error display */}
+          {(error || persistentError) && (
+            <Alert variant="destructive">
+              <FaCircleExclamation className="h-4 w-4" />
+              <AlertDescription className="flex items-center justify-between">
+                <span>{error || persistentError}</span>
+                {persistentError && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-destructive-foreground hover:bg-destructive/20"
+                    onClick={() => setPersistentError(null)}
+                  >
+                    Dismiss
+                  </Button>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Add Mod Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FaPlus className="h-5 w-5 text-ring" />
+                Add Workshop Mod
+              </CardTitle>
+              <CardDescription>
+                Enter a Steam Workshop ID or URL to download a mod
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <Label htmlFor="workshopInput" className="sr-only">
+                    Workshop ID or URL
+                  </Label>
+                  <Input
+                    id="workshopInput"
+                    placeholder="Workshop ID or URL (e.g., 2116157322 or https://steamcommunity.com/...)"
+                    value={workshopInput}
+                    onChange={(e) => setWorkshopInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (
+                        e.key === "Enter" &&
+                        isValidInput &&
+                        !adding &&
+                        !isRunning
+                      ) {
+                        handleAddMod();
+                      }
+                    }}
+                    disabled={isRunning}
+                  />
+                </div>
+                <Button
+                  onClick={handleAddMod}
+                  disabled={!isValidInput || adding || isRunning}
+                >
+                  {adding ? (
+                    <FaSpinner className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <FaPlus className="h-4 w-4 mr-2" />
+                  )}
+                  Add Mod
+                </Button>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isServerMod}
+                    onChange={(e) => setIsServerMod(e.target.checked)}
+                    className="rounded border-input hover:cursor-pointer"
+                    disabled={isRunning}
+                  />
+                  <FaServer className="h-4 w-4 text-muted-foreground" />
+                  Server-side only mod
+                </label>
+              </div>
+
+              <p className="text-sm text-muted-foreground">
+                Find mods on the{" "}
+                <a
+                  href={getWorkshopUrl(
+                    gameDefinition?.workshopAppId,
+                    server.appId,
+                  )}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline inline-flex items-center gap-1"
+                >
+                  {getGameName(server.gameId)} Steam Workshop
+                  <FaArrowUpRightFromSquare className="h-3 w-3" />
+                </a>
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Installed Mods Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FaCubes className="h-5 w-5 text-ring" />
+                Installed Mods
+                {mods.length > 0 && (
+                  <Badge variant="secondary">{mods.length}</Badge>
+                )}
+              </CardTitle>
+              <CardDescription>
+                Manage installed mods and their load order
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {mods.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <FaCubes className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No mods installed yet.</p>
+                  <p className="text-sm mt-1">Add mods using the form above.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {mods.map((mod, index) => {
+                    const statusCfg = statusConfig[mod.status];
+                    const StatusIcon = statusCfg.icon;
+                    const isProcessing = actionInProgress === mod.id;
+
+                    return (
+                      <div
+                        key={mod.id}
+                        className={`flex items-center gap-3 p-3 rounded-lg border ${
+                          mod.enabled
+                            ? "bg-muted/50 border-border"
+                            : "bg-muted/20 border-border/50 opacity-60"
+                        }`}
+                      >
+                        {/* Load order & move buttons */}
+                        <div className="flex flex-col items-center gap-0.5 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5"
+                            onClick={() => handleMoveMod(mod.id, "up")}
+                            disabled={index === 0 || isRunning}
+                            title="Move up"
+                          >
+                            <FaChevronUp className="h-3.5 w-3.5" />
+                          </Button>
+                          <span className="text-xs font-mono text-muted-foreground w-5 text-center">
+                            {index + 1}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5"
+                            onClick={() => handleMoveMod(mod.id, "down")}
+                            disabled={index === mods.length - 1 || isRunning}
+                            title="Move down"
+                          >
+                            <FaChevronDown className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium truncate">{mod.name}</p>
+                            {mod.isServerMod && (
+                              <Badge variant="outline" className="text-xs">
+                                <FaServer className="h-3 w-3 mr-1" />
+                                Server
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <span>ID: {mod.workshopId}</span>
+                            <a
+                              href={`https://steamcommunity.com/sharedfiles/filedetails/?id=${mod.workshopId}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary hover:underline inline-flex items-center gap-1"
+                            >
+                              <FaArrowUpRightFromSquare className="h-3 w-3" />
+                            </a>
+                          </div>
+                        </div>
+
+                        <Badge variant={statusCfg.variant} className="shrink-0">
+                          <StatusIcon
+                            className={`h-3 w-3 mr-1 ${
+                              mod.status === "downloading" ? "animate-spin" : ""
+                            }`}
+                          />
+                          {statusCfg.label}
+                        </Badge>
+
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleToggleMod(mod)}
+                            disabled={
+                              isRunning ||
+                              isProcessing ||
+                              (mod.status !== "installed" &&
+                                mod.status !== "update_available")
+                            }
+                            title={mod.enabled ? "Disable mod" : "Enable mod"}
+                          >
+                            {mod.enabled ? "Disable" : "Enable"}
+                          </Button>
+
+                          {mod.status === "error" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleReinstallMod(mod)}
+                              disabled={isRunning || isProcessing}
+                              title="Retry installation"
+                            >
+                              <FaArrowsRotate className="h-4 w-4" />
+                            </Button>
+                          )}
+
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setModToRemove(mod)}
+                            disabled={isRunning || isProcessing}
+                            title="Remove mod"
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <FaTrashCan className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Launch Parameters Info */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Launch Parameters</CardTitle>
+              <CardDescription>
+                Mod parameters that will be used when starting the server
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {clientMods.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2 text-sm font-medium">
+                    <FaUsers className="h-4 w-4 text-ring" />
+                    Client Mods ({clientMods.length})
+                  </div>
+                  <div className="bg-muted p-3 rounded-lg font-mono text-sm break-all">
+                    {modParam || "-mod="}
+                  </div>
+                </div>
+              )}
+
+              {serverMods.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2 text-sm font-medium">
+                    <FaServer className="h-4 w-4 text-ring" />
+                    Server-side Mods ({serverMods.length})
+                  </div>
+                  <div className="bg-muted p-3 rounded-lg font-mono text-sm break-all">
+                    {serverModParam || "-serverMod="}
+                  </div>
+                </div>
+              )}
+
+              {installedMods.length === 0 && (
+                <div className="bg-muted p-3 rounded-lg font-mono text-sm text-muted-foreground">
+                  No mods configured
+                </div>
+              )}
+
+              {installedMods.length > 0 &&
+                clientMods.length === 0 &&
+                serverMods.length === 0 && (
+                  <div className="bg-muted p-3 rounded-lg font-mono text-sm text-muted-foreground">
+                    All mods are disabled
+                  </div>
+                )}
+            </CardContent>
+          </Card>
+
+          {/* Remove Mod Confirmation Dialog */}
+          <Dialog
+            open={!!modToRemove}
+            onOpenChange={(open) => !open && setModToRemove(null)}
+          >
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <FaTrashCan className="h-5 w-5 text-destructive" />
+                  Remove Mod
+                </DialogTitle>
+                <DialogDescription>
+                  Are you sure you want to remove{" "}
+                  <span className="font-semibold text-foreground">
+                    {modToRemove?.name}
+                  </span>
+                  ?
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button variant="outline" onClick={() => setModToRemove(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    if (modToRemove) {
+                      handleRemoveMod(modToRemove);
+                      setModToRemove(null);
+                    }
+                  }}
+                >
+                  Remove
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </>
+      )}
     </div>
   );
 }

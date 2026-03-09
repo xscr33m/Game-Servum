@@ -564,7 +564,7 @@ async function sendUpdateWarning(
   const rcon = getRconConnection(serverId);
   if (rcon && rcon.isConnected()) {
     try {
-      await rcon.sendCommand(`say -1 ${message}`);
+      await rcon.broadcastMessage(message);
     } catch (err) {
       logger.error(
         `[UpdateChecker] Server ${serverId}: failed to send RCON warning:`,

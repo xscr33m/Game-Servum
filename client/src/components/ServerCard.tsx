@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { publicAsset } from "@/lib/assets";
+import { getGameName, getGameLogo } from "@/lib/gameMetadata";
 import { useUptime } from "@/hooks/useUptime";
 import type { GameServer } from "@/types";
 
@@ -31,25 +32,6 @@ const statusConfig = {
   error: { label: "Error", variant: "destructive" as const },
 };
 
-/**
- * Map gameId to a logo file in /game-logos/.
- * Falls back to null if no logo exists for the game.
- */
-const gameLogos: Record<string, string> = {
-  dayz: "game-logos/dayz.png",
-  "7dtd": "game-logos/7daystodie.png",
-  ark: "game-logos/ark.png",
-};
-
-const gameNames: Record<string, string> = {
-  dayz: "DayZ",
-  "7dtd": "7 Days to Die",
-  ark: "ARK: Survival Evolved",
-  rust: "Rust",
-  csgo: "Counter-Strike 2",
-  valheim: "Valheim",
-};
-
 export function ServerCard({
   server,
   onStart,
@@ -59,8 +41,8 @@ export function ServerCard({
 }: ServerCardProps) {
   const navigate = useNavigate();
   const status = statusConfig[server.status];
-  const gameName = gameNames[server.gameId] || `App ${server.appId}`;
-  const gameLogo = gameLogos[server.gameId] || null;
+  const gameName = getGameName(server.gameId, `App ${server.appId}`);
+  const gameLogo = getGameLogo(server.gameId);
   const isRunning = server.status === "running";
   const uptime = useUptime(isRunning ? server.startedAt : null);
   const isBusy =

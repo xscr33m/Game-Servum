@@ -28,21 +28,13 @@ import { useBackend } from "@/hooks/useBackend";
 import { useUptime } from "@/hooks/useUptime";
 import { toastSuccess } from "@/lib/toast";
 import { logger } from "@/lib/logger";
+import { getGameName } from "@/lib/gameMetadata";
 import type { GameServer, GameDefinition } from "@/types";
 
 interface OverviewTabProps {
   server: GameServer;
   onRefresh?: () => void;
 }
-
-const gameNames: Record<string, string> = {
-  dayz: "DayZ",
-  "7dtd": "7 Days to Die",
-  ark: "ARK: Survival Evolved",
-  rust: "Rust",
-  valheim: "Valheim",
-  csgo: "Counter-Strike 2",
-};
 
 export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
   const { api, isConnected } = useBackend();
@@ -257,7 +249,7 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
     queryPort !== (server.queryPort || "").toString();
 
   const paramsChanged = launchParams !== (server.launchParams || "");
-  const gameName = gameNames[server.gameId] || server.gameId;
+  const gameName = getGameName(server.gameId);
   const createdDate = new Date(server.createdAt).toLocaleDateString();
   const isRunning = server.status === "running";
   const uptime = useUptime(isRunning ? server.startedAt : null);

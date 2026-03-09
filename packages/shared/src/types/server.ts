@@ -9,6 +9,29 @@ export type ServerStatus =
   | "updating"
   | "error";
 
+// RCON protocol types supported by game servers
+export type RconProtocol = "battleye" | "telnet" | "source";
+
+// Capabilities that a game server supports — drives UI and backend feature branching
+export interface GameCapabilities {
+  /** RCON protocol type, or false if not supported */
+  rcon: RconProtocol | false;
+  /** Whether game supports Steam Workshop mods */
+  workshopMods: boolean;
+  /** Whether a form-based config editor exists for this game */
+  configEditor: boolean;
+  /** Whether player tracking is available (requires RCON) */
+  playerTracking: boolean;
+  /** Whether scheduled RCON messages are supported (requires RCON) */
+  scheduledMessages: boolean;
+  /** How whitelist management works: 'file' = text file, 'rcon' = RCON commands, false = not supported */
+  whitelist: "file" | "rcon" | false;
+  /** How ban list management works: 'file' = text file, 'rcon' = RCON commands, false = not supported */
+  banList: "file" | "rcon" | false;
+  /** Whether game-specific log parsing is available (e.g., DayZ ADM logs for character IDs) */
+  logParsing: boolean;
+}
+
 // Database models
 export interface SteamConfig {
   id: number;

@@ -94,6 +94,7 @@ router.get("/games", (_req: Request, res: Response) => {
     id: game.id,
     name: game.name,
     appId: game.appId,
+    workshopAppId: game.workshopAppId,
     defaultPort: game.defaultPort,
     portCount: game.portCount,
     queryPort: game.queryPort,
@@ -102,6 +103,7 @@ router.get("/games", (_req: Request, res: Response) => {
     description: game.description,
     defaultLaunchParams: game.defaultLaunchParams,
     firewallRules: game.firewallRules ?? [],
+    capabilities: game.capabilities,
   }));
   res.json(games);
 });
@@ -1081,12 +1083,13 @@ router.get("/:id/config", (req: Request, res: Response) => {
     return res.status(404).json({ error: "Server not found" });
   }
 
-  // Determine config file based on game
-  let configFileName = "serverDZ.cfg"; // Default for DayZ
-  if (server.gameId === "7dtd") {
-    configFileName = "serverconfig.xml";
-  } else if (server.gameId === "rust") {
-    configFileName = "server.cfg";
+  // Determine config file from game definition
+  const gameDef = getGameDefinition(server.gameId);
+  const configFileName = gameDef?.configFiles?.[0];
+  if (!configFileName) {
+    return res.status(404).json({
+      error: "No config file defined for this game",
+    });
   }
 
   const configPath = path.join(server.installPath, configFileName);
@@ -1101,7 +1104,7 @@ router.get("/:id/config", (req: Request, res: Response) => {
   try {
     const content = fs.readFileSync(configPath, "utf-8");
     res.json({
-      fileName: configFileName,
+      fileName: path.basename(configFileName),
       path: configPath,
       content,
     });
@@ -1132,12 +1135,13 @@ router.put("/:id/config", (req: Request, res: Response) => {
     return res.status(400).json({ error: "Content is required" });
   }
 
-  // Determine config file based on game
-  let configFileName = "serverDZ.cfg";
-  if (server.gameId === "7dtd") {
-    configFileName = "serverconfig.xml";
-  } else if (server.gameId === "rust") {
-    configFileName = "server.cfg";
+  // Determine config file from game definition
+  const gameDef = getGameDefinition(server.gameId);
+  const configFileName = gameDef?.configFiles?.[0];
+  if (!configFileName) {
+    return res.status(404).json({
+      error: "No config file defined for this game",
+    });
   }
 
   const configPath = path.join(server.installPath, configFileName);
