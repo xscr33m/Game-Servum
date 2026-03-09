@@ -311,16 +311,11 @@ export function AddServerDialog({
           {/* Step indicator */}
           <div className="flex items-center gap-2 px-1">
             {(["select-game", "steam-login", "configure"] as const)
-              .filter(
-                (s) =>
-                  s !== "steam-login" ||
-                  (selectedGame?.requiresLogin && !isLoggedIn),
-              )
+              .filter((s) => s !== "steam-login" || selectedGame?.requiresLogin)
               .map((s, i, arr) => {
-                const stepIndex = arr.indexOf(step);
-                const thisIndex = i;
+                const currentIndex = arr.indexOf(step);
                 const isActive = s === step;
-                const isDone = thisIndex < stepIndex;
+                const isDone = currentIndex >= 0 && i < currentIndex;
                 return (
                   <div key={s} className="flex items-center gap-2 flex-1">
                     <div
@@ -432,33 +427,30 @@ export function AddServerDialog({
                 </div>
 
                 {isLoggedIn ? (
-                  <Alert>
-                    <FaCheck className="h-4 w-4 text-success" />
-                    <AlertDescription className="flex items-center justify-between gap-2">
-                      <span>
-                        Logged in as <strong>{steamcmd?.username}</strong>
-                      </span>
-                      <Button size="sm" onClick={() => setStep("configure")}>
-                        Continue
-                      </Button>
-                    </AlertDescription>
-                  </Alert>
+                  <div className="flex items-center gap-2.5 rounded-lg border border-success/30 bg-success/5 p-3">
+                    <FaCheck className="h-4 w-4 text-success shrink-0" />
+                    <span className="text-sm">
+                      Logged in as <strong>{steamcmd?.username}</strong>
+                    </span>
+                  </div>
                 ) : (
-                  <Alert className="border-warning/50 text-warning [&>svg]:text-warning">
-                    <FaCircleExclamation className="h-4 w-4" />
-                    <AlertDescription className="flex items-center justify-between gap-2">
-                      <span>This game requires a Steam login to download.</span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="shrink-0"
-                        onClick={() => setShowSteamLogin(true)}
-                      >
-                        <FaRightToBracket className="h-3.5 w-3.5 mr-1.5" />
-                        Log in
-                      </Button>
-                    </AlertDescription>
-                  </Alert>
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-warning/50 bg-warning/5 p-3 text-warning">
+                    <div className="flex items-center gap-2.5">
+                      <FaCircleExclamation className="h-4 w-4 shrink-0" />
+                      <span className="text-sm">
+                        This game requires a Steam login to download.
+                      </span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0"
+                      onClick={() => setShowSteamLogin(true)}
+                    >
+                      <FaRightToBracket className="h-3.5 w-3.5 mr-1.5" />
+                      Log in
+                    </Button>
+                  </div>
                 )}
               </div>
             )}
