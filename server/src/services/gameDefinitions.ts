@@ -37,7 +37,11 @@ export interface GameDefinition {
   broadcastCommand?: string; // RCON command template to broadcast a message (use {MESSAGE} placeholder)
   playerListCommand?: string; // RCON command to list players
   rconPortOffset?: number; // RCON port = base port + offset (for auto-calculation)
-  postInstall?: (installPath: string, serverName: string) => Promise<void>; // Post-install hook
+  postInstall?: (
+    installPath: string,
+    serverName: string,
+    port: number,
+  ) => Promise<void>; // Post-install hook
 }
 
 // Helper to create directories
@@ -90,6 +94,7 @@ function generatePassword(length: number = 16): string {
 async function dayZPostInstall(
   installPath: string,
   serverName: string,
+  port: number,
 ): Promise<void> {
   logger.info(`[DayZ] Running post-install for ${serverName}...`);
 
@@ -137,8 +142,9 @@ async function dayZPostInstall(
   const beServerCfgPath = path.join(battleEyePath, "BEServer_x64.cfg");
   if (!fs.existsSync(beServerCfgPath)) {
     const rconPassword = generatePassword(20);
+    const rconPort = port + 4; // RCON port = base port + rconPortOffset (4)
     const beConfig = `RConPassword ${rconPassword}
-RConPort 2306
+RConPort ${rconPort}
 RestrictRCon 0
 `;
     createFile(beServerCfgPath, beConfig);
@@ -154,6 +160,7 @@ RestrictRCon 0
 async function sevenDaysPostInstall(
   installPath: string,
   serverName: string,
+  port: number,
 ): Promise<void> {
   logger.info(`[7DTD] Running post-install for ${serverName}...`);
 
@@ -161,7 +168,7 @@ async function sevenDaysPostInstall(
   const dataPath = path.join(installPath, "Data");
   ensureDir(dataPath);
 
-  // Patch serverconfig.xml with the user-chosen server name
+  // Patch serverconfig.xml with server name, port, and Telnet settings
   const configPath = path.join(installPath, "serverconfig.xml");
   if (fs.existsSync(configPath)) {
     try {
@@ -172,14 +179,24 @@ async function sevenDaysPostInstall(
         "ServerDescription",
         `${serverName} - powered by Game Servum`,
       );
+
+      // Set game server port to the user-chosen port
+      content = setXmlProperty(content, "ServerPort", String(port));
+
+      // Generate secure Telnet password so Game-Servum can connect via RCON
+      const telnetPassword = generatePassword(20);
+      content = setXmlProperty(content, "TelnetPassword", telnetPassword);
+
       fs.writeFileSync(configPath, content, "utf-8");
-      logger.info(`[7DTD] Updated serverconfig.xml with server name`);
+      logger.info(
+        `[7DTD] Updated serverconfig.xml: ServerName, ServerPort=${port}, TelnetPassword set`,
+      );
     } catch (err) {
       logger.error(`[7DTD] Failed to patch serverconfig.xml:`, err);
     }
   } else {
     logger.warn(
-      `[7DTD] serverconfig.xml not found at ${configPath}, skipping name patch`,
+      `[7DTD] serverconfig.xml not found at ${configPath}, skipping config patch`,
     );
   }
 
@@ -192,6 +209,7 @@ async function sevenDaysPostInstall(
 async function arkPostInstall(
   installPath: string,
   serverName: string,
+  _port: number,
 ): Promise<void> {
   logger.info(`[ARK] Running post-install for ${serverName}...`);
 
@@ -372,9 +390,10 @@ export async function runPostInstall(
   gameId: string,
   installPath: string,
   serverName: string,
+  port: number,
 ): Promise<void> {
   const game = getGameDefinition(gameId);
   if (game?.postInstall) {
-    await game.postInstall(installPath, serverName);
+    await game.postInstall(installPath, serverName, port);
   }
 }

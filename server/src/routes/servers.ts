@@ -315,6 +315,7 @@ router.post("/", async (req: Request, res: Response) => {
     appId: gameDef.appId,
     installPath,
     serverName: body.name,
+    port: body.port || gameDef.defaultPort,
     useAnonymous: !gameDef.requiresLogin,
     username: steamConfig?.username,
     password: null, // Password is managed by SteamCMD session

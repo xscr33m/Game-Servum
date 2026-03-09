@@ -658,6 +658,7 @@ async function performUpdateRestart(
         server.appId,
         server.installPath,
         server.name,
+        server.port,
         useAnonymous,
         steamConfig?.username,
       );
