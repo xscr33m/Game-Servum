@@ -52,6 +52,18 @@ function createFile(filePath: string, content: string): void {
   fs.writeFileSync(filePath, content, "utf-8");
 }
 
+// Helper to set an XML property value: <property name="Key" value="Value"/>
+function setXmlProperty(content: string, name: string, value: string): string {
+  const regex = new RegExp(
+    `(<property\\s+name\\s*=\\s*"${name}"\\s+value\\s*=\\s*")[^"]*"`,
+    "i",
+  );
+  if (regex.test(content)) {
+    return content.replace(regex, `$1${value}"`);
+  }
+  return content;
+}
+
 // Helper to generate a secure random password
 function generatePassword(length: number = 16): string {
   const chars =
@@ -145,9 +157,31 @@ async function sevenDaysPostInstall(
 ): Promise<void> {
   logger.info(`[7DTD] Running post-install for ${serverName}...`);
 
-  // 7DTD creates its own config on first run, but we can prepare the data folder
+  // Prepare data folder
   const dataPath = path.join(installPath, "Data");
   ensureDir(dataPath);
+
+  // Patch serverconfig.xml with the user-chosen server name
+  const configPath = path.join(installPath, "serverconfig.xml");
+  if (fs.existsSync(configPath)) {
+    try {
+      let content = fs.readFileSync(configPath, "utf-8");
+      content = setXmlProperty(content, "ServerName", serverName);
+      content = setXmlProperty(
+        content,
+        "ServerDescription",
+        `${serverName} - powered by Game Servum`,
+      );
+      fs.writeFileSync(configPath, content, "utf-8");
+      logger.info(`[7DTD] Updated serverconfig.xml with server name`);
+    } catch (err) {
+      logger.error(`[7DTD] Failed to patch serverconfig.xml:`, err);
+    }
+  } else {
+    logger.warn(
+      `[7DTD] serverconfig.xml not found at ${configPath}, skipping name patch`,
+    );
+  }
 
   logger.info(`[7DTD] Post-install complete for ${serverName}`);
 }
