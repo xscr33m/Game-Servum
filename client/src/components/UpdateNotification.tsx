@@ -75,6 +75,7 @@ export function UpdateNotification() {
         errMsg.includes("404") ||
         errMsg.includes("406") ||
         errMsg.includes("Unable to find latest version") ||
+        errMsg.includes("No published versions") ||
         errMsg.includes("authentication token") ||
         errMsg.includes("Cannot parse releases feed")
       ) {
