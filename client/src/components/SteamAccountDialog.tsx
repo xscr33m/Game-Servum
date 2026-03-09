@@ -92,7 +92,6 @@ export function SteamAccountDialog({
       if (message.type === "steamcmd:login-success") {
         setLoading(false);
         setError(null);
-        toastSuccess("Logged in to Steam");
         onStatusChange();
         onOpenChange(false);
       }
