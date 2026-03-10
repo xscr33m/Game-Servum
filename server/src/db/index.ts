@@ -218,6 +218,20 @@ function runMigrations(): void {
       logger.info("[DB] Migration: Added started_at column to game_servers");
     }
   }
+
+  // Migration: Fix ARK executable path (moved from root to ShooterGame/Binaries/Win64/)
+  const arkServers = db.exec(
+    "SELECT id FROM game_servers WHERE game_id = 'ark' AND executable = 'ShooterGameServer.exe'",
+  );
+  if (arkServers.length > 0 && arkServers[0].values.length > 0) {
+    db.run(
+      "UPDATE game_servers SET executable = 'ShooterGame/Binaries/Win64/ShooterGameServer.exe' WHERE game_id = 'ark' AND executable = 'ShooterGameServer.exe'",
+    );
+    saveDatabase();
+    logger.info(
+      `[DB] Migration: Updated ARK executable path for ${arkServers[0].values.length} server(s)`,
+    );
+  }
 }
 
 export function getDb(): SqlJsDatabase {

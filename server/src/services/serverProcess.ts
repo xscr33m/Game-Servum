@@ -157,6 +157,7 @@ export function startServer(serverId: number): StartResult {
 
   launchParams = launchParams
     .replace(/\{PORT\}/g, server.port.toString())
+    .replace(/\{QUERY_PORT\}/g, (server.queryPort ?? server.port).toString())
     .replace(/\{PROFILES\}/g, server.profilesPath)
     .replace(/\{INSTALL_PATH\}/g, server.installPath)
     .replace(/\{SERVER_NAME\}/g, server.name);

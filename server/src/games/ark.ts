@@ -2,14 +2,15 @@
  * ARK: Survival Evolved Game Adapter
  *
  * Handles all ARK-specific server management logic:
- * - Source RCON config from launch params (RCONPort, ServerAdminPassword)
- * - GameUserSettings.ini config editor
+ * - Source RCON config from GameUserSettings.ini (RCONPort, ServerAdminPassword)
+ * - GameUserSettings.ini / Game.ini config editor
  * - Workshop mods via -automanagedmods + ActiveMods in GameUserSettings.ini
  * - Whitelist via PlayersJoinNoCheckList.txt / Ban via BannedPlayers.txt
  */
 
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 import { logger } from "../index.js";
 import { BaseGameAdapter } from "./base.js";
 import type {
@@ -23,6 +24,112 @@ import type {
 import type { GameServer } from "../types/index.js";
 import type { ServerMod } from "../types/index.js";
 
+// ── Helpers ────────────────────────────────────────────────────────
+
+function generatePassword(length: number = 16): string {
+  const chars =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const bytes = crypto.randomBytes(length);
+  let password = "";
+  for (let i = 0; i < length; i++) {
+    password += chars[bytes[i] % chars.length];
+  }
+  return password;
+}
+
+/**
+ * Set or append a key=value pair under a specific [Section] in an INI file.
+ * If the key exists under the section, its value is replaced.
+ * If the key does not exist, it is appended at the end of the section.
+ * If the section does not exist, both section and key are appended.
+ */
+function setIniProperty(
+  content: string,
+  section: string,
+  key: string,
+  value: string,
+): string {
+  const lines = content.split("\n");
+  const sectionHeader = `[${section}]`;
+  let sectionStart = -1;
+  let sectionEnd = lines.length;
+
+  // Find the section
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].trim().toLowerCase() === sectionHeader.toLowerCase()) {
+      sectionStart = i;
+      // Find end of section (next [Section] or EOF)
+      for (let j = i + 1; j < lines.length; j++) {
+        if (lines[j].trim().startsWith("[")) {
+          sectionEnd = j;
+          break;
+        }
+      }
+      break;
+    }
+  }
+
+  if (sectionStart === -1) {
+    // Section not found — append it
+    const newLines = content.endsWith("\n") ? [] : [""];
+    newLines.push(sectionHeader, `${key}=${value}`);
+    return content + newLines.join("\n") + "\n";
+  }
+
+  // Look for existing key in section
+  const keyLower = key.toLowerCase();
+  for (let i = sectionStart + 1; i < sectionEnd; i++) {
+    const eqIdx = lines[i].indexOf("=");
+    if (eqIdx > 0) {
+      const existingKey = lines[i].substring(0, eqIdx).trim();
+      if (existingKey.toLowerCase() === keyLower) {
+        lines[i] = `${key}=${value}`;
+        return lines.join("\n");
+      }
+    }
+  }
+
+  // Key not found in section — insert before section end
+  lines.splice(sectionEnd, 0, `${key}=${value}`);
+  return lines.join("\n");
+}
+
+/**
+ * Read an INI property value from a specific section.
+ */
+function getIniProperty(
+  content: string,
+  section: string,
+  key: string,
+): string | null {
+  const lines = content.split("\n");
+  const sectionHeader = `[${section}]`;
+  let inSection = false;
+  const keyLower = key.toLowerCase();
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.toLowerCase() === sectionHeader.toLowerCase()) {
+      inSection = true;
+      continue;
+    }
+    if (trimmed.startsWith("[")) {
+      if (inSection) break;
+      continue;
+    }
+    if (inSection) {
+      const eqIdx = trimmed.indexOf("=");
+      if (eqIdx > 0) {
+        const existingKey = trimmed.substring(0, eqIdx).trim();
+        if (existingKey.toLowerCase() === keyLower) {
+          return trimmed.substring(eqIdx + 1).trim();
+        }
+      }
+    }
+  }
+  return null;
+}
+
 // ── ARK Adapter ────────────────────────────────────────────────────
 
 export class ArkAdapter extends BaseGameAdapter {
@@ -31,14 +138,14 @@ export class ArkAdapter extends BaseGameAdapter {
     name: "ARK: Survival Evolved",
     appId: 376030,
     workshopAppId: 346110, // ARK Workshop mods are under the game AppID (346110), not the server (376030)
-    executable: "ShooterGameServer.exe",
+    executable: "ShooterGame/Binaries/Win64/ShooterGameServer.exe",
     defaultPort: 7777,
     portCount: 2,
     queryPort: 27015,
     queryPortOffset: 19238,
     requiresLogin: false,
     defaultLaunchParams:
-      "TheIsland?listen?SessionName=MyARKServer -server -log",
+      "TheIsland?listen?SessionName={SERVER_NAME}?Port={PORT}?QueryPort={QUERY_PORT}?RCONEnabled=True -server -log",
     description: "Dinosaur survival game. Can be downloaded anonymously.",
     configFiles: [
       "ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini",
@@ -81,20 +188,103 @@ export class ArkAdapter extends BaseGameAdapter {
   async postInstall(
     installPath: string,
     serverName: string,
-    _port: number,
+    port: number,
   ): Promise<void> {
     logger.info(`[ARK] Running post-install for ${serverName}...`);
 
     // ARK needs ShooterGame/Saved directory structure
-    const savedPath = path.join(
+    const savedConfigPath = path.join(
       installPath,
       "ShooterGame",
       "Saved",
       "Config",
       "WindowsServer",
     );
-    if (!fs.existsSync(savedPath)) {
-      fs.mkdirSync(savedPath, { recursive: true });
+    if (!fs.existsSync(savedConfigPath)) {
+      fs.mkdirSync(savedConfigPath, { recursive: true });
+    }
+
+    // Copy default INI templates from ShooterGame/Config/ to Saved/Config/WindowsServer/
+    const defaultConfigDir = path.join(installPath, "ShooterGame", "Config");
+    const iniMappings: Array<{ source: string; target: string }> = [
+      {
+        source: path.join(defaultConfigDir, "DefaultGameUserSettings.ini"),
+        target: path.join(savedConfigPath, "GameUserSettings.ini"),
+      },
+      {
+        source: path.join(defaultConfigDir, "DefaultGame.ini"),
+        target: path.join(savedConfigPath, "Game.ini"),
+      },
+    ];
+
+    for (const { source, target } of iniMappings) {
+      if (!fs.existsSync(target)) {
+        if (fs.existsSync(source)) {
+          fs.copyFileSync(source, target);
+          logger.info(
+            `[ARK] Copied ${path.basename(source)} → ${path.basename(target)}`,
+          );
+        } else {
+          // Create empty file so config editor can work
+          fs.writeFileSync(target, "", "utf-8");
+          logger.warn(
+            `[ARK] Default template ${path.basename(source)} not found, created empty ${path.basename(target)}`,
+          );
+        }
+      }
+    }
+
+    // Configure GameUserSettings.ini with server-specific settings
+    const gusPath = path.join(savedConfigPath, "GameUserSettings.ini");
+    try {
+      let gusContent = fs.readFileSync(gusPath, "utf-8");
+      const adminPassword = generatePassword(20);
+      const rconPort = port + (this.definition.rconPortOffset || 19243);
+      const queryPort = port + (this.definition.queryPortOffset || 19238);
+
+      gusContent = setIniProperty(
+        gusContent,
+        "ServerSettings",
+        "SessionName",
+        serverName,
+      );
+      gusContent = setIniProperty(
+        gusContent,
+        "ServerSettings",
+        "RCONEnabled",
+        "True",
+      );
+      gusContent = setIniProperty(
+        gusContent,
+        "ServerSettings",
+        "RCONPort",
+        String(rconPort),
+      );
+      gusContent = setIniProperty(
+        gusContent,
+        "ServerSettings",
+        "ServerAdminPassword",
+        adminPassword,
+      );
+      gusContent = setIniProperty(
+        gusContent,
+        "ServerSettings",
+        "Port",
+        String(port),
+      );
+      gusContent = setIniProperty(
+        gusContent,
+        "ServerSettings",
+        "QueryPort",
+        String(queryPort),
+      );
+
+      fs.writeFileSync(gusPath, gusContent, "utf-8");
+      logger.info(
+        `[ARK] Configured GameUserSettings.ini: SessionName=${serverName}, Port=${port}, QueryPort=${queryPort}, RCONPort=${rconPort}, RCONEnabled=True`,
+      );
+    } catch (err) {
+      logger.error(`[ARK] Failed to configure GameUserSettings.ini:`, err);
     }
 
     logger.info(`[ARK] Post-install complete for ${serverName}`);
@@ -118,7 +308,42 @@ export class ArkAdapter extends BaseGameAdapter {
   // ── RCON ─────────────────────────────────────────────────────────
 
   readRconConfig(server: GameServer): RconConfig | null {
-    // ARK: derive RCON port and password from launch params
+    // Primary: read RCON config from GameUserSettings.ini
+    const gusPath = path.join(
+      server.installPath,
+      "ShooterGame",
+      "Saved",
+      "Config",
+      "WindowsServer",
+      "GameUserSettings.ini",
+    );
+
+    if (fs.existsSync(gusPath)) {
+      try {
+        const content = fs.readFileSync(gusPath, "utf-8");
+        const password = getIniProperty(
+          content,
+          "ServerSettings",
+          "ServerAdminPassword",
+        );
+        const rconPort = getIniProperty(content, "ServerSettings", "RCONPort");
+
+        if (password) {
+          return {
+            password,
+            port: rconPort
+              ? parseInt(rconPort, 10)
+              : server.port + (this.definition.rconPortOffset || 0),
+          };
+        }
+      } catch (error) {
+        logger.debug(
+          `[ARK] Could not read GameUserSettings.ini for RCON config: ${(error as Error).message}`,
+        );
+      }
+    }
+
+    // Fallback: derive RCON config from launch params (backward compat)
     const launchParams = server.launchParams || "";
     const portMatch = launchParams.match(/RCONPort=(\d+)/i);
     const passMatch = launchParams.match(/ServerAdminPassword=(\S+)/i);
@@ -193,6 +418,49 @@ export class ArkAdapter extends BaseGameAdapter {
       modParam: `-automanagedmods -mods=${modIds.join(",")}`,
       serverModParam: "",
     };
+  }
+
+  /**
+   * Write ActiveMods list into GameUserSettings.ini for mod loading.
+   * Called by modManager after mod install/enable/disable/reorder.
+   */
+  updateActiveModsInConfig(serverInstallPath: string, mods: ServerMod[]): void {
+    const gusPath = path.join(
+      serverInstallPath,
+      "ShooterGame",
+      "Saved",
+      "Config",
+      "WindowsServer",
+      "GameUserSettings.ini",
+    );
+
+    if (!fs.existsSync(gusPath)) return;
+
+    try {
+      let content = fs.readFileSync(gusPath, "utf-8");
+      const enabledMods = mods
+        .filter((m) => m.enabled && m.status === "installed")
+        .sort((a, b) => a.loadOrder - b.loadOrder)
+        .map((m) => m.workshopId);
+
+      const activeModsValue =
+        enabledMods.length > 0 ? enabledMods.join(",") : "";
+      content = setIniProperty(
+        content,
+        "ServerSettings",
+        "ActiveMods",
+        activeModsValue,
+      );
+
+      fs.writeFileSync(gusPath, content, "utf-8");
+      logger.info(
+        `[ARK] Updated ActiveMods in GameUserSettings.ini: ${activeModsValue || "(none)"}`,
+      );
+    } catch (error) {
+      logger.error(
+        `[ARK] Failed to update ActiveMods in config: ${(error as Error).message}`,
+      );
+    }
   }
 
   // ── Player Management ────────────────────────────────────────────
