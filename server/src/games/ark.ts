@@ -18,6 +18,7 @@ import type {
   PlayerFileConfig,
   EditableFileConfig,
   ModCopyResult,
+  LogPaths,
 } from "./types.js";
 import type { GameServer } from "../types/index.js";
 import type { ServerMod } from "../types/index.js";
@@ -240,6 +241,22 @@ export class ArkAdapter extends BaseGameAdapter {
 
   getLogFileExtensions(): string[] {
     return [".log"];
+  }
+
+  getLogPaths(server: GameServer): LogPaths {
+    return {
+      directories: [
+        path.join(server.installPath, "ShooterGame", "Saved", "Logs"),
+      ],
+      extensions: [".log"],
+      archiveDir: path.join(
+        server.installPath,
+        "ShooterGame",
+        "Saved",
+        "Logs",
+        "log_archive",
+      ),
+    };
   }
 
   getEditableFiles(server: GameServer): EditableFileConfig[] {

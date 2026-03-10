@@ -23,6 +23,7 @@ import type {
   PlayerFileConfig,
   EditableFileConfig,
   ModCopyResult,
+  LogPaths,
 } from "./types.js";
 import type { GameServer } from "../types/index.js";
 import type { ServerMod } from "../types/index.js";
@@ -348,6 +349,15 @@ export class DayZAdapter extends BaseGameAdapter {
 
   getLogFileExtensions(): string[] {
     return [".ADM", ".RPT", ".log"];
+  }
+
+  getLogPaths(server: GameServer): LogPaths {
+    const profilesDir = resolveProfilesPath(server);
+    return {
+      directories: [profilesDir],
+      extensions: this.getLogFileExtensions(),
+      archiveDir: path.join(profilesDir, "log_archive"),
+    };
   }
 
   getEditableFiles(server: GameServer): EditableFileConfig[] {

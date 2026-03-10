@@ -175,25 +175,17 @@ export function startServer(serverId: number): StartResult {
 
   // Archive old log files before starting
   const logSettings = getLogSettings(serverId);
-  if (logSettings.archiveOnStart) {
-    const logExtensions = adapter?.getLogFileExtensions();
-    const archivedCount = archiveLogsBeforeStart(
-      server.installPath,
-      server.profilesPath,
-      logExtensions,
-    );
+  const logPaths = adapter?.getLogPaths(server);
+  if (logSettings.archiveOnStart && logPaths) {
+    const archivedCount = archiveLogsBeforeStart(logPaths);
     if (archivedCount > 0) {
       logger.info(`[ServerProcess] Archived ${archivedCount} old log files`);
     }
   }
 
   // Clean up old archives based on retention setting
-  if (logSettings.retentionDays > 0) {
-    cleanupOldArchives(
-      server.installPath,
-      logSettings.retentionDays,
-      server.profilesPath,
-    );
+  if (logSettings.retentionDays > 0 && logPaths) {
+    cleanupOldArchives(logPaths, logSettings.retentionDays);
   }
 
   // Read RCON config BEFORE spawn (game-specific)

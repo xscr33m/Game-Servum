@@ -1256,8 +1256,13 @@ router.get("/:id/logs", (req: Request, res: Response) => {
     return res.status(404).json({ error: "Server not found" });
   }
 
-  const current = getCurrentLogs(server.installPath, server.profilesPath);
-  const archives = getArchivedSessions(server.installPath, server.profilesPath);
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter) {
+    return res.status(400).json({ error: "Unknown game type" });
+  }
+  const logPaths = adapter.getLogPaths(server);
+  const current = getCurrentLogs(logPaths);
+  const archives = getArchivedSessions(logPaths);
 
   res.json({ current, archives });
 });
@@ -1273,14 +1278,13 @@ router.get("/:id/logs/content/:filename", (req: Request, res: Response) => {
     return res.status(404).json({ error: "Server not found" });
   }
 
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter) {
+    return res.status(400).json({ error: "Unknown game type" });
+  }
+  const logPaths = adapter.getLogPaths(server);
   const maxLines = parseInt(lines as string, 10) || 0;
-  const result = readLogContent(
-    server.installPath,
-    filename,
-    maxLines,
-    undefined,
-    server.profilesPath,
-  );
+  const result = readLogContent(logPaths, filename, maxLines);
 
   if (!result) {
     return res.status(404).json({ error: "Log file not found or not allowed" });
@@ -1288,7 +1292,6 @@ router.get("/:id/logs/content/:filename", (req: Request, res: Response) => {
 
   res.json({ name: filename, ...result });
 });
-
 // GET /api/servers/:id/logs/archive/:session - List files in an archive session
 router.get("/:id/logs/archive/:session", (req: Request, res: Response) => {
   const id = parseInt(req.params.id, 10);
@@ -1299,11 +1302,12 @@ router.get("/:id/logs/archive/:session", (req: Request, res: Response) => {
     return res.status(404).json({ error: "Server not found" });
   }
 
-  const files = getArchivedSessionFiles(
-    server.installPath,
-    session,
-    server.profilesPath,
-  );
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter) {
+    return res.status(400).json({ error: "Unknown game type" });
+  }
+  const logPaths = adapter.getLogPaths(server);
+  const files = getArchivedSessionFiles(logPaths, session);
   res.json(files);
 });
 
@@ -1320,14 +1324,13 @@ router.get(
       return res.status(404).json({ error: "Server not found" });
     }
 
+    const adapter = getGameAdapter(server.gameId);
+    if (!adapter) {
+      return res.status(400).json({ error: "Unknown game type" });
+    }
+    const logPaths = adapter.getLogPaths(server);
     const maxLines = parseInt(lines as string, 10) || 0;
-    const result = readLogContent(
-      server.installPath,
-      filename,
-      maxLines,
-      session,
-      server.profilesPath,
-    );
+    const result = readLogContent(logPaths, filename, maxLines, session);
 
     if (!result) {
       return res
@@ -1349,11 +1352,12 @@ router.delete("/:id/logs/archive/:session", (req: Request, res: Response) => {
     return res.status(404).json({ error: "Server not found" });
   }
 
-  const deleted = deleteArchivedSession(
-    server.installPath,
-    session,
-    server.profilesPath,
-  );
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter) {
+    return res.status(400).json({ error: "Unknown game type" });
+  }
+  const logPaths = adapter.getLogPaths(server);
+  const deleted = deleteArchivedSession(logPaths, session);
   if (!deleted) {
     return res.status(404).json({ error: "Archive session not found" });
   }

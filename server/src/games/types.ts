@@ -65,6 +65,17 @@ export interface EditableFileConfig {
   readonly?: boolean;
 }
 
+// ── Log Paths Config ─────────────────────────────────────────────────
+
+export interface LogPaths {
+  /** Directories to scan for log files (may contain multiple) */
+  directories: string[];
+  /** File extensions to match (e.g., [".ADM", ".RPT", ".log"] or [".txt"]) */
+  extensions: string[];
+  /** Directory where archived log sessions are stored */
+  archiveDir: string;
+}
+
 // ── Mod Copy Result ──────────────────────────────────────────────────
 
 export interface ModCopyResult {
@@ -161,6 +172,12 @@ export interface GameAdapter {
    * File extensions to archive when rotating logs (e.g. [".ADM", ".RPT", ".log"]).
    */
   getLogFileExtensions(): string[];
+
+  /**
+   * Return the directories to scan for logs, file extensions to match,
+   * and where to store archived log sessions.
+   */
+  getLogPaths(server: GameServer): LogPaths;
 
   /**
    * List of files that the frontend may read/edit via the files API.

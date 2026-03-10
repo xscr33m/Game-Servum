@@ -16,6 +16,7 @@ import type {
   PlayerFileConfig,
   EditableFileConfig,
   ModCopyResult,
+  LogPaths,
 } from "./types.js";
 
 export abstract class BaseGameAdapter implements GameAdapter {
@@ -139,6 +140,22 @@ export abstract class BaseGameAdapter implements GameAdapter {
 
   getLogFileExtensions(): string[] {
     return [".log"];
+  }
+
+  /**
+   * Default: scan resolved profilesPath for log files, archive into profilesPath/log_archive.
+   */
+  getLogPaths(server: GameServer): LogPaths {
+    const profilesDir = server.profilesPath
+      ? path.isAbsolute(server.profilesPath)
+        ? server.profilesPath
+        : path.join(server.installPath, server.profilesPath)
+      : path.join(server.installPath, "profiles");
+    return {
+      directories: [profilesDir],
+      extensions: this.getLogFileExtensions(),
+      archiveDir: path.join(profilesDir, "log_archive"),
+    };
   }
 
   getEditableFiles(_server: GameServer): EditableFileConfig[] {

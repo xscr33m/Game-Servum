@@ -2,36 +2,19 @@
  * Log Manager Service
  *
  * Handles log file archiving and cleanup for game servers.
+ * Uses LogPaths from game adapters to support different games'
+ * log directory structures and file extensions.
  *
- * - **Archiving**: On server start, moves existing log files with game-specific
- *   extensions from the profiles directory into a timestamped archive subfolder.
- * - **Cleanup**: Automatically deletes archived logs older than a configurable
- *   retention period (default: 30 days, 0 = keep forever).
+ * - **Archiving**: On server start, moves existing log files from
+ *   adapter-defined directories into a timestamped archive subfolder.
+ * - **Cleanup**: Automatically deletes archived logs older than a
+ *   configurable retention period (default: 30 days, 0 = keep forever).
  */
 
 import path from "path";
 import fs from "fs";
 import { logger } from "../index.js";
-
-const DEFAULT_LOG_EXTENSIONS = [".ADM", ".RPT", ".log"];
-const ARCHIVE_DIR_NAME = "log_archive";
-
-/**
- * Resolve the profiles directory path.
- * If profilesPath is absolute, use it directly; otherwise join with installPath.
- * Falls back to installPath/profiles if profilesPath is not provided.
- */
-function resolveProfilesPath(
-  installPath: string,
-  profilesPath?: string,
-): string {
-  if (!profilesPath) {
-    return path.join(installPath, "profiles");
-  }
-  return path.isAbsolute(profilesPath)
-    ? profilesPath
-    : path.join(installPath, profilesPath);
-}
+import type { LogPaths } from "../games/index.js";
 
 /**
  * Check if a file is a log file based on its extension
@@ -44,41 +27,34 @@ function isLogFile(filename: string, extensions: string[]): boolean {
 
 /**
  * Archive existing log files before a server starts.
- * Moves log files matching the given extensions from the profiles directory
- * into profiles/log_archive/<timestamp>/
+ * Scans all directories in logPaths, moves matching files into
+ * archiveDir/<timestamp>/
  * Returns the number of files archived.
  */
-export function archiveLogsBeforeStart(
-  installPath: string,
-  serverProfilesPath?: string,
-  logExtensions?: string[],
-): number {
-  const profilesPath = resolveProfilesPath(installPath, serverProfilesPath);
-  const extensions = logExtensions ?? DEFAULT_LOG_EXTENSIONS;
+export function archiveLogsBeforeStart(logPaths: LogPaths): number {
+  const { directories, extensions, archiveDir } = logPaths;
 
-  if (!fs.existsSync(profilesPath)) {
-    return 0;
-  }
-
-  // Find all log files in the profiles directory
-  let logFiles: string[];
-  try {
-    logFiles = fs
-      .readdirSync(profilesPath)
-      .filter(
-        (f) =>
-          isLogFile(f, extensions) &&
-          fs.statSync(path.join(profilesPath, f)).isFile(),
+  // Collect log files from all source directories
+  const filesToArchive: Array<{ src: string; name: string }> = [];
+  for (const dir of directories) {
+    if (!fs.existsSync(dir)) continue;
+    try {
+      const entries = fs.readdirSync(dir);
+      for (const file of entries) {
+        const filePath = path.join(dir, file);
+        if (isLogFile(file, extensions) && fs.statSync(filePath).isFile()) {
+          filesToArchive.push({ src: filePath, name: file });
+        }
+      }
+    } catch (error) {
+      logger.error(
+        `[LogManager] Error scanning directory ${dir}:`,
+        (error as Error).message,
       );
-  } catch (error) {
-    logger.error(
-      "[LogManager] Error scanning profiles directory:",
-      (error as Error).message,
-    );
-    return 0;
+    }
   }
 
-  if (logFiles.length === 0) {
+  if (filesToArchive.length === 0) {
     return 0;
   }
 
@@ -88,7 +64,7 @@ export function archiveLogsBeforeStart(
     .replace(/[:.]/g, "-")
     .replace("T", "_")
     .slice(0, 19);
-  const archivePath = path.join(profilesPath, ARCHIVE_DIR_NAME, timestamp);
+  const archivePath = path.join(archiveDir, timestamp);
 
   try {
     fs.mkdirSync(archivePath, { recursive: true });
@@ -101,9 +77,8 @@ export function archiveLogsBeforeStart(
   }
 
   let archivedCount = 0;
-  for (const file of logFiles) {
-    const src = path.join(profilesPath, file);
-    const dest = path.join(archivePath, file);
+  for (const { src, name } of filesToArchive) {
+    const dest = path.join(archivePath, name);
 
     try {
       fs.renameSync(src, dest);
@@ -116,7 +91,7 @@ export function archiveLogsBeforeStart(
         archivedCount++;
       } catch (copyError) {
         logger.warn(
-          `[LogManager] Could not archive ${file}: ${(copyError as Error).message}`,
+          `[LogManager] Could not archive ${name}: ${(copyError as Error).message}`,
         );
       }
     }
@@ -132,13 +107,12 @@ export function archiveLogsBeforeStart(
 }
 
 /**
- * Get list of log files in the profiles directory (current session logs)
+ * Get list of current log files across all configured directories.
  */
 export function getCurrentLogs(
-  installPath: string,
-  serverProfilesPath?: string,
+  logPaths: LogPaths,
 ): Array<{ name: string; path: string; size: number; modified: string }> {
-  const profilesPath = resolveProfilesPath(installPath, serverProfilesPath);
+  const { directories, extensions } = logPaths;
   const logs: Array<{
     name: string;
     path: string;
@@ -146,29 +120,31 @@ export function getCurrentLogs(
     modified: string;
   }> = [];
 
-  if (!fs.existsSync(profilesPath)) return logs;
+  for (const dir of directories) {
+    if (!fs.existsSync(dir)) continue;
 
-  try {
-    const files = fs.readdirSync(profilesPath);
-    for (const file of files) {
-      if (isLogFile(file, DEFAULT_LOG_EXTENSIONS)) {
-        const filePath = path.join(profilesPath, file);
-        const stats = fs.statSync(filePath);
-        if (stats.isFile()) {
-          logs.push({
-            name: file,
-            path: filePath,
-            size: stats.size,
-            modified: stats.mtime.toISOString(),
-          });
+    try {
+      const files = fs.readdirSync(dir);
+      for (const file of files) {
+        if (isLogFile(file, extensions)) {
+          const filePath = path.join(dir, file);
+          const stats = fs.statSync(filePath);
+          if (stats.isFile()) {
+            logs.push({
+              name: file,
+              path: filePath,
+              size: stats.size,
+              modified: stats.mtime.toISOString(),
+            });
+          }
         }
       }
+    } catch (error) {
+      logger.error(
+        `[LogManager] Error reading current logs from ${dir}:`,
+        (error as Error).message,
+      );
     }
-  } catch (error) {
-    logger.error(
-      "[LogManager] Error reading current logs:",
-      (error as Error).message,
-    );
   }
 
   // Sort by modified date descending (newest first)
@@ -181,21 +157,15 @@ export function getCurrentLogs(
 /**
  * Get list of archived log sessions (each is a timestamped folder)
  */
-export function getArchivedSessions(
-  installPath: string,
-  serverProfilesPath?: string,
-): Array<{
+export function getArchivedSessions(logPaths: LogPaths): Array<{
   name: string;
   date: string;
   fileCount: number;
   totalSize: number;
 }> {
-  const archivePath = path.join(
-    resolveProfilesPath(installPath, serverProfilesPath),
-    ARCHIVE_DIR_NAME,
-  );
+  const { archiveDir } = logPaths;
 
-  if (!fs.existsSync(archivePath)) return [];
+  if (!fs.existsSync(archiveDir)) return [];
 
   const sessions: Array<{
     name: string;
@@ -206,19 +176,22 @@ export function getArchivedSessions(
 
   try {
     const folders = fs
-      .readdirSync(archivePath)
-      .filter((f) => fs.statSync(path.join(archivePath, f)).isDirectory());
+      .readdirSync(archiveDir)
+      .filter((f) => fs.statSync(path.join(archiveDir, f)).isDirectory());
 
     for (const folder of folders) {
-      const folderPath = path.join(archivePath, folder);
-      const files = fs
-        .readdirSync(folderPath)
-        .filter((f) => isLogFile(f, DEFAULT_LOG_EXTENSIONS));
+      const folderPath = path.join(archiveDir, folder);
+      const allFiles = fs.readdirSync(folderPath);
 
       let totalSize = 0;
-      for (const file of files) {
+      let fileCount = 0;
+      for (const file of allFiles) {
         try {
-          totalSize += fs.statSync(path.join(folderPath, file)).size;
+          const stats = fs.statSync(path.join(folderPath, file));
+          if (stats.isFile()) {
+            totalSize += stats.size;
+            fileCount++;
+          }
         } catch {
           // ignore
         }
@@ -239,7 +212,7 @@ export function getArchivedSessions(
       sessions.push({
         name: folder,
         date,
-        fileCount: files.length,
+        fileCount,
         totalSize,
       });
     }
@@ -259,15 +232,10 @@ export function getArchivedSessions(
  * Get the files within an archived session
  */
 export function getArchivedSessionFiles(
-  installPath: string,
+  logPaths: LogPaths,
   sessionName: string,
-  serverProfilesPath?: string,
 ): Array<{ name: string; path: string; size: number; modified: string }> {
-  const sessionPath = path.join(
-    resolveProfilesPath(installPath, serverProfilesPath),
-    ARCHIVE_DIR_NAME,
-    sessionName,
-  );
+  const sessionPath = path.join(logPaths.archiveDir, sessionName);
 
   if (!fs.existsSync(sessionPath)) return [];
 
@@ -280,17 +248,15 @@ export function getArchivedSessionFiles(
 
   try {
     for (const file of fs.readdirSync(sessionPath)) {
-      if (isLogFile(file, DEFAULT_LOG_EXTENSIONS)) {
-        const filePath = path.join(sessionPath, file);
-        const stats = fs.statSync(filePath);
-        if (stats.isFile()) {
-          files.push({
-            name: file,
-            path: filePath,
-            size: stats.size,
-            modified: stats.mtime.toISOString(),
-          });
-        }
+      const filePath = path.join(sessionPath, file);
+      const stats = fs.statSync(filePath);
+      if (stats.isFile()) {
+        files.push({
+          name: file,
+          path: filePath,
+          size: stats.size,
+          modified: stats.mtime.toISOString(),
+        });
       }
     }
   } catch (error) {
@@ -307,17 +273,18 @@ export function getArchivedSessionFiles(
 }
 
 /**
- * Read content of a log file (current or archived)
+ * Read content of a log file (current or archived).
+ * For current logs, searches all configured directories.
+ * For archived logs, reads from archiveDir/<session>/<filename>.
  */
 export function readLogContent(
-  installPath: string,
+  logPaths: LogPaths,
   filename: string,
   maxLines: number,
   archiveSession?: string,
-  serverProfilesPath?: string,
 ): { content: string; totalLines: number; returnedLines: number } | null {
-  // Security: Only allow log file extensions
-  if (!isLogFile(filename, DEFAULT_LOG_EXTENSIONS)) {
+  // Security: Only allow files matching configured extensions
+  if (!isLogFile(filename, logPaths.extensions)) {
     return null;
   }
 
@@ -327,20 +294,27 @@ export function readLogContent(
     ? path.basename(archiveSession)
     : undefined;
 
-  const resolved = resolveProfilesPath(installPath, serverProfilesPath);
-  let filePath: string;
+  let filePath: string | undefined;
+
   if (sanitizedSession) {
+    // Archived log: look in archiveDir/<session>/
     filePath = path.join(
-      resolved,
-      ARCHIVE_DIR_NAME,
+      logPaths.archiveDir,
       sanitizedSession,
       sanitizedFilename,
     );
   } else {
-    filePath = path.join(resolved, sanitizedFilename);
+    // Current log: search across all configured directories
+    for (const dir of logPaths.directories) {
+      const candidate = path.join(dir, sanitizedFilename);
+      if (fs.existsSync(candidate)) {
+        filePath = candidate;
+        break;
+      }
+    }
   }
 
-  if (!fs.existsSync(filePath)) {
+  if (!filePath || !fs.existsSync(filePath)) {
     return null;
   }
 
@@ -369,17 +343,12 @@ export function readLogContent(
  * Delete an entire archived session folder
  */
 export function deleteArchivedSession(
-  installPath: string,
+  logPaths: LogPaths,
   sessionName: string,
-  serverProfilesPath?: string,
 ): boolean {
   // Security: Prevent path traversal
   const sanitized = path.basename(sessionName);
-  const sessionPath = path.join(
-    resolveProfilesPath(installPath, serverProfilesPath),
-    ARCHIVE_DIR_NAME,
-    sanitized,
-  );
+  const sessionPath = path.join(logPaths.archiveDir, sanitized);
 
   if (!fs.existsSync(sessionPath)) {
     return false;
@@ -400,23 +369,19 @@ export function deleteArchivedSession(
 
 /**
  * Clean up archived logs older than the specified retention period.
- * @param installPath Server install path
+ * @param logPaths Log path configuration
  * @param retentionDays Number of days to keep (0 = keep forever)
  * @returns Number of sessions deleted
  */
 export function cleanupOldArchives(
-  installPath: string,
+  logPaths: LogPaths,
   retentionDays: number,
-  serverProfilesPath?: string,
 ): number {
   if (retentionDays <= 0) return 0;
 
-  const archivePath = path.join(
-    resolveProfilesPath(installPath, serverProfilesPath),
-    ARCHIVE_DIR_NAME,
-  );
+  const { archiveDir } = logPaths;
 
-  if (!fs.existsSync(archivePath)) return 0;
+  if (!fs.existsSync(archiveDir)) return 0;
 
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
@@ -425,11 +390,11 @@ export function cleanupOldArchives(
 
   try {
     const folders = fs
-      .readdirSync(archivePath)
-      .filter((f) => fs.statSync(path.join(archivePath, f)).isDirectory());
+      .readdirSync(archiveDir)
+      .filter((f) => fs.statSync(path.join(archiveDir, f)).isDirectory());
 
     for (const folder of folders) {
-      const folderPath = path.join(archivePath, folder);
+      const folderPath = path.join(archiveDir, folder);
 
       // Use folder modification time as age indicator
       try {

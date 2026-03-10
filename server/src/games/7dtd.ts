@@ -18,6 +18,7 @@ import type {
   RconConfig,
   PlayerFileConfig,
   EditableFileConfig,
+  LogPaths,
 } from "./types.js";
 import type { GameServer } from "../types/index.js";
 
@@ -222,7 +223,15 @@ export class SevenDaysAdapter extends BaseGameAdapter {
   // ── Logs ─────────────────────────────────────────────────────────
 
   getLogFileExtensions(): string[] {
-    return [".log"];
+    return [".txt"];
+  }
+
+  getLogPaths(server: GameServer): LogPaths {
+    return {
+      directories: [path.join(server.installPath, "logs"), server.installPath],
+      extensions: [".txt"],
+      archiveDir: path.join(server.installPath, "log_archive"),
+    };
   }
 
   getEditableFiles(server: GameServer): EditableFileConfig[] {

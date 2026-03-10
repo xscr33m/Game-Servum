@@ -106,6 +106,7 @@ export type {
   PlayerFileConfig,
   EditableFileConfig,
   ModCopyResult,
+  LogPaths,
 } from "./types.js";
 export { BaseGameAdapter } from "./base.js";
 export { DayZAdapter } from "./dayz.js";
