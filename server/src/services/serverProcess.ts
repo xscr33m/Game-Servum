@@ -211,12 +211,14 @@ export function startServer(serverId: number): StartResult {
 
   try {
     // Spawn the process directly (works on both Windows and Linux)
-    // DayZ server is a proper executable that doesn't need shell
+    const spawnEnv = adapter
+      ? { ...process.env, ...adapter.getSpawnEnvironment(server) }
+      : process.env;
     const child = spawn(executablePath, args, {
       cwd: server.installPath,
       detached: false,
       stdio: ["ignore", "pipe", "pipe"],
-      // Don't use shell - direct execution is more reliable
+      env: spawnEnv,
       shell: false,
     });
 

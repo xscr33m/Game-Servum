@@ -161,6 +161,13 @@ export abstract class BaseGameAdapter implements GameAdapter {
   getEditableFiles(_server: GameServer): EditableFileConfig[] {
     return [];
   }
+
+  /**
+   * Default: no extra environment variables needed.
+   */
+  getSpawnEnvironment(_server: GameServer): Record<string, string> {
+    return {};
+  }
 }
 
 // ── Helpers ────────────────────────────────────────────────────────

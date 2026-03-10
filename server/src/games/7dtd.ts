@@ -228,10 +228,16 @@ export class SevenDaysAdapter extends BaseGameAdapter {
 
   getLogPaths(server: GameServer): LogPaths {
     return {
-      directories: [path.join(server.installPath, "logs"), server.installPath],
+      directories: [server.installPath],
       extensions: [".txt"],
       archiveDir: path.join(server.installPath, "log_archive"),
     };
+  }
+
+  getSpawnEnvironment(_server: GameServer): Record<string, string> {
+    // 7DTD requires the CLIENT app ID set for Steam networking to work.
+    // This matches the official startdedicated.bat: set SteamAppId=251570
+    return { SteamAppId: "251570" };
   }
 
   getEditableFiles(server: GameServer): EditableFileConfig[] {

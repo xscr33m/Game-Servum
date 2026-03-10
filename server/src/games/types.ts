@@ -185,6 +185,13 @@ export interface GameAdapter {
    */
   getEditableFiles(server: GameServer): EditableFileConfig[];
 
+  /**
+   * Extra environment variables required when spawning the server process.
+   * Merged into the parent environment before spawn.
+   * Example: 7DTD needs SteamAppId=251570 for Steam networking.
+   */
+  getSpawnEnvironment(server: GameServer): Record<string, string>;
+
   // ── Optional: Game-Specific Features ─────────────────────────────
 
   /**
