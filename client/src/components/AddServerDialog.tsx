@@ -23,16 +23,11 @@ import {
 import { useBackend } from "@/hooks/useBackend";
 import { SteamAccountDialog } from "@/components/SteamAccountDialog";
 import { publicAsset } from "@/lib/assets";
+import { getGameLogo } from "@/lib/gameMetadata";
 import { toastSuccess } from "@/lib/toast";
 import type { GameDefinition, GameServer, SteamCMDStatus } from "@/types";
 
 type WizardStep = "select-game" | "steam-login" | "configure";
-
-const gameLogos: Record<string, string> = {
-  dayz: "game-logos/dayz.png",
-  "7dtd": "game-logos/7daystodie.png",
-  ark: "game-logos/ark.png",
-};
 
 interface AddServerDialogProps {
   open: boolean;
@@ -348,7 +343,7 @@ export function AddServerDialog({
                 ) : (
                   <div className="grid grid-cols-2 gap-3">
                     {games.map((game) => {
-                      const logo = gameLogos[game.id];
+                      const logo = getGameLogo(game.id);
                       return (
                         <button
                           key={game.id}
@@ -401,9 +396,9 @@ export function AddServerDialog({
               <div className="space-y-4">
                 <div className="rounded-lg border p-4 space-y-3">
                   <div className="flex items-center gap-3">
-                    {gameLogos[selectedGame.id] && (
+                    {getGameLogo(selectedGame.id) && (
                       <img
-                        src={publicAsset(gameLogos[selectedGame.id])}
+                        src={publicAsset(getGameLogo(selectedGame.id)!)}
                         alt={selectedGame.name}
                         className="h-10 w-auto object-contain"
                       />
@@ -461,9 +456,9 @@ export function AddServerDialog({
                 {/* Selected game summary */}
                 <div className="rounded-lg border p-3">
                   <div className="flex items-center gap-3">
-                    {gameLogos[selectedGame.id] && (
+                    {getGameLogo(selectedGame.id) && (
                       <img
-                        src={publicAsset(gameLogos[selectedGame.id])}
+                        src={publicAsset(getGameLogo(selectedGame.id)!)}
                         alt={selectedGame.name}
                         className="h-8 w-auto object-contain"
                       />

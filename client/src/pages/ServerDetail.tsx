@@ -25,6 +25,7 @@ import { PlayersTab } from "@/components/server/PlayersTab";
 import { LogsTab } from "@/components/server/LogsTab";
 import { SettingsTab } from "@/components/server/SettingsTab";
 import { useBackend } from "@/hooks/useBackend";
+import { useGameCapabilities } from "@/hooks/useGameCapabilities";
 import { AgentControlPanel } from "@/components/agent/AgentControlPanel";
 import { AppHeader } from "@/components/AppHeader";
 import { AgentStatusBanner } from "@/components/AgentStatusBanner";
@@ -58,6 +59,8 @@ export function ServerDetail() {
   const [actionLoading, setActionLoading] = useState(false);
   const [installProgress, setInstallProgress] = useState<string>("");
   const [terminalOutput, setTerminalOutput] = useState<string[]>([]);
+  const { capabilities } = useGameCapabilities(server?.gameId ?? "");
+  const hasPlayers = capabilities?.playerTracking !== false;
   const terminalRef = useRef<HTMLDivElement>(null);
 
   const { api, subscribe, isConnected, activeConnection } = useBackend();
@@ -416,7 +419,9 @@ export function ServerDetail() {
               }
               className="space-y-6"
             >
-              <TabsList className="grid w-full grid-cols-6">
+              <TabsList
+                className={`grid w-full ${hasPlayers ? "grid-cols-6" : "grid-cols-5"}`}
+              >
                 <TabsTrigger value="overview" className="gap-2">
                   <FaGauge className="h-4 w-4 text-ring/70" />
                   <span className="hidden sm:inline">Overview</span>
@@ -429,10 +434,12 @@ export function ServerDetail() {
                   <FaCubes className="h-4 w-4 text-ring/70" />
                   <span className="hidden sm:inline">Mods</span>
                 </TabsTrigger>
-                <TabsTrigger value="players" className="gap-2">
-                  <FaUsers className="h-4 w-4 text-ring/70" />
-                  <span className="hidden sm:inline">Players</span>
-                </TabsTrigger>
+                {hasPlayers && (
+                  <TabsTrigger value="players" className="gap-2">
+                    <FaUsers className="h-4 w-4 text-ring/70" />
+                    <span className="hidden sm:inline">Players</span>
+                  </TabsTrigger>
+                )}
                 <TabsTrigger value="logs" className="gap-2">
                   <FaFileLines className="h-4 w-4 text-ring/70" />
                   <span className="hidden sm:inline">Logs</span>
@@ -455,9 +462,11 @@ export function ServerDetail() {
                 <ModsTab server={server} />
               </TabsContent>
 
-              <TabsContent value="players">
-                <PlayersTab server={server} />
-              </TabsContent>
+              {hasPlayers && (
+                <TabsContent value="players">
+                  <PlayersTab server={server} />
+                </TabsContent>
+              )}
 
               <TabsContent value="logs">
                 <LogsTab server={server} />

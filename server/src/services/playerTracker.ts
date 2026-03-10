@@ -3,20 +3,17 @@
  *
  * Tracks player connections using two strategies:
  *
- * 1. **RCON polling (primary)** — Connects to BattlEye RCON and polls `players`
- *    command every 15 seconds. Gives reliable live state regardless of file locks.
+ * 1. **RCON polling (primary)** — Connects via the game's RCON protocol and polls
+ *    every 15 seconds. Gives reliable live state regardless of file locks.
  *
- * 2. **ADM log parsing (historical)** — On startup, parses the latest ADM log
- *    to backfill player history (sessions, playtime). Log files are often locked
- *    while the DayZ server runs, so this only works reliably at startup.
+ * 2. **Log parsing (historical)** — On startup, delegates to the game adapter
+ *    to backfill player history from game-specific log files (e.g. DayZ ADM logs).
  *
  * The RCON approach compares each poll snapshot against the previous one to
  * detect connect/disconnect events, records them in the DB, and broadcasts
  * via WebSocket.
  */
 
-import path from "path";
-import fs from "fs";
 import { broadcast, logger } from "../index.js";
 import {
   recordPlayerConnect,
@@ -24,17 +21,18 @@ import {
   disconnectAllPlayers,
   getOnlinePlayers,
   lookupCharacterId,
-  updateCharacterIds,
 } from "../db/index.js";
-import { BattlEyeRcon, type RconPlayer } from "./rcon.js";
+import { createRconClient, type RconClient } from "./rcon/index.js";
+import { getGameAdapter } from "../games/index.js";
+import { getServerById as dbGetServerById } from "../db/index.js";
 
 // Active RCON connections per server
-const rconConnections = new Map<number, BattlEyeRcon>();
+const rconConnections = new Map<number, RconClient>();
 
 /**
  * Get an active RCON connection for a server (used by scheduler for in-game warnings)
  */
-export function getRconConnection(serverId: number): BattlEyeRcon | undefined {
+export function getRconConnection(serverId: number): RconClient | undefined {
   return rconConnections.get(serverId);
 }
 
@@ -53,6 +51,7 @@ const serverInfo = new Map<
   {
     installPath: string;
     port: number;
+    gameId: string;
     rconConfig?: { password: string; port: number };
   }
 >();
@@ -60,60 +59,21 @@ const serverInfo = new Map<
 // Poll counter per server (for periodic character ID sync)
 const pollCounters = new Map<number, number>();
 
-const POLL_INTERVAL_MS = 15000; // 15 seconds
+const POLL_INTERVAL_MS = 30000; // 30 seconds
 const RCON_RECONNECT_DELAY_MS = 30000; // 30 seconds
 const RCON_CONNECT_DELAY_MS = 15000; // Wait 15s after server start before first RCON connect
 const CHARACTER_ID_SYNC_INTERVAL = 5; // Sync character IDs every N polls
 
 /**
- * Read BattlEye RCon config from the server's profiles directory
+ * Get cached count of online players for a server
  */
-export function readBattlEyeConfig(
-  installPath: string,
-  profilesPath?: string,
-): { password: string; port: number } | null {
-  // Resolve the profiles path (may be relative or absolute)
-  const resolvedProfiles = profilesPath
-    ? path.isAbsolute(profilesPath)
-      ? profilesPath
-      : path.join(installPath, profilesPath)
-    : path.join(installPath, "profiles");
-
-  // Check multiple possible BattlEye config locations
-  const possiblePaths = [
-    path.join(resolvedProfiles, "BattlEye", "BEServer_x64.cfg"),
-    path.join(installPath, "battleye", "BEServer_x64.cfg"),
-    path.join(installPath, "BattlEye", "BEServer_x64.cfg"),
-  ];
-
-  for (const cfgPath of possiblePaths) {
-    if (fs.existsSync(cfgPath)) {
-      try {
-        const content = fs.readFileSync(cfgPath, "utf-8");
-        const passwordMatch = content.match(/^RConPassword\s+(.+)$/m);
-        const portMatch = content.match(/^RConPort\s+(\d+)$/m);
-
-        if (passwordMatch) {
-          return {
-            password: passwordMatch[1].trim(),
-            port: portMatch ? parseInt(portMatch[1].trim(), 10) : 2306,
-          };
-        }
-      } catch (error) {
-        logger.error(
-          `[PlayerTracker] Error reading BattlEye config ${cfgPath}:`,
-          error,
-        );
-      }
-    }
-  }
-
-  return null;
+export function getOnlinePlayerCount(serverId: number): number {
+  return getOnlinePlayers(serverId).length;
 }
 
 /**
  * Start player tracking for a server.
- * First backfills history from ADM logs, then connects via RCON for live tracking.
+ * Backfills history from logs if the adapter supports it, then connects via RCON for live tracking.
  */
 export function startPlayerTracking(
   serverId: number,
@@ -124,18 +84,27 @@ export function startPlayerTracking(
   // Stop any existing tracking
   stopPlayerTracking(serverId);
 
-  logger.info(`[PlayerTracker] Starting tracking for server ${serverId}`);
+  // Look up the game ID for this server
+  const server = dbGetServerById(serverId);
+  const gameId = server?.gameId || "dayz";
+
+  logger.info(
+    `[PlayerTracker] Starting tracking for server ${serverId} (${gameId})`,
+  );
 
   // Store server info for reconnection (including pre-read RCON config)
-  serverInfo.set(serverId, { installPath, port: gamePort, rconConfig });
+  serverInfo.set(serverId, { installPath, port: gamePort, gameId, rconConfig });
 
   // Initialize player state
   lastKnownPlayers.set(serverId, new Map());
 
-  // Step 1: Try to backfill history from ADM logs (best effort, files may be locked)
-  backfillFromLogs(serverId, installPath);
+  // Game-specific: Try to backfill history from logs if adapter supports it
+  const adapter = getGameAdapter(gameId);
+  if (adapter?.parseServerLogs) {
+    adapter.parseServerLogs(serverId, installPath);
+  }
 
-  // Step 1b: Reset all sessions to offline after backfill.
+  // Reset all sessions to offline after backfill.
   // ADM logs use base64 player IDs while RCON uses hex BattlEye GUIDs — these are
   // different identifiers, so backfill-created "online" sessions would never get
   // closed by RCON disconnect events. RCON polling will establish the true live state.
@@ -188,7 +157,8 @@ export function stopPlayerTracking(serverId: number): void {
 }
 
 /**
- * Connect to RCON and start polling
+ * Connect to RCON and start polling.
+ * Supports BattlEye (DayZ), Telnet (7DTD), and Source RCON (ARK).
  */
 async function connectRcon(
   serverId: number,
@@ -196,24 +166,38 @@ async function connectRcon(
   gamePort: number,
   rconConfig?: { password: string; port: number },
 ): Promise<void> {
-  // Use pre-read config (passed before server start) or try reading from file
-  const beConfig = rconConfig || readBattlEyeConfig(installPath);
-  if (!beConfig) {
+  const info = serverInfo.get(serverId);
+  const gameId = info?.gameId || "dayz";
+  const adapter = getGameAdapter(gameId);
+  const rconProtocol = adapter?.definition.capabilities.rcon;
+
+  if (!rconProtocol) {
     logger.warn(
-      `[PlayerTracker] No BattlEye config found for server ${serverId}, RCON tracking unavailable`,
+      `[PlayerTracker] Game ${gameId} does not support RCON, tracking unavailable for server ${serverId}`,
     );
     return;
   }
 
-  const rcon = new BattlEyeRcon({
+  // Resolve RCON connection config using adapter
+  const server = dbGetServerById(serverId);
+  const config =
+    rconConfig || (server && adapter ? adapter.readRconConfig(server) : null);
+  if (!config) {
+    logger.warn(
+      `[PlayerTracker] No RCON config found for server ${serverId} (${gameId}), RCON tracking unavailable`,
+    );
+    return;
+  }
+
+  const rcon = createRconClient(rconProtocol, {
     host: "127.0.0.1",
-    port: beConfig.port,
-    password: beConfig.password,
+    port: config.port,
+    password: config.password,
   });
 
   try {
     logger.info(
-      `[PlayerTracker] Connecting RCON to 127.0.0.1:${beConfig.port} for server ${serverId}...`,
+      `[PlayerTracker] Connecting ${rconProtocol} RCON to 127.0.0.1:${config.port} for server ${serverId}...`,
     );
     const success = await rcon.connect();
 
@@ -293,39 +277,36 @@ function scheduleReconnect(serverId: number): void {
 /**
  * Poll RCON for current players and detect connect/disconnect events
  */
-async function pollPlayers(
-  serverId: number,
-  rcon: BattlEyeRcon,
-): Promise<void> {
+async function pollPlayers(serverId: number, rcon: RconClient): Promise<void> {
   try {
     const currentPlayers = await rcon.getPlayers();
     const currentMap = new Map<string, string>();
 
     for (const player of currentPlayers) {
-      currentMap.set(player.guid, player.name);
+      currentMap.set(player.id, player.name);
     }
 
     const previousMap =
       lastKnownPlayers.get(serverId) || new Map<string, string>();
 
     // Detect new connections (in current but not in previous)
-    for (const [guid, name] of currentMap) {
-      if (!previousMap.has(guid)) {
+    for (const [playerId, name] of currentMap) {
+      if (!previousMap.has(playerId)) {
         // Try to find the character ID from previous sessions or ADM logs
         const characterId = lookupCharacterId(serverId, name);
         logger.info(
-          `[PlayerTracker] Player connected: ${name} (${guid}${characterId ? `, charId=${characterId}` : ""}) on server ${serverId}`,
+          `[PlayerTracker] Player connected: ${name} (${playerId}${characterId ? `, charId=${characterId}` : ""}) on server ${serverId}`,
         );
         recordPlayerConnect(
           serverId,
-          guid,
+          playerId,
           name,
           undefined,
           characterId || undefined,
         );
         broadcast("player:connected", {
           serverId,
-          steamId: guid,
+          steamId: playerId,
           playerName: name,
           characterId,
         });
@@ -333,15 +314,15 @@ async function pollPlayers(
     }
 
     // Detect disconnections (in previous but not in current)
-    for (const [guid, name] of previousMap) {
-      if (!currentMap.has(guid)) {
+    for (const [playerId, name] of previousMap) {
+      if (!currentMap.has(playerId)) {
         logger.info(
-          `[PlayerTracker] Player disconnected: ${name} (${guid}) on server ${serverId}`,
+          `[PlayerTracker] Player disconnected: ${name} (${playerId}) on server ${serverId}`,
         );
-        recordPlayerDisconnect(serverId, guid);
+        recordPlayerDisconnect(serverId, playerId);
         broadcast("player:disconnected", {
           serverId,
-          steamId: guid,
+          steamId: playerId,
           playerName: name,
         });
       }
@@ -349,159 +330,22 @@ async function pollPlayers(
 
     lastKnownPlayers.set(serverId, currentMap);
 
-    // Periodically try to sync character IDs from ADM logs
-    const counter = (pollCounters.get(serverId) || 0) + 1;
-    pollCounters.set(serverId, counter);
-    if (counter % CHARACTER_ID_SYNC_INTERVAL === 0) {
-      const info = serverInfo.get(serverId);
-      if (info) {
-        syncCharacterIdsFromLog(serverId, info.installPath);
+    // Game-specific: Periodically try to sync player data from logs
+    const info = serverInfo.get(serverId);
+    if (info) {
+      const adapter = getGameAdapter(info.gameId);
+      if (adapter?.syncPlayerDataFromLogs) {
+        const counter = (pollCounters.get(serverId) || 0) + 1;
+        pollCounters.set(serverId, counter);
+        if (counter % CHARACTER_ID_SYNC_INTERVAL === 0) {
+          adapter.syncPlayerDataFromLogs(serverId, info.installPath);
+        }
       }
     }
   } catch (error) {
     logger.error(
       `[PlayerTracker] RCON poll failed for server ${serverId}:`,
       (error as Error).message,
-    );
-  }
-}
-
-/**
- * Backfill player history from ADM log files (best effort).
- * Reads the latest ADM log file to populate session history.
- * This may fail if the file is locked by the DayZ server — that's OK,
- * RCON will handle live tracking.
- */
-function backfillFromLogs(serverId: number, installPath: string): void {
-  const profilesPath = path.join(installPath, "profiles");
-  if (!fs.existsSync(profilesPath)) return;
-
-  const admFile = findLatestAdmFile(profilesPath);
-  if (!admFile) return;
-
-  try {
-    const content = fs.readFileSync(admFile, "utf-8");
-    const lines = content.split("\n").filter((l) => l.trim());
-
-    logger.info(
-      `[PlayerTracker] Backfilling from ${path.basename(admFile)} (${lines.length} lines)`,
-    );
-
-    let connectCount = 0;
-    let disconnectCount = 0;
-
-    for (const line of lines) {
-      // Player connected
-      const connectMatch = line.match(
-        /Player "(.+?)"\s*\(id=([^)\s]+)\)\s*is connected/,
-      );
-      if (connectMatch) {
-        const characterId = connectMatch[2];
-        recordPlayerConnect(
-          serverId,
-          characterId,
-          connectMatch[1],
-          undefined,
-          characterId,
-        );
-        connectCount++;
-        continue;
-      }
-
-      // Player disconnected (with ID)
-      const disconnectMatch = line.match(
-        /Player "(.+?)"\s*\(id=([^)\s]+)\)\s*has been disconnected/,
-      );
-      if (disconnectMatch) {
-        recordPlayerDisconnect(serverId, disconnectMatch[2]);
-        disconnectCount++;
-      }
-    }
-
-    if (connectCount > 0 || disconnectCount > 0) {
-      logger.info(
-        `[PlayerTracker] Backfill complete: ${connectCount} connects, ${disconnectCount} disconnects`,
-      );
-    }
-  } catch (error) {
-    // File may be locked by DayZ server — this is expected
-    logger.debug(
-      `[PlayerTracker] Could not read ADM log (may be locked): ${(error as Error).message}`,
-    );
-  }
-}
-
-/**
- * Find the most recent .ADM file in the profiles directory
- */
-function findLatestAdmFile(profilesPath: string): string | null {
-  try {
-    const files = fs
-      .readdirSync(profilesPath)
-      .filter((f) => f.endsWith(".ADM"));
-
-    if (files.length === 0) return null;
-
-    // Sort by filename (contains timestamp), newest last
-    // Format: DayZServer_x64_YYYY-MM-DD_HH-MM-SS.ADM
-    files.sort();
-    return path.join(profilesPath, files[files.length - 1]);
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Get cached count of online players for a server
- */
-export function getOnlinePlayerCount(serverId: number): number {
-  return getOnlinePlayers(serverId).length;
-}
-
-/**
- * Extract character ID mappings from the latest ADM log file.
- * Returns a Map of playerName → characterId (44-char base64 ID).
- */
-export function extractCharacterIdsFromLog(
-  installPath: string,
-): Map<string, string> {
-  const mappings = new Map<string, string>();
-  const profilesPath = path.join(installPath, "profiles");
-  if (!fs.existsSync(profilesPath)) return mappings;
-
-  const admFile = findLatestAdmFile(profilesPath);
-  if (!admFile) return mappings;
-
-  try {
-    const content = fs.readFileSync(admFile, "utf-8");
-    const lines = content.split("\n");
-
-    for (const line of lines) {
-      // Match any line containing a player ID: Player "Name"(id=XXXXX...)
-      const match = line.match(/Player "(.+?)"\s*\(id=([A-Za-z0-9+/=]{20,})/);
-      if (match) {
-        mappings.set(match[1], match[2]);
-      }
-    }
-  } catch {
-    // File may be locked — this is expected during server runtime
-  }
-
-  return mappings;
-}
-
-/**
- * Sync character IDs from the current ADM log into player_sessions
- * that are missing them. Called periodically during RCON polling.
- */
-function syncCharacterIdsFromLog(serverId: number, installPath: string): void {
-  const mappings = extractCharacterIdsFromLog(installPath);
-  if (mappings.size === 0) return;
-
-  const updated = updateCharacterIds(serverId, mappings);
-  if (updated > 0) {
-    logger.info(
-      `[PlayerTracker] Synced ${updated} character IDs from ADM log for server ${serverId}`,
     );
   }
 }

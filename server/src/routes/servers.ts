@@ -42,7 +42,8 @@ import { getSteamConfig, getUsedPorts } from "../db/index.js";
 import {
   getAllGameDefinitions,
   getGameDefinition,
-} from "../services/gameDefinitions.js";
+  getGameAdapter,
+} from "../games/index.js";
 import {
   installServer,
   cancelInstallation,
@@ -88,12 +89,24 @@ import type { CreateServerRequest } from "../types/index.js";
 
 const router = Router();
 
+/**
+ * Sanitize a string for use as a Windows directory name.
+ * Replaces characters illegal in Windows filenames: < > : " | ? *
+ */
+function sanitizeDirName(name: string): string {
+  return name
+    .replace(/[<>:"|?*]/g, "") // Remove illegal characters
+    .replace(/_+/g, "_") // Replace multiple underscores with a single one
+    .trim(); // Trim leading/trailing whitespace
+}
+
 // GET /api/servers/games - List all available game definitions
 router.get("/games", (_req: Request, res: Response) => {
   const games = getAllGameDefinitions().map((game) => ({
     id: game.id,
     name: game.name,
     appId: game.appId,
+    workshopAppId: game.workshopAppId,
     defaultPort: game.defaultPort,
     portCount: game.portCount,
     queryPort: game.queryPort,
@@ -102,6 +115,7 @@ router.get("/games", (_req: Request, res: Response) => {
     description: game.description,
     defaultLaunchParams: game.defaultLaunchParams,
     firewallRules: game.firewallRules ?? [],
+    capabilities: game.capabilities,
   }));
   res.json(games);
 });
@@ -208,9 +222,10 @@ router.post("/", async (req: Request, res: Response) => {
     });
   }
 
-  // Default install path
+  // Default install path (sanitize name for Windows filesystem compatibility)
   const installPath =
-    body.installPath || path.join(config.serversPath, body.name);
+    body.installPath ||
+    path.join(config.serversPath, sanitizeDirName(body.name));
 
   // Check for port conflicts with existing servers (using full port ranges)
   const requestedPort = body.port || gameDef.defaultPort;
@@ -313,6 +328,7 @@ router.post("/", async (req: Request, res: Response) => {
     appId: gameDef.appId,
     installPath,
     serverName: body.name,
+    port: body.port || gameDef.defaultPort,
     useAnonymous: !gameDef.requiresLogin,
     username: steamConfig?.username,
     password: null, // Password is managed by SteamCMD session
@@ -1081,12 +1097,13 @@ router.get("/:id/config", (req: Request, res: Response) => {
     return res.status(404).json({ error: "Server not found" });
   }
 
-  // Determine config file based on game
-  let configFileName = "serverDZ.cfg"; // Default for DayZ
-  if (server.gameId === "7dtd") {
-    configFileName = "serverconfig.xml";
-  } else if (server.gameId === "rust") {
-    configFileName = "server.cfg";
+  // Determine config file from game definition
+  const gameDef = getGameDefinition(server.gameId);
+  const configFileName = gameDef?.configFiles?.[0];
+  if (!configFileName) {
+    return res.status(404).json({
+      error: "No config file defined for this game",
+    });
   }
 
   const configPath = path.join(server.installPath, configFileName);
@@ -1101,7 +1118,7 @@ router.get("/:id/config", (req: Request, res: Response) => {
   try {
     const content = fs.readFileSync(configPath, "utf-8");
     res.json({
-      fileName: configFileName,
+      fileName: path.basename(configFileName),
       path: configPath,
       content,
     });
@@ -1132,12 +1149,13 @@ router.put("/:id/config", (req: Request, res: Response) => {
     return res.status(400).json({ error: "Content is required" });
   }
 
-  // Determine config file based on game
-  let configFileName = "serverDZ.cfg";
-  if (server.gameId === "7dtd") {
-    configFileName = "serverconfig.xml";
-  } else if (server.gameId === "rust") {
-    configFileName = "server.cfg";
+  // Determine config file from game definition
+  const gameDef = getGameDefinition(server.gameId);
+  const configFileName = gameDef?.configFiles?.[0];
+  if (!configFileName) {
+    return res.status(404).json({
+      error: "No config file defined for this game",
+    });
   }
 
   const configPath = path.join(server.installPath, configFileName);
@@ -1168,30 +1186,23 @@ router.get("/:id/files/:filename", (req: Request, res: Response) => {
     return res.status(404).json({ error: "Server not found" });
   }
 
-  // Security: Only allow specific files
-  const allowedFiles = ["ban.txt", "whitelist.txt", "BEServer_x64.cfg"];
-  if (!allowedFiles.includes(filename)) {
+  // Security: Use game adapter to determine allowed files and paths
+  const adapter = getGameAdapter(server.gameId);
+  const editableFiles = adapter?.getEditableFiles(server) ?? [];
+  const fileConfig = editableFiles.find((f) => f.name === filename);
+
+  if (!fileConfig) {
     return res
       .status(403)
       .json({ error: "Access to this file is not allowed" });
   }
 
-  let filePath: string;
-  if (filename === "BEServer_x64.cfg") {
-    const resolvedProfiles = path.isAbsolute(server.profilesPath)
-      ? server.profilesPath
-      : path.join(server.installPath, server.profilesPath);
-    filePath = path.join(resolvedProfiles, "BattlEye", filename);
-  } else {
-    filePath = path.join(server.installPath, filename);
-  }
-
-  if (!fs.existsSync(filePath)) {
+  if (!fs.existsSync(fileConfig.path)) {
     return res.json({ content: "", exists: false });
   }
 
   try {
-    const content = fs.readFileSync(filePath, "utf-8");
+    const content = fs.readFileSync(fileConfig.path, "utf-8");
     res.json({ content, exists: true });
   } catch (err) {
     res.status(500).json({
@@ -1211,9 +1222,12 @@ router.put("/:id/files/:filename", (req: Request, res: Response) => {
     return res.status(404).json({ error: "Server not found" });
   }
 
-  // Security: Only allow specific files
-  const allowedFiles = ["ban.txt", "whitelist.txt"];
-  if (!allowedFiles.includes(filename)) {
+  // Security: Use game adapter to determine allowed writable files
+  const adapter = getGameAdapter(server.gameId);
+  const editableFiles = adapter?.getEditableFiles(server) ?? [];
+  const fileConfig = editableFiles.find((f) => f.name === filename);
+
+  if (!fileConfig || fileConfig.readonly) {
     return res
       .status(403)
       .json({ error: "Modification of this file is not allowed" });
@@ -1223,11 +1237,8 @@ router.put("/:id/files/:filename", (req: Request, res: Response) => {
     return res.status(400).json({ error: "Content is required" });
   }
 
-  let filePath: string;
-  filePath = path.join(server.installPath, filename);
-
   try {
-    fs.writeFileSync(filePath, content, "utf-8");
+    fs.writeFileSync(fileConfig.path, content, "utf-8");
     res.json({ success: true, message: "File saved" });
   } catch (err) {
     res.status(500).json({
@@ -1245,8 +1256,13 @@ router.get("/:id/logs", (req: Request, res: Response) => {
     return res.status(404).json({ error: "Server not found" });
   }
 
-  const current = getCurrentLogs(server.installPath, server.profilesPath);
-  const archives = getArchivedSessions(server.installPath, server.profilesPath);
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter) {
+    return res.status(400).json({ error: "Unknown game type" });
+  }
+  const logPaths = adapter.getLogPaths(server);
+  const current = getCurrentLogs(logPaths);
+  const archives = getArchivedSessions(logPaths);
 
   res.json({ current, archives });
 });
@@ -1262,14 +1278,13 @@ router.get("/:id/logs/content/:filename", (req: Request, res: Response) => {
     return res.status(404).json({ error: "Server not found" });
   }
 
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter) {
+    return res.status(400).json({ error: "Unknown game type" });
+  }
+  const logPaths = adapter.getLogPaths(server);
   const maxLines = parseInt(lines as string, 10) || 0;
-  const result = readLogContent(
-    server.installPath,
-    filename,
-    maxLines,
-    undefined,
-    server.profilesPath,
-  );
+  const result = readLogContent(logPaths, filename, maxLines);
 
   if (!result) {
     return res.status(404).json({ error: "Log file not found or not allowed" });
@@ -1277,7 +1292,6 @@ router.get("/:id/logs/content/:filename", (req: Request, res: Response) => {
 
   res.json({ name: filename, ...result });
 });
-
 // GET /api/servers/:id/logs/archive/:session - List files in an archive session
 router.get("/:id/logs/archive/:session", (req: Request, res: Response) => {
   const id = parseInt(req.params.id, 10);
@@ -1288,11 +1302,12 @@ router.get("/:id/logs/archive/:session", (req: Request, res: Response) => {
     return res.status(404).json({ error: "Server not found" });
   }
 
-  const files = getArchivedSessionFiles(
-    server.installPath,
-    session,
-    server.profilesPath,
-  );
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter) {
+    return res.status(400).json({ error: "Unknown game type" });
+  }
+  const logPaths = adapter.getLogPaths(server);
+  const files = getArchivedSessionFiles(logPaths, session);
   res.json(files);
 });
 
@@ -1309,14 +1324,13 @@ router.get(
       return res.status(404).json({ error: "Server not found" });
     }
 
+    const adapter = getGameAdapter(server.gameId);
+    if (!adapter) {
+      return res.status(400).json({ error: "Unknown game type" });
+    }
+    const logPaths = adapter.getLogPaths(server);
     const maxLines = parseInt(lines as string, 10) || 0;
-    const result = readLogContent(
-      server.installPath,
-      filename,
-      maxLines,
-      session,
-      server.profilesPath,
-    );
+    const result = readLogContent(logPaths, filename, maxLines, session);
 
     if (!result) {
       return res
@@ -1338,11 +1352,12 @@ router.delete("/:id/logs/archive/:session", (req: Request, res: Response) => {
     return res.status(404).json({ error: "Server not found" });
   }
 
-  const deleted = deleteArchivedSession(
-    server.installPath,
-    session,
-    server.profilesPath,
-  );
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter) {
+    return res.status(400).json({ error: "Unknown game type" });
+  }
+  const logPaths = adapter.getLogPaths(server);
+  const deleted = deleteArchivedSession(logPaths, session);
   if (!deleted) {
     return res.status(404).json({ error: "Archive session not found" });
   }
@@ -1678,37 +1693,26 @@ router.post("/:id/players/whitelist", (req: Request, res: Response) => {
     return res.status(404).json({ error: "Server not found" });
   }
 
-  if (!characterId || characterId.length < 20) {
-    return res.status(400).json({ error: "Valid character ID is required" });
+  if (!characterId || characterId.length < 10) {
+    return res.status(400).json({ error: "Valid player ID is required" });
   }
 
-  const filePath = path.join(server.installPath, "whitelist.txt");
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter) {
+    return res.status(400).json({ error: "Unknown game type" });
+  }
 
   try {
-    let content = "";
-    if (fs.existsSync(filePath)) {
-      content = fs.readFileSync(filePath, "utf-8");
+    const result = adapter.addToPlayerList(
+      server,
+      "whitelist",
+      characterId,
+      playerName,
+    );
+    if (!result.success) {
+      return res.status(400).json({ error: result.message });
     }
-
-    // Check if character ID already exists
-    if (content.includes(characterId)) {
-      return res
-        .status(400)
-        .json({ error: "Player is already on the whitelist" });
-    }
-
-    // Append the character ID with optional player name comment
-    const entry = playerName ? `${characterId}\t//${playerName}` : characterId;
-    const newContent =
-      content.endsWith("\n") || content === ""
-        ? `${content}${entry}\n`
-        : `${content}\n${entry}\n`;
-
-    fs.writeFileSync(filePath, newContent, "utf-8");
-    res.json({
-      success: true,
-      message: `${playerName || "Player"} added to whitelist`,
-    });
+    res.json({ success: true, message: result.message });
   } catch (err) {
     res.status(500).json({
       error: `Failed to update whitelist: ${(err as Error).message}`,
@@ -1727,30 +1731,24 @@ router.delete("/:id/players/whitelist", (req: Request, res: Response) => {
   }
 
   if (!characterId) {
-    return res.status(400).json({ error: "Character ID is required" });
+    return res.status(400).json({ error: "Player ID is required" });
   }
 
-  const filePath = path.join(server.installPath, "whitelist.txt");
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter) {
+    return res.status(400).json({ error: "Unknown game type" });
+  }
 
   try {
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: "Whitelist file not found" });
-    }
-
-    const content = fs.readFileSync(filePath, "utf-8");
-    const lines = content.split("\n");
-    const filtered = lines.filter(
-      (line) => !line.trim().startsWith(characterId),
+    const result = adapter.removeFromPlayerList(
+      server,
+      "whitelist",
+      characterId,
     );
-
-    if (lines.length === filtered.length) {
-      return res
-        .status(404)
-        .json({ error: "Player not found on the whitelist" });
+    if (!result.success) {
+      return res.status(404).json({ error: result.message });
     }
-
-    fs.writeFileSync(filePath, filtered.join("\n"), "utf-8");
-    res.json({ success: true, message: "Player removed from whitelist" });
+    res.json({ success: true, message: result.message });
   } catch (err) {
     res.status(500).json({
       error: `Failed to update whitelist: ${(err as Error).message}`,
@@ -1771,37 +1769,26 @@ router.post("/:id/players/ban", (req: Request, res: Response) => {
     return res.status(404).json({ error: "Server not found" });
   }
 
-  if (!characterId || characterId.length < 20) {
-    return res.status(400).json({ error: "Valid character ID is required" });
+  if (!characterId || characterId.length < 10) {
+    return res.status(400).json({ error: "Valid player ID is required" });
   }
 
-  const filePath = path.join(server.installPath, "ban.txt");
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter) {
+    return res.status(400).json({ error: "Unknown game type" });
+  }
 
   try {
-    let content = "";
-    if (fs.existsSync(filePath)) {
-      content = fs.readFileSync(filePath, "utf-8");
+    const result = adapter.addToPlayerList(
+      server,
+      "ban",
+      characterId,
+      playerName,
+    );
+    if (!result.success) {
+      return res.status(400).json({ error: result.message });
     }
-
-    // Check if character ID already exists
-    if (content.includes(characterId)) {
-      return res
-        .status(400)
-        .json({ error: "Player is already on the ban list" });
-    }
-
-    // Append the character ID with optional player name comment
-    const entry = playerName ? `${characterId} //${playerName}` : characterId;
-    const newContent =
-      content.endsWith("\n") || content === ""
-        ? `${content}${entry}\n`
-        : `${content}\n${entry}\n`;
-
-    fs.writeFileSync(filePath, newContent, "utf-8");
-    res.json({
-      success: true,
-      message: `${playerName || "Player"} added to ban list`,
-    });
+    res.json({ success: true, message: result.message });
   } catch (err) {
     res.status(500).json({
       error: `Failed to update ban list: ${(err as Error).message}`,
@@ -1820,35 +1807,61 @@ router.delete("/:id/players/ban", (req: Request, res: Response) => {
   }
 
   if (!characterId) {
-    return res.status(400).json({ error: "Character ID is required" });
+    return res.status(400).json({ error: "Player ID is required" });
   }
 
-  const filePath = path.join(server.installPath, "ban.txt");
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter) {
+    return res.status(400).json({ error: "Unknown game type" });
+  }
 
   try {
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: "Ban file not found" });
+    const result = adapter.removeFromPlayerList(server, "ban", characterId);
+    if (!result.success) {
+      return res.status(404).json({ error: result.message });
     }
-
-    const content = fs.readFileSync(filePath, "utf-8");
-    const lines = content.split("\n");
-    const filtered = lines.filter(
-      (line) => !line.trim().startsWith(characterId),
-    );
-
-    if (lines.length === filtered.length) {
-      return res
-        .status(404)
-        .json({ error: "Player not found on the ban list" });
-    }
-
-    fs.writeFileSync(filePath, filtered.join("\n"), "utf-8");
-    res.json({ success: true, message: "Player removed from ban list" });
+    res.json({ success: true, message: result.message });
   } catch (err) {
     res.status(500).json({
       error: `Failed to update ban list: ${(err as Error).message}`,
     });
   }
+});
+
+// GET /api/servers/:id/players/whitelist-content - Get whitelist content as text
+router.get("/:id/players/whitelist-content", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter) {
+    return res.status(400).json({ error: "Unknown game type" });
+  }
+
+  const content = adapter.getPlayerListContent(server, "whitelist");
+  res.json({ content });
+});
+
+// GET /api/servers/:id/players/ban-content - Get ban list content as text
+router.get("/:id/players/ban-content", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter) {
+    return res.status(400).json({ error: "Unknown game type" });
+  }
+
+  const content = adapter.getPlayerListContent(server, "ban");
+  res.json({ content });
 });
 
 // ==================== FIREWALL ROUTES ====================

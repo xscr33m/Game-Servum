@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useBackend } from "@/hooks/useBackend";
+import { useGameCapabilities } from "@/hooks/useGameCapabilities";
 import { toastSuccess } from "@/lib/toast";
 import { UpdateCheckDialog } from "@/components/server/UpdateCheckDialog";
 import { logger } from "@/lib/logger";
@@ -44,6 +45,9 @@ interface SettingsTabProps {
 
 export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
   const { api, isConnected, subscribe } = useBackend();
+  const { capabilities } = useGameCapabilities(server.gameId);
+
+  const hasRcon = capabilities?.rcon !== false;
 
   // Firewall state
   const [firewallStatus, setFirewallStatus] = useState<FirewallStatus | null>(
@@ -613,226 +617,233 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
           </CardContent>
         </Card>
 
-        {/* Auto-Restart on Update */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <FaDownload className="h-5 w-5 text-ring" />
-                  Auto-Restart on Update
-                </CardTitle>
-                <CardDescription>
-                  Periodically check for mod & game server updates and
-                  automatically restart with RCON warnings
-                </CardDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                {editingUpdateRestart ? (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        handleRevertUpdateRestart();
-                        setEditingUpdateRestart(false);
-                      }}
-                      disabled={urSaving}
-                    >
-                      <FaRotateLeft className="h-3.5 w-3.5 mr-1.5" />
-                      Cancel
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={handleSaveUpdateRestart}
-                      disabled={urSaving}
-                    >
-                      <FaFloppyDisk className="h-3.5 w-3.5 mr-1.5" />
-                      {urSaving ? "Saving..." : "Save"}
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setUrCheckDialogOpen(true)}
-                    >
-                      <FaArrowsRotate className="h-3.5 w-3.5 mr-1.5" />
-                      Check Now
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setEditingUpdateRestart(true)}
-                    >
-                      <FaPencil className="h-3.5 w-3.5 mr-1.5" />
-                      {updateRestart ? "Edit" : "Configure"}
-                    </Button>
-                  </>
-                )}
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {updateRestartLoading ? (
-              <p className="text-sm text-muted-foreground">Loading...</p>
-            ) : editingUpdateRestart ? (
-              <div className="space-y-4">
-                {/* Enabled toggle */}
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium">
-                    Enable Auto-Update Restart
-                  </label>
-                  <Switch checked={urEnabled} onCheckedChange={setUrEnabled} />
+        {/* Auto-Restart on Update (RCON warnings) */}
+        {hasRcon && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <FaDownload className="h-5 w-5 text-ring" />
+                    Auto-Restart on Update
+                  </CardTitle>
+                  <CardDescription>
+                    Periodically check for mod & game server updates and
+                    automatically restart with RCON warnings
+                  </CardDescription>
                 </div>
-
-                {/* Check game server updates toggle */}
-                <div className="flex items-center justify-between">
-                  <div>
+                <div className="flex items-center gap-2">
+                  {editingUpdateRestart ? (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          handleRevertUpdateRestart();
+                          setEditingUpdateRestart(false);
+                        }}
+                        disabled={urSaving}
+                      >
+                        <FaRotateLeft className="h-3.5 w-3.5 mr-1.5" />
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleSaveUpdateRestart}
+                        disabled={urSaving}
+                      >
+                        <FaFloppyDisk className="h-3.5 w-3.5 mr-1.5" />
+                        {urSaving ? "Saving..." : "Save"}
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setUrCheckDialogOpen(true)}
+                      >
+                        <FaArrowsRotate className="h-3.5 w-3.5 mr-1.5" />
+                        Check Now
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setEditingUpdateRestart(true)}
+                      >
+                        <FaPencil className="h-3.5 w-3.5 mr-1.5" />
+                        {updateRestart ? "Edit" : "Configure"}
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {updateRestartLoading ? (
+                <p className="text-sm text-muted-foreground">Loading...</p>
+              ) : editingUpdateRestart ? (
+                <div className="space-y-4">
+                  {/* Enabled toggle */}
+                  <div className="flex items-center justify-between">
                     <label className="text-sm font-medium">
-                      Check Game Server Updates
+                      Enable Auto-Update Restart
                     </label>
-                    <p className="text-xs text-muted-foreground">
-                      Also check for game server updates via SteamCMD build ID
-                      comparison
+                    <Switch
+                      checked={urEnabled}
+                      onCheckedChange={setUrEnabled}
+                    />
+                  </div>
+
+                  {/* Check game server updates toggle */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="text-sm font-medium">
+                        Check Game Server Updates
+                      </label>
+                      <p className="text-xs text-muted-foreground">
+                        Also check for game server updates via SteamCMD build ID
+                        comparison
+                      </p>
+                    </div>
+                    <Switch
+                      checked={urCheckGameUpdates}
+                      onCheckedChange={setUrCheckGameUpdates}
+                    />
+                  </div>
+
+                  {/* Check interval */}
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground block mb-1">
+                      Check Interval (minutes)
+                    </label>
+                    <Input
+                      className="font-mono text-sm"
+                      type="number"
+                      min={5}
+                      max={1440}
+                      value={urCheckInterval}
+                      onChange={(e) => setUrCheckInterval(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Check for updates every {urCheckInterval || "?"} minute(s)
                     </p>
                   </div>
-                  <Switch
-                    checked={urCheckGameUpdates}
-                    onCheckedChange={setUrCheckGameUpdates}
-                  />
-                </div>
 
-                {/* Check interval */}
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground block mb-1">
-                    Check Interval (minutes)
-                  </label>
-                  <Input
-                    className="font-mono text-sm"
-                    type="number"
-                    min={5}
-                    max={1440}
-                    value={urCheckInterval}
-                    onChange={(e) => setUrCheckInterval(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Check for updates every {urCheckInterval || "?"} minute(s)
-                  </p>
-                </div>
+                  {/* Restart delay */}
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground block mb-1">
+                      Restart Delay (minutes)
+                    </label>
+                    <Input
+                      className="font-mono text-sm"
+                      type="number"
+                      min={1}
+                      max={60}
+                      value={urDelay}
+                      onChange={(e) => setUrDelay(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Wait {urDelay || "?"} minute(s) after detecting updates
+                      before restarting
+                    </p>
+                  </div>
 
-                {/* Restart delay */}
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground block mb-1">
-                    Restart Delay (minutes)
-                  </label>
-                  <Input
-                    className="font-mono text-sm"
-                    type="number"
-                    min={1}
-                    max={60}
-                    value={urDelay}
-                    onChange={(e) => setUrDelay(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Wait {urDelay || "?"} minute(s) after detecting updates
-                    before restarting
-                  </p>
-                </div>
+                  {/* Warning times */}
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground block mb-1">
+                      Warning Times (minutes before restart)
+                    </label>
+                    <Input
+                      className="font-mono text-sm"
+                      value={urWarnings}
+                      onChange={(e) => setUrWarnings(e.target.value)}
+                      placeholder="5,1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Comma-separated minutes. Warnings are sent via RCON
+                      in-game chat.
+                    </p>
+                  </div>
 
-                {/* Warning times */}
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground block mb-1">
-                    Warning Times (minutes before restart)
-                  </label>
-                  <Input
-                    className="font-mono text-sm"
-                    value={urWarnings}
-                    onChange={(e) => setUrWarnings(e.target.value)}
-                    placeholder="5,1"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Comma-separated minutes. Warnings are sent via RCON in-game
-                    chat.
-                  </p>
-                </div>
+                  {/* Warning message */}
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground block mb-1">
+                      Warning Message
+                    </label>
+                    <Input
+                      className="text-sm"
+                      value={urMessage}
+                      onChange={(e) => setUrMessage(e.target.value)}
+                      placeholder="Server restarting in {MINUTES} minute(s) for mod updates"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Use {"{MOD_NAME}"} to show which mod(s) updated,{" "}
+                      {"{MOD_COUNT}"} for the number of updates
+                    </p>
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {allVariableHints.map((v) => (
+                        <span
+                          key={v.name}
+                          className="text-xs font-mono bg-muted text-muted-foreground px-1.5 py-0.5 rounded cursor-default"
+                          title={v.description}
+                        >
+                          {`{${v.name}}`}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
 
-                {/* Warning message */}
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground block mb-1">
-                    Warning Message
-                  </label>
-                  <Input
-                    className="text-sm"
-                    value={urMessage}
-                    onChange={(e) => setUrMessage(e.target.value)}
-                    placeholder="Server restarting in {MINUTES} minute(s) for mod updates"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Use {"{MOD_NAME}"} to show which mod(s) updated,{" "}
-                    {"{MOD_COUNT}"} for the number of updates
-                  </p>
-                  <div className="flex flex-wrap gap-1 mt-1.5">
-                    {allVariableHints.map((v) => (
-                      <span
-                        key={v.name}
-                        className="text-xs font-mono bg-muted text-muted-foreground px-1.5 py-0.5 rounded cursor-default"
-                        title={v.description}
-                      >
-                        {`{${v.name}}`}
+                  {urError && <p className="text-xs text-red-500">{urError}</p>}
+                </div>
+              ) : updateRestart ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge
+                      variant={updateRestart.enabled ? "success" : "secondary"}
+                    >
+                      {updateRestart.enabled ? "Active" : "Disabled"}
+                    </Badge>
+                    {updateRestart.checkGameUpdates && (
+                      <Badge variant="outline">Game Updates</Badge>
+                    )}
+                    <span className="text-sm text-muted-foreground">
+                      Check every {updateRestart.checkIntervalMinutes} min
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      · {updateRestart.delayMinutes} min delay
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="bg-muted p-2 rounded">
+                      <span className="text-muted-foreground">
+                        Warnings at:{" "}
                       </span>
-                    ))}
+                      <span className="font-mono">
+                        {updateRestart.warningMinutes.join(", ")} min
+                      </span>
+                    </div>
+                    <div className="bg-muted p-2 rounded">
+                      <span className="text-muted-foreground">Message: </span>
+                      <span className="font-mono text-xs">
+                        {updateRestart.warningMessage}
+                      </span>
+                    </div>
                   </div>
+                  {urError && <p className="text-xs text-red-500">{urError}</p>}
                 </div>
-
-                {urError && <p className="text-xs text-red-500">{urError}</p>}
-              </div>
-            ) : updateRestart ? (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Badge
-                    variant={updateRestart.enabled ? "success" : "secondary"}
-                  >
-                    {updateRestart.enabled ? "Active" : "Disabled"}
-                  </Badge>
-                  {updateRestart.checkGameUpdates && (
-                    <Badge variant="outline">Game Updates</Badge>
-                  )}
-                  <span className="text-sm text-muted-foreground">
-                    Check every {updateRestart.checkIntervalMinutes} min
-                  </span>
-                  <span className="text-sm text-muted-foreground">
-                    · {updateRestart.delayMinutes} min delay
-                  </span>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    No update restart settings configured. Click "Configure" to
+                    set up automatic update detection and restart.
+                  </p>
+                  {urError && <p className="text-xs text-red-500">{urError}</p>}
                 </div>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="bg-muted p-2 rounded">
-                    <span className="text-muted-foreground">Warnings at: </span>
-                    <span className="font-mono">
-                      {updateRestart.warningMinutes.join(", ")} min
-                    </span>
-                  </div>
-                  <div className="bg-muted p-2 rounded">
-                    <span className="text-muted-foreground">Message: </span>
-                    <span className="font-mono text-xs">
-                      {updateRestart.warningMessage}
-                    </span>
-                  </div>
-                </div>
-                {urError && <p className="text-xs text-red-500">{urError}</p>}
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">
-                  No update restart settings configured. Click "Configure" to
-                  set up automatic update detection and restart.
-                </p>
-                {urError && <p className="text-xs text-red-500">{urError}</p>}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Template Variables */}
         <Card>
@@ -1008,353 +1019,365 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
           </CardContent>
         </Card>
 
-        {/* Scheduled Restarts */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <FaStopwatch className="h-5 w-5 text-ring" />
-                  Scheduled Restarts
-                </CardTitle>
-                <CardDescription>
-                  Automatic periodic restarts with in-game RCON warnings
-                </CardDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                {editingSchedule ? (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        handleRevertSchedule();
-                        setEditingSchedule(false);
-                      }}
-                      disabled={scheduleSaving}
-                    >
-                      <FaRotateLeft className="h-3.5 w-3.5 mr-1.5" />
-                      Cancel
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={handleSaveSchedule}
-                      disabled={scheduleSaving}
-                    >
-                      <FaFloppyDisk className="h-3.5 w-3.5 mr-1.5" />
-                      {scheduleSaving ? "Saving..." : "Save"}
-                    </Button>
-                  </>
-                ) : (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setEditingSchedule(true)}
-                  >
-                    <FaPencil className="h-3.5 w-3.5 mr-1.5" />
-                    {schedule ? "Edit" : "Configure"}
-                  </Button>
-                )}
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {scheduleLoading ? (
-              <p className="text-sm text-muted-foreground">Loading...</p>
-            ) : editingSchedule ? (
-              <div className="space-y-4">
-                {/* Enabled toggle */}
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium">Enable Schedule</label>
-                  <Switch
-                    checked={scheduleEnabled}
-                    onCheckedChange={setScheduleEnabled}
-                  />
-                </div>
-
-                {/* Interval */}
+        {/* Scheduled Restarts (RCON warnings) */}
+        {hasRcon && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground block mb-1">
-                    Restart Interval (hours)
-                  </label>
-                  <Input
-                    className="font-mono text-sm"
-                    type="number"
-                    min={1}
-                    max={168}
-                    value={scheduleInterval}
-                    onChange={(e) => setScheduleInterval(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Server will restart every {scheduleInterval || "?"} hour(s)
-                  </p>
+                  <CardTitle className="flex items-center gap-2">
+                    <FaStopwatch className="h-5 w-5 text-ring" />
+                    Scheduled Restarts
+                  </CardTitle>
+                  <CardDescription>
+                    Automatic periodic restarts with in-game RCON warnings
+                  </CardDescription>
                 </div>
-
-                {/* Warning times */}
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground block mb-1">
-                    Warning Times (minutes before restart)
-                  </label>
-                  <Input
-                    className="font-mono text-sm"
-                    value={scheduleWarnings}
-                    onChange={(e) => setScheduleWarnings(e.target.value)}
-                    placeholder="15,5,1"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Comma-separated minutes. Warnings are sent via RCON in-game
-                    chat.
-                  </p>
-                </div>
-
-                {/* Warning message */}
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground block mb-1">
-                    Warning Message
-                  </label>
-                  <Input
-                    className="text-sm"
-                    value={scheduleMessage}
-                    onChange={(e) => setScheduleMessage(e.target.value)}
-                    placeholder="Server restart in {MINUTES} minutes!"
-                  />
-                  <div className="flex flex-wrap gap-1 mt-1.5">
-                    {allVariableHints.map((v) => (
-                      <span
-                        key={v.name}
-                        className="text-xs font-mono bg-muted text-muted-foreground px-1.5 py-0.5 rounded cursor-default"
-                        title={v.description}
-                      >
-                        {`{${v.name}}`}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                {scheduleError && (
-                  <p className="text-xs text-red-500">{scheduleError}</p>
-                )}
-              </div>
-            ) : schedule ? (
-              <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <Badge variant={schedule.enabled ? "success" : "secondary"}>
-                    {schedule.enabled ? "Active" : "Disabled"}
-                  </Badge>
-                  <span className="text-sm text-muted-foreground">
-                    Every {schedule.intervalHours}h
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="bg-muted p-2 rounded">
-                    <span className="text-muted-foreground">Warnings at: </span>
-                    <span className="font-mono">
-                      {schedule.warningMinutes.join(", ")} min
-                    </span>
-                  </div>
-                  <div className="bg-muted p-2 rounded">
-                    <span className="text-muted-foreground">Message: </span>
-                    <span className="font-mono text-xs">
-                      {schedule.warningMessage}
-                    </span>
-                  </div>
-                </div>
-                {schedule.nextRestart && schedule.enabled && (
-                  <p className="text-xs text-muted-foreground">
-                    Next restart:{" "}
-                    {new Date(schedule.nextRestart).toLocaleString()}
-                  </p>
-                )}
-                {schedule.lastRestart && (
-                  <p className="text-xs text-muted-foreground">
-                    Last restart:{" "}
-                    {new Date(schedule.lastRestart).toLocaleString()}
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div className="text-sm text-muted-foreground">
-                No restart schedule configured. Click "Configure" to set one up.
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Scheduled Messages */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <FaCommentDots className="h-5 w-5 text-ring" />
-                  Scheduled Messages
-                </CardTitle>
-                <CardDescription>
-                  Recurring RCON messages broadcast to all players (e.g. server
-                  name, rules, Discord link)
-                </CardDescription>
-              </div>
-              {!addingMessage && editingMessageId === null && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    resetMessageForm();
-                    setAddingMessage(true);
-                  }}
-                >
-                  <FaPlus className="h-3.5 w-3.5 mr-1.5" />
-                  Add
-                </Button>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {messagesLoading ? (
-              <p className="text-sm text-muted-foreground">Loading...</p>
-            ) : (
-              <>
-                {/* Add / Edit form */}
-                {(addingMessage || editingMessageId !== null) && (
-                  <div className="space-y-3 border rounded-lg p-4">
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground block mb-1">
-                        Message Text
-                      </label>
-                      <Input
-                        className="text-sm"
-                        value={msgText}
-                        onChange={(e) => setMsgText(e.target.value)}
-                        placeholder="Welcome to {SERVER_NAME}! Rules: {DISCORD}"
-                      />
-                      <div className="flex flex-wrap gap-1 mt-1.5">
-                        {allVariableHints
-                          .filter((v) => v.name !== "MINUTES")
-                          .map((v) => (
-                            <span
-                              key={v.name}
-                              className="text-xs font-mono bg-muted text-muted-foreground px-1.5 py-0.5 rounded cursor-default"
-                              title={v.description}
-                            >
-                              {`{${v.name}}`}
-                            </span>
-                          ))}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground block mb-1">
-                          Interval (minutes)
-                        </label>
-                        <Input
-                          className="font-mono text-sm"
-                          type="number"
-                          min={1}
-                          max={1440}
-                          value={msgInterval}
-                          onChange={(e) => setMsgInterval(e.target.value)}
-                        />
-                      </div>
-                      <div className="flex items-end">
-                        <div className="flex items-center gap-2 pb-0.5">
-                          <Switch
-                            checked={msgEnabled}
-                            onCheckedChange={setMsgEnabled}
-                          />
-                          <label className="text-sm font-medium">Enabled</label>
-                        </div>
-                      </div>
-                    </div>
-                    {msgError && (
-                      <p className="text-xs text-red-500">{msgError}</p>
-                    )}
-                    <div className="flex justify-end gap-2">
+                  {editingSchedule ? (
+                    <>
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={cancelEditMessage}
-                        disabled={msgSaving}
+                        onClick={() => {
+                          handleRevertSchedule();
+                          setEditingSchedule(false);
+                        }}
+                        disabled={scheduleSaving}
                       >
                         <FaRotateLeft className="h-3.5 w-3.5 mr-1.5" />
                         Cancel
                       </Button>
                       <Button
                         size="sm"
-                        onClick={handleSaveMessage}
-                        disabled={msgSaving}
+                        onClick={handleSaveSchedule}
+                        disabled={scheduleSaving}
                       >
                         <FaFloppyDisk className="h-3.5 w-3.5 mr-1.5" />
-                        {msgSaving ? "Saving..." : "Save"}
+                        {scheduleSaving ? "Saving..." : "Save"}
                       </Button>
+                    </>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEditingSchedule(true)}
+                    >
+                      <FaPencil className="h-3.5 w-3.5 mr-1.5" />
+                      {schedule ? "Edit" : "Configure"}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {scheduleLoading ? (
+                <p className="text-sm text-muted-foreground">Loading...</p>
+              ) : editingSchedule ? (
+                <div className="space-y-4">
+                  {/* Enabled toggle */}
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">
+                      Enable Schedule
+                    </label>
+                    <Switch
+                      checked={scheduleEnabled}
+                      onCheckedChange={setScheduleEnabled}
+                    />
+                  </div>
+
+                  {/* Interval */}
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground block mb-1">
+                      Restart Interval (hours)
+                    </label>
+                    <Input
+                      className="font-mono text-sm"
+                      type="number"
+                      min={1}
+                      max={168}
+                      value={scheduleInterval}
+                      onChange={(e) => setScheduleInterval(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Server will restart every {scheduleInterval || "?"}{" "}
+                      hour(s)
+                    </p>
+                  </div>
+
+                  {/* Warning times */}
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground block mb-1">
+                      Warning Times (minutes before restart)
+                    </label>
+                    <Input
+                      className="font-mono text-sm"
+                      value={scheduleWarnings}
+                      onChange={(e) => setScheduleWarnings(e.target.value)}
+                      placeholder="15,5,1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Comma-separated minutes. Warnings are sent via RCON
+                      in-game chat.
+                    </p>
+                  </div>
+
+                  {/* Warning message */}
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground block mb-1">
+                      Warning Message
+                    </label>
+                    <Input
+                      className="text-sm"
+                      value={scheduleMessage}
+                      onChange={(e) => setScheduleMessage(e.target.value)}
+                      placeholder="Server restart in {MINUTES} minutes!"
+                    />
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {allVariableHints.map((v) => (
+                        <span
+                          key={v.name}
+                          className="text-xs font-mono bg-muted text-muted-foreground px-1.5 py-0.5 rounded cursor-default"
+                          title={v.description}
+                        >
+                          {`{${v.name}}`}
+                        </span>
+                      ))}
                     </div>
                   </div>
-                )}
 
-                {/* Message list */}
-                {messages.length > 0 ? (
-                  <div className="space-y-2">
-                    {messages.map((msg) => (
-                      <div
-                        key={msg.id}
-                        className="flex items-start justify-between gap-3 bg-muted p-3 rounded-lg"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Badge
-                              variant={msg.enabled ? "success" : "secondary"}
-                              className="text-xs"
-                            >
-                              {msg.enabled ? "Active" : "Disabled"}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              Every {msg.intervalMinutes} min
-                            </span>
-                          </div>
-                          <p className="text-sm font-mono break-all">
-                            {msg.message}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <Switch
-                            checked={msg.enabled}
-                            onCheckedChange={() => handleToggleMessage(msg)}
-                            className="scale-75"
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => startEditMessage(msg)}
-                            disabled={
-                              editingMessageId !== null || addingMessage
-                            }
-                          >
-                            <FaPencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-red-500 hover:text-red-600"
-                            onClick={() => handleDeleteMessage(msg.id)}
-                          >
-                            <FaTrashCan className="h-3.5 w-3.5" />
-                          </Button>
+                  {scheduleError && (
+                    <p className="text-xs text-red-500">{scheduleError}</p>
+                  )}
+                </div>
+              ) : schedule ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Badge variant={schedule.enabled ? "success" : "secondary"}>
+                      {schedule.enabled ? "Active" : "Disabled"}
+                    </Badge>
+                    <span className="text-sm text-muted-foreground">
+                      Every {schedule.intervalHours}h
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="bg-muted p-2 rounded">
+                      <span className="text-muted-foreground">
+                        Warnings at:{" "}
+                      </span>
+                      <span className="font-mono">
+                        {schedule.warningMinutes.join(", ")} min
+                      </span>
+                    </div>
+                    <div className="bg-muted p-2 rounded">
+                      <span className="text-muted-foreground">Message: </span>
+                      <span className="font-mono text-xs">
+                        {schedule.warningMessage}
+                      </span>
+                    </div>
+                  </div>
+                  {schedule.nextRestart && schedule.enabled && (
+                    <p className="text-xs text-muted-foreground">
+                      Next restart:{" "}
+                      {new Date(schedule.nextRestart).toLocaleString()}
+                    </p>
+                  )}
+                  {schedule.lastRestart && (
+                    <p className="text-xs text-muted-foreground">
+                      Last restart:{" "}
+                      {new Date(schedule.lastRestart).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground">
+                  No restart schedule configured. Click "Configure" to set one
+                  up.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Scheduled Messages (RCON broadcasts) */}
+        {hasRcon && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <FaCommentDots className="h-5 w-5 text-ring" />
+                    Scheduled Messages
+                  </CardTitle>
+                  <CardDescription>
+                    Recurring RCON messages broadcast to all players (e.g.
+                    server name, rules, Discord link)
+                  </CardDescription>
+                </div>
+                {!addingMessage && editingMessageId === null && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      resetMessageForm();
+                      setAddingMessage(true);
+                    }}
+                  >
+                    <FaPlus className="h-3.5 w-3.5 mr-1.5" />
+                    Add
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {messagesLoading ? (
+                <p className="text-sm text-muted-foreground">Loading...</p>
+              ) : (
+                <>
+                  {/* Add / Edit form */}
+                  {(addingMessage || editingMessageId !== null) && (
+                    <div className="space-y-3 border rounded-lg p-4">
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground block mb-1">
+                          Message Text
+                        </label>
+                        <Input
+                          className="text-sm"
+                          value={msgText}
+                          onChange={(e) => setMsgText(e.target.value)}
+                          placeholder="Welcome to {SERVER_NAME}! Rules: {DISCORD}"
+                        />
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {allVariableHints
+                            .filter((v) => v.name !== "MINUTES")
+                            .map((v) => (
+                              <span
+                                key={v.name}
+                                className="text-xs font-mono bg-muted text-muted-foreground px-1.5 py-0.5 rounded cursor-default"
+                                title={v.description}
+                              >
+                                {`{${v.name}}`}
+                              </span>
+                            ))}
                         </div>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  !addingMessage && (
-                    <p className="text-sm text-muted-foreground">
-                      No scheduled messages configured. Click "Add" to create
-                      one.
-                    </p>
-                  )
-                )}
-              </>
-            )}
-          </CardContent>
-        </Card>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-sm font-medium text-muted-foreground block mb-1">
+                            Interval (minutes)
+                          </label>
+                          <Input
+                            className="font-mono text-sm"
+                            type="number"
+                            min={1}
+                            max={1440}
+                            value={msgInterval}
+                            onChange={(e) => setMsgInterval(e.target.value)}
+                          />
+                        </div>
+                        <div className="flex items-end">
+                          <div className="flex items-center gap-2 pb-0.5">
+                            <Switch
+                              checked={msgEnabled}
+                              onCheckedChange={setMsgEnabled}
+                            />
+                            <label className="text-sm font-medium">
+                              Enabled
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                      {msgError && (
+                        <p className="text-xs text-red-500">{msgError}</p>
+                      )}
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={cancelEditMessage}
+                          disabled={msgSaving}
+                        >
+                          <FaRotateLeft className="h-3.5 w-3.5 mr-1.5" />
+                          Cancel
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={handleSaveMessage}
+                          disabled={msgSaving}
+                        >
+                          <FaFloppyDisk className="h-3.5 w-3.5 mr-1.5" />
+                          {msgSaving ? "Saving..." : "Save"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Message list */}
+                  {messages.length > 0 ? (
+                    <div className="space-y-2">
+                      {messages.map((msg) => (
+                        <div
+                          key={msg.id}
+                          className="flex items-start justify-between gap-3 bg-muted p-3 rounded-lg"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge
+                                variant={msg.enabled ? "success" : "secondary"}
+                                className="text-xs"
+                              >
+                                {msg.enabled ? "Active" : "Disabled"}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                Every {msg.intervalMinutes} min
+                              </span>
+                            </div>
+                            <p className="text-sm font-mono break-all">
+                              {msg.message}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Switch
+                              checked={msg.enabled}
+                              onCheckedChange={() => handleToggleMessage(msg)}
+                              className="scale-75"
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => startEditMessage(msg)}
+                              disabled={
+                                editingMessageId !== null || addingMessage
+                              }
+                            >
+                              <FaPencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-red-500 hover:text-red-600"
+                              onClick={() => handleDeleteMessage(msg.id)}
+                            >
+                              <FaTrashCan className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    !addingMessage && (
+                      <p className="text-sm text-muted-foreground">
+                        No scheduled messages configured. Click "Add" to create
+                        one.
+                      </p>
+                    )
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Windows Firewall Rules */}
         <Card>

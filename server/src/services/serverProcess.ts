@@ -21,13 +21,13 @@ import {
   getAppSetting,
   setAppSetting,
 } from "../db/index.js";
-import { getGameDefinition } from "./gameDefinitions.js";
-import { generateModParams } from "./modManager.js";
 import {
-  startPlayerTracking,
-  stopPlayerTracking,
-  readBattlEyeConfig,
-} from "./playerTracker.js";
+  getGameAdapter,
+  getGameDefinition,
+  type GameDefinition,
+} from "../games/index.js";
+import { generateModParams } from "./modManager.js";
+import { startPlayerTracking, stopPlayerTracking } from "./playerTracker.js";
 import { archiveLogsBeforeStart, cleanupOldArchives } from "./logManager.js";
 import { getLogSettings } from "../db/index.js";
 import { startSchedule, clearSchedule } from "./scheduler.js";
@@ -46,6 +46,18 @@ const crashHistory: Map<number, number[]> = new Map();
 const MAX_CRASHES = 3;
 const CRASH_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 const AUTO_RESTART_DELAY_MS = 10000; // 10 seconds delay before restart
+
+/**
+ * Read RCON connection config for a server (delegates to game adapter).
+ */
+function readRconConfig(
+  server: GameServer,
+  _gameDef?: GameDefinition,
+): { password: string; port: number } | null {
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter || !adapter.definition.capabilities.rcon) return null;
+  return adapter.readRconConfig(server);
+}
 
 export interface StartResult {
   success: boolean;
@@ -105,11 +117,12 @@ export function startServer(serverId: number): StartResult {
     };
   }
 
-  // DayZ-specific validation and setup
-  if (server.gameId === "dayz") {
-    const configPath = path.join(server.installPath, "serverDZ.cfg");
-    if (!fs.existsSync(configPath)) {
-      const errorMsg = `DayZ config file not found: ${configPath}. Please ensure the server was installed correctly.`;
+  // Game-specific validation and setup (delegates to adapter)
+  const adapter = getGameAdapter(server.gameId);
+  if (adapter) {
+    const preStartErrors = adapter.validatePreStart(server);
+    if (preStartErrors.length > 0) {
+      const errorMsg = preStartErrors[0];
       logger.error(`[ServerProcess] ${errorMsg}`);
       broadcast("server:status", {
         serverId,
@@ -122,40 +135,21 @@ export function startServer(serverId: number): StartResult {
         message: errorMsg,
       };
     }
-
-    // Ensure BattlEye directory exists (required for DayZ)
-    const resolvedProfilesForBE = path.isAbsolute(server.profilesPath)
-      ? server.profilesPath
-      : path.join(server.installPath, server.profilesPath);
-    const battleEyePath = path.join(resolvedProfilesForBE, "BattlEye");
-    if (!fs.existsSync(battleEyePath)) {
-      fs.mkdirSync(battleEyePath, { recursive: true });
-      logger.info(
-        `[ServerProcess] Created BattlEye directory: ${battleEyePath}`,
-      );
-
-      // Create default BattlEye config
-      const beConfigPath = path.join(battleEyePath, "BEServer_x64.cfg");
-      if (!fs.existsSync(beConfigPath)) {
-        fs.writeFileSync(
-          beConfigPath,
-          "RConPassword changeme123\nRConPort 2306\nRestrictRCon 0\n",
-          "utf-8",
-        );
-        logger.info(`[ServerProcess] Created BattlEye config`);
-      }
-    }
   }
 
-  // Ensure profiles directory exists (required for DayZ and other servers)
+  // Resolve profiles path (used by DayZ for logs, crash analysis, etc.)
   const resolvedProfilesPath = path.isAbsolute(server.profilesPath)
     ? server.profilesPath
     : path.join(server.installPath, server.profilesPath);
-  if (!fs.existsSync(resolvedProfilesPath)) {
-    fs.mkdirSync(resolvedProfilesPath, { recursive: true });
-    logger.info(
-      `[ServerProcess] Created profiles directory: ${resolvedProfilesPath}`,
-    );
+
+  // Ensure profiles directory exists (only for games that use it, e.g. DayZ)
+  if (gameDef?.capabilities?.profilesPath) {
+    if (!fs.existsSync(resolvedProfilesPath)) {
+      fs.mkdirSync(resolvedProfilesPath, { recursive: true });
+      logger.info(
+        `[ServerProcess] Created profiles directory: ${resolvedProfilesPath}`,
+      );
+    }
   }
 
   // Parse launch parameters and replace placeholders
@@ -185,29 +179,25 @@ export function startServer(serverId: number): StartResult {
 
   // Archive old log files before starting
   const logSettings = getLogSettings(serverId);
-  if (logSettings.archiveOnStart) {
-    const archivedCount = archiveLogsBeforeStart(
-      server.installPath,
-      server.profilesPath,
-    );
+  const logPaths = adapter?.getLogPaths(server);
+  if (logSettings.archiveOnStart && logPaths) {
+    const archivedCount = archiveLogsBeforeStart(logPaths);
     if (archivedCount > 0) {
       logger.info(`[ServerProcess] Archived ${archivedCount} old log files`);
     }
   }
 
   // Clean up old archives based on retention setting
-  if (logSettings.retentionDays > 0) {
-    cleanupOldArchives(
-      server.installPath,
-      logSettings.retentionDays,
-      server.profilesPath,
-    );
+  if (logSettings.retentionDays > 0 && logPaths) {
+    cleanupOldArchives(logPaths, logSettings.retentionDays);
   }
 
-  // Read BattlEye RCON config BEFORE spawn — DayZ renames the file on startup
-  const beConfig = readBattlEyeConfig(server.installPath, server.profilesPath);
-  if (beConfig) {
-    logger.debug(`[ServerProcess] Pre-read RCON config: port=${beConfig.port}`);
+  // Read RCON config BEFORE spawn (game-specific)
+  const rconConfig = readRconConfig(server, gameDef);
+  if (rconConfig) {
+    logger.debug(
+      `[ServerProcess] Pre-read RCON config: port=${rconConfig.port}`,
+    );
   }
 
   // Parse arguments - same for all platforms
@@ -225,12 +215,14 @@ export function startServer(serverId: number): StartResult {
 
   try {
     // Spawn the process directly (works on both Windows and Linux)
-    // DayZ server is a proper executable that doesn't need shell
+    const spawnEnv = adapter
+      ? { ...process.env, ...adapter.getSpawnEnvironment(server) }
+      : process.env;
     const child = spawn(executablePath, args, {
       cwd: server.installPath,
       detached: false,
       stdio: ["ignore", "pipe", "pipe"],
-      // Don't use shell - direct execution is more reliable
+      env: spawnEnv,
       shell: false,
     });
 
@@ -261,7 +253,7 @@ export function startServer(serverId: number): StartResult {
       serverId,
       server.installPath,
       server.port,
-      beConfig || undefined,
+      rconConfig || undefined,
     );
 
     // Collect stderr output for error reporting
@@ -333,11 +325,13 @@ export function startServer(serverId: number): StartResult {
         if (dependencyError) {
           errorMessage = `Server ${server.name}: ${dependencyError}`;
         } else {
-          // Try to read DayZ server logs for more error details
-          if (server.gameId === "dayz") {
-            const logDetails = readDayZCrashLogs(resolvedProfilesPath);
+          // Try to read game-specific crash logs for more error details
+          if (adapter?.analyzeCrash) {
+            const logDetails = adapter.analyzeCrash(
+              server,
+              resolvedProfilesPath,
+            );
             if (logDetails) {
-              // Check logs for dependency errors too
               const logDependencyError = detectDependencyError(
                 logDetails,
                 code,
@@ -347,7 +341,7 @@ export function startServer(serverId: number): StartResult {
               } else {
                 errorMessage += ` - ${logDetails}`;
               }
-              logger.info(`[ServerProcess] DayZ log details: ${logDetails}`);
+              logger.info(`[ServerProcess] Crash log details: ${logDetails}`);
             }
           }
 
@@ -639,9 +633,9 @@ export function checkServerRequirements(serverId: number): RequirementsResult {
     });
   }
 
-  // Check 2: Config file exists (game-specific)
-  if (server.gameId === "dayz") {
-    const configPath = path.join(server.installPath, "serverDZ.cfg");
+  // Check 2: Config file exists (derived from game definition)
+  if (gameDef?.configFiles?.[0]) {
+    const configPath = path.join(server.installPath, gameDef.configFiles[0]);
     if (fs.existsSync(configPath)) {
       checks.push({
         name: "Configuration",
@@ -652,25 +646,30 @@ export function checkServerRequirements(serverId: number): RequirementsResult {
       checks.push({
         name: "Configuration",
         status: "error",
-        message: "serverDZ.cfg not found. Server may need reinstallation.",
+        message: `${path.basename(gameDef.configFiles[0])} not found. Server may need reinstallation.`,
       });
     }
   }
 
-  // Check 3: Profiles directory
-  const profilesPath = path.join(server.installPath, "profiles");
-  if (fs.existsSync(profilesPath)) {
-    checks.push({
-      name: "Profiles",
-      status: "ok",
-      message: "Profiles directory exists",
-    });
-  } else {
-    checks.push({
-      name: "Profiles",
-      status: "warning",
-      message: "Profiles directory will be created on first start",
-    });
+  // Check 3: Profiles directory (only for games that use it)
+  if (gameDef?.capabilities?.profilesPath) {
+    const profilesPath = path.join(
+      server.installPath,
+      server.profilesPath || "profiles",
+    );
+    if (fs.existsSync(profilesPath)) {
+      checks.push({
+        name: "Profiles",
+        status: "ok",
+        message: "Profiles directory exists",
+      });
+    } else {
+      checks.push({
+        name: "Profiles",
+        status: "warning",
+        message: "Profiles directory will be created on first start",
+      });
+    }
   }
 
   // Check 4: Windows-specific runtime checks
@@ -713,8 +712,8 @@ export function checkServerRequirements(serverId: number): RequirementsResult {
     }
   }
 
-  // Check 5: BattlEye (for DayZ)
-  if (server.gameId === "dayz") {
+  // Check 5: BattlEye (only for games using BattlEye RCON)
+  if (gameDef?.capabilities.rcon === "battleye") {
     const battleEyePath = path.join(server.installPath, "battleye");
     const beDll = path.join(battleEyePath, "BEServer_x64.dll");
     if (fs.existsSync(beDll)) {
@@ -778,17 +777,15 @@ export function restoreServerStates(): void {
         logger.info(
           `[ServerProcess] Server ${server.id} (${server.name}) is still running with PID ${server.pid}`,
         );
-        // Read BattlEye config using the server's profiles path
-        const beConfig = readBattlEyeConfig(
-          server.installPath,
-          server.profilesPath,
-        );
+        // Read RCON config for the still-running server (game-specific)
+        const serverGameDef = getGameDefinition(server.gameId);
+        const restoredRconConfig = readRconConfig(server, serverGameDef);
         // Start player tracking for the still-running server
         startPlayerTracking(
           server.id,
           server.installPath,
           server.port,
-          beConfig ?? undefined,
+          restoredRconConfig ?? undefined,
         );
       } else {
         logger.info(
@@ -958,64 +955,6 @@ function parseArguments(argsString: string): string[] {
   }
 
   return args;
-}
-
-/**
- * Read DayZ crash logs to get more error details
- */
-function readDayZCrashLogs(profilesPath: string): string | null {
-  try {
-    // Look for .RPT files (DayZ server log files)
-    if (!fs.existsSync(profilesPath)) {
-      return "Profiles directory not found";
-    }
-
-    const files = fs.readdirSync(profilesPath);
-    const rptFiles = files
-      .filter((f) => f.toLowerCase().endsWith(".rpt"))
-      .map((f) => ({
-        name: f,
-        path: path.join(profilesPath, f),
-        mtime: fs.statSync(path.join(profilesPath, f)).mtime,
-      }))
-      .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
-
-    if (rptFiles.length === 0) {
-      // Check for server_console.log
-      const consoleLogPath = path.join(profilesPath, "server_console.log");
-      if (fs.existsSync(consoleLogPath)) {
-        const content = fs.readFileSync(consoleLogPath, "utf-8");
-        const lines = content.split("\n").filter((l) => l.trim());
-        const lastLines = lines.slice(-5).join(" | ");
-        return lastLines.substring(0, 300);
-      }
-      return "No log files found";
-    }
-
-    // Read the most recent RPT file
-    const latestRpt = rptFiles[0];
-    const content = fs.readFileSync(latestRpt.path, "utf-8");
-    const lines = content.split("\n").filter((l) => l.trim());
-
-    // Look for error lines
-    const errorLines = lines.filter(
-      (l) =>
-        l.toLowerCase().includes("error") ||
-        l.toLowerCase().includes("failed") ||
-        l.toLowerCase().includes("exception") ||
-        l.toLowerCase().includes("cannot"),
-    );
-
-    if (errorLines.length > 0) {
-      return errorLines.slice(-3).join(" | ").substring(0, 300);
-    }
-
-    // Return last few lines if no specific errors found
-    return lines.slice(-3).join(" | ").substring(0, 300);
-  } catch (error) {
-    logger.error("[ServerProcess] Error reading DayZ logs:", error);
-    return null;
-  }
 }
 
 /**

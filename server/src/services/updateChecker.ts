@@ -25,7 +25,7 @@ import { checkModsForUpdates, installMod } from "./modManager.js";
 import { stopServer, startServer, isServerRunning } from "./serverProcess.js";
 import { getRconConnection } from "./playerTracker.js";
 import { resolveVariables } from "./variableResolver.js";
-import { getGameDefinition } from "./gameDefinitions.js";
+import { getGameDefinition } from "../games/index.js";
 import { getConfig, getSteamCMDExecutable } from "./config.js";
 import { updateServer } from "./serverInstall.js";
 
@@ -564,7 +564,7 @@ async function sendUpdateWarning(
   const rcon = getRconConnection(serverId);
   if (rcon && rcon.isConnected()) {
     try {
-      await rcon.sendCommand(`say -1 ${message}`);
+      await rcon.broadcastMessage(message);
     } catch (err) {
       logger.error(
         `[UpdateChecker] Server ${serverId}: failed to send RCON warning:`,
@@ -658,6 +658,7 @@ async function performUpdateRestart(
         server.appId,
         server.installPath,
         server.name,
+        server.port,
         useAnonymous,
         steamConfig?.username,
       );

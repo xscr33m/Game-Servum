@@ -101,7 +101,7 @@ async function sendMessage(
   const rcon = getRconConnection(serverId);
   if (rcon && rcon.isConnected()) {
     try {
-      await rcon.sendCommand(`say -1 ${message}`);
+      await rcon.broadcastMessage(message);
       logger.info(`[MessageBroadcaster] Server ${serverId}: sent "${message}"`);
     } catch (err) {
       logger.error(

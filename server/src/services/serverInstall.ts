@@ -18,7 +18,7 @@ import {
   getGameDefinition,
   getGameDefinitionByAppId,
   runPostInstall,
-} from "./gameDefinitions.js";
+} from "../games/index.js";
 
 // Track active installations
 const activeInstallations: Map<
@@ -36,6 +36,7 @@ export interface InstallOptions {
   appId: number;
   installPath: string;
   serverName: string;
+  port: number;
   useAnonymous: boolean;
   username?: string | null;
   password?: string | null;
@@ -258,7 +259,7 @@ export async function installServer(
         });
 
         try {
-          await runPostInstall(gameId, installPath, serverName);
+          await runPostInstall(gameId, installPath, serverName, options.port);
 
           updateServerStatus(serverId, "stopped", null);
           broadcast("install:complete", {
@@ -374,6 +375,7 @@ export async function updateServer(
   appId: number,
   installPath: string,
   serverName: string,
+  port: number,
   useAnonymous: boolean,
   username?: string | null,
 ): Promise<InstallResult> {
@@ -384,6 +386,7 @@ export async function updateServer(
     appId,
     installPath,
     serverName,
+    port,
     useAnonymous,
     username,
   });
