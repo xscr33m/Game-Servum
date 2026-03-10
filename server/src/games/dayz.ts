@@ -93,6 +93,7 @@ export class DayZAdapter extends BaseGameAdapter {
       banList: "file",
       playerIdentifier: "battleye-guid",
       logParsing: true,
+      playerListEditable: true,
     },
     broadcastCommand: "say -1 {MESSAGE}",
     playerListCommand: "players",

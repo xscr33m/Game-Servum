@@ -297,6 +297,8 @@ export interface ServersApiClient {
     serverId: number,
     characterId: string,
   ) => Promise<{ success: boolean; message: string }>;
+  getWhitelistContent: (serverId: number) => Promise<{ content: string }>;
+  getBanContent: (serverId: number) => Promise<{ content: string }>;
 }
 
 export interface SystemApiClient {
@@ -843,6 +845,12 @@ function createServersApi(fetchApi: FetchApiFn): ServersApiClient {
           body: JSON.stringify({ characterId }),
         },
       ),
+    getWhitelistContent: (serverId: number) =>
+      fetchApi<{ content: string }>(
+        `/servers/${serverId}/players/whitelist-content`,
+      ),
+    getBanContent: (serverId: number) =>
+      fetchApi<{ content: string }>(`/servers/${serverId}/players/ban-content`),
   };
 }
 

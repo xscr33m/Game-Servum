@@ -245,8 +245,10 @@ export class TelnetRcon implements RconClient {
 /**
  * Parse the response from the 7DTD `listplayers` command
  *
- * Example response:
- *   0. id=171, PlayerName, pos=(1234.5, 67.8, 910.1), rot=(0.0, 45.0, 0.0), remote=True, health=100, deaths=0, zombies=0, players=0, score=0, level=1, steamid=76561198012345678, ip=192.168.1.10, ping=32
+ * V1.0+ format:
+ *   0. id=171, ⎝⧹ xscr33m ⧸⎠, pos=(-273.0, 61.0, 449.0), ..., pltfmid=Steam_76561198082430502, crossid=EOS_0002262a33b54246b2d2761969a6cf88, ..., ping=32
+ * Legacy format:
+ *   0. id=171, PlayerName, pos=(1234.5, 67.8, 910.1), ..., steamid=76561198012345678, ip=192.168.1.10, ping=32
  *   Total of 1 in the game
  */
 export function parseTelnetPlayersResponse(
@@ -256,16 +258,23 @@ export function parseTelnetPlayersResponse(
   const lines = response.split("\n");
 
   for (const line of lines) {
-    // Match: index. id=X, Name, ..., steamid=..., ip=..., ping=...
+    // Match: index. id=X, Name, ...
     const idMatch = line.match(/^\d+\.\s+id=(\d+),\s+([^,]+),/);
     if (!idMatch) continue;
 
+    // V1.0+: pltfmid=Steam_XXXXX (preferred)
+    const pltfmMatch = line.match(/pltfmid=Steam_(\d+)/);
+    // Legacy: steamid=XXXXX
     const steamIdMatch = line.match(/steamid=(\d+)/);
     const ipMatch = line.match(/ip=([\d.]+)/);
     const pingMatch = line.match(/ping=(\d+)/);
 
     players.push({
-      id: steamIdMatch ? steamIdMatch[1] : idMatch[1],
+      id: pltfmMatch
+        ? pltfmMatch[1]
+        : steamIdMatch
+          ? steamIdMatch[1]
+          : idMatch[1],
       name: idMatch[2].trim(),
       ping: pingMatch ? parseInt(pingMatch[1], 10) : undefined,
       ip: ipMatch ? ipMatch[1] : undefined,

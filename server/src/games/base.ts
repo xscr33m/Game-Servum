@@ -14,6 +14,7 @@ import type {
   GameDefinition,
   RconConfig,
   PlayerFileConfig,
+  PlayerListResult,
   EditableFileConfig,
   ModCopyResult,
   LogPaths,
@@ -134,6 +135,102 @@ export abstract class BaseGameAdapter implements GameAdapter {
     // Extract ID before any comment
     const id = trimmed.split(/\s+\/\/|\s+#/)[0].trim();
     return id || null;
+  }
+
+  /**
+   * Default: append a text line to the whitelist/ban file.
+   */
+  addToPlayerList(
+    server: GameServer,
+    type: "whitelist" | "ban",
+    playerId: string,
+    playerName?: string,
+  ): PlayerListResult {
+    const config =
+      type === "whitelist"
+        ? this.getWhitelistConfig(server)
+        : this.getBanListConfig(server);
+    if (!config) {
+      return { success: false, message: `This game does not support ${type}` };
+    }
+
+    let content = "";
+    if (fs.existsSync(config.filePath)) {
+      content = fs.readFileSync(config.filePath, "utf-8");
+    }
+
+    if (content.includes(playerId)) {
+      return {
+        success: false,
+        message: `Player is already on the ${type === "ban" ? "ban list" : "whitelist"}`,
+      };
+    }
+
+    const entry = this.formatPlayerEntry(type, playerId, playerName);
+    const newContent =
+      content.endsWith("\n") || content === ""
+        ? `${content}${entry}\n`
+        : `${content}\n${entry}\n`;
+
+    fs.writeFileSync(config.filePath, newContent, "utf-8");
+    return {
+      success: true,
+      message: `${playerName || "Player"} added to ${type === "ban" ? "ban list" : "whitelist"}`,
+    };
+  }
+
+  /**
+   * Default: remove matching lines from the whitelist/ban text file.
+   */
+  removeFromPlayerList(
+    server: GameServer,
+    type: "whitelist" | "ban",
+    playerId: string,
+  ): PlayerListResult {
+    const config =
+      type === "whitelist"
+        ? this.getWhitelistConfig(server)
+        : this.getBanListConfig(server);
+    if (!config) {
+      return { success: false, message: `This game does not support ${type}` };
+    }
+
+    if (!fs.existsSync(config.filePath)) {
+      return {
+        success: false,
+        message: `${type === "ban" ? "Ban" : "Whitelist"} file not found`,
+      };
+    }
+
+    const content = fs.readFileSync(config.filePath, "utf-8");
+    const lines = content.split("\n");
+    const filtered = lines.filter((line) => !line.trim().startsWith(playerId));
+
+    if (lines.length === filtered.length) {
+      return {
+        success: false,
+        message: `Player not found on the ${type === "ban" ? "ban list" : "whitelist"}`,
+      };
+    }
+
+    fs.writeFileSync(config.filePath, filtered.join("\n"), "utf-8");
+    return {
+      success: true,
+      message: `Player removed from ${type === "ban" ? "ban list" : "whitelist"}`,
+    };
+  }
+
+  /**
+   * Default: read the text file and return its content as-is.
+   */
+  getPlayerListContent(server: GameServer, type: "whitelist" | "ban"): string {
+    const config =
+      type === "whitelist"
+        ? this.getWhitelistConfig(server)
+        : this.getBanListConfig(server);
+    if (!config) return "";
+    if (!fs.existsSync(config.filePath)) return "";
+    return fs.readFileSync(config.filePath, "utf-8");
   }
 
   // ── Logs ─────────────────────────────────────────────────────────

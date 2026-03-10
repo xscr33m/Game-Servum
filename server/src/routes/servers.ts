@@ -1698,42 +1698,21 @@ router.post("/:id/players/whitelist", (req: Request, res: Response) => {
   }
 
   const adapter = getGameAdapter(server.gameId);
-  const whitelistConfig = adapter?.getWhitelistConfig(server);
-  if (!whitelistConfig) {
-    return res
-      .status(400)
-      .json({ error: "This game does not support file-based whitelist" });
+  if (!adapter) {
+    return res.status(400).json({ error: "Unknown game type" });
   }
 
-  const filePath = whitelistConfig.filePath;
-
   try {
-    let content = "";
-    if (fs.existsSync(filePath)) {
-      content = fs.readFileSync(filePath, "utf-8");
-    }
-
-    if (content.includes(characterId)) {
-      return res
-        .status(400)
-        .json({ error: "Player is already on the whitelist" });
-    }
-
-    const entry = adapter!.formatPlayerEntry(
+    const result = adapter.addToPlayerList(
+      server,
       "whitelist",
       characterId,
       playerName,
     );
-    const newContent =
-      content.endsWith("\n") || content === ""
-        ? `${content}${entry}\n`
-        : `${content}\n${entry}\n`;
-
-    fs.writeFileSync(filePath, newContent, "utf-8");
-    res.json({
-      success: true,
-      message: `${playerName || "Player"} added to whitelist`,
-    });
+    if (!result.success) {
+      return res.status(400).json({ error: result.message });
+    }
+    res.json({ success: true, message: result.message });
   } catch (err) {
     res.status(500).json({
       error: `Failed to update whitelist: ${(err as Error).message}`,
@@ -1756,34 +1735,20 @@ router.delete("/:id/players/whitelist", (req: Request, res: Response) => {
   }
 
   const adapter = getGameAdapter(server.gameId);
-  const whitelistConfig = adapter?.getWhitelistConfig(server);
-  if (!whitelistConfig) {
-    return res
-      .status(400)
-      .json({ error: "This game does not support file-based whitelist" });
+  if (!adapter) {
+    return res.status(400).json({ error: "Unknown game type" });
   }
 
-  const filePath = whitelistConfig.filePath;
-
   try {
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: "Whitelist file not found" });
-    }
-
-    const content = fs.readFileSync(filePath, "utf-8");
-    const lines = content.split("\n");
-    const filtered = lines.filter(
-      (line) => !line.trim().startsWith(characterId),
+    const result = adapter.removeFromPlayerList(
+      server,
+      "whitelist",
+      characterId,
     );
-
-    if (lines.length === filtered.length) {
-      return res
-        .status(404)
-        .json({ error: "Player not found on the whitelist" });
+    if (!result.success) {
+      return res.status(404).json({ error: result.message });
     }
-
-    fs.writeFileSync(filePath, filtered.join("\n"), "utf-8");
-    res.json({ success: true, message: "Player removed from whitelist" });
+    res.json({ success: true, message: result.message });
   } catch (err) {
     res.status(500).json({
       error: `Failed to update whitelist: ${(err as Error).message}`,
@@ -1809,38 +1774,21 @@ router.post("/:id/players/ban", (req: Request, res: Response) => {
   }
 
   const adapter = getGameAdapter(server.gameId);
-  const banConfig = adapter?.getBanListConfig(server);
-  if (!banConfig) {
-    return res
-      .status(400)
-      .json({ error: "This game does not support file-based banning" });
+  if (!adapter) {
+    return res.status(400).json({ error: "Unknown game type" });
   }
 
-  const filePath = banConfig.filePath;
-
   try {
-    let content = "";
-    if (fs.existsSync(filePath)) {
-      content = fs.readFileSync(filePath, "utf-8");
+    const result = adapter.addToPlayerList(
+      server,
+      "ban",
+      characterId,
+      playerName,
+    );
+    if (!result.success) {
+      return res.status(400).json({ error: result.message });
     }
-
-    if (content.includes(characterId)) {
-      return res
-        .status(400)
-        .json({ error: "Player is already on the ban list" });
-    }
-
-    const entry = adapter!.formatPlayerEntry("ban", characterId, playerName);
-    const newContent =
-      content.endsWith("\n") || content === ""
-        ? `${content}${entry}\n`
-        : `${content}\n${entry}\n`;
-
-    fs.writeFileSync(filePath, newContent, "utf-8");
-    res.json({
-      success: true,
-      message: `${playerName || "Player"} added to ban list`,
-    });
+    res.json({ success: true, message: result.message });
   } catch (err) {
     res.status(500).json({
       error: `Failed to update ban list: ${(err as Error).message}`,
@@ -1863,39 +1811,57 @@ router.delete("/:id/players/ban", (req: Request, res: Response) => {
   }
 
   const adapter = getGameAdapter(server.gameId);
-  const banConfig = adapter?.getBanListConfig(server);
-  if (!banConfig) {
-    return res
-      .status(400)
-      .json({ error: "This game does not support file-based banning" });
+  if (!adapter) {
+    return res.status(400).json({ error: "Unknown game type" });
   }
 
-  const filePath = banConfig.filePath;
-
   try {
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: "Ban file not found" });
+    const result = adapter.removeFromPlayerList(server, "ban", characterId);
+    if (!result.success) {
+      return res.status(404).json({ error: result.message });
     }
-
-    const content = fs.readFileSync(filePath, "utf-8");
-    const lines = content.split("\n");
-    const filtered = lines.filter(
-      (line) => !line.trim().startsWith(characterId),
-    );
-
-    if (lines.length === filtered.length) {
-      return res
-        .status(404)
-        .json({ error: "Player not found on the ban list" });
-    }
-
-    fs.writeFileSync(filePath, filtered.join("\n"), "utf-8");
-    res.json({ success: true, message: "Player removed from ban list" });
+    res.json({ success: true, message: result.message });
   } catch (err) {
     res.status(500).json({
       error: `Failed to update ban list: ${(err as Error).message}`,
     });
   }
+});
+
+// GET /api/servers/:id/players/whitelist-content - Get whitelist content as text
+router.get("/:id/players/whitelist-content", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter) {
+    return res.status(400).json({ error: "Unknown game type" });
+  }
+
+  const content = adapter.getPlayerListContent(server, "whitelist");
+  res.json({ content });
+});
+
+// GET /api/servers/:id/players/ban-content - Get ban list content as text
+router.get("/:id/players/ban-content", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter) {
+    return res.status(400).json({ error: "Unknown game type" });
+  }
+
+  const content = adapter.getPlayerListContent(server, "ban");
+  res.json({ content });
 });
 
 // ==================== FIREWALL ROUTES ====================

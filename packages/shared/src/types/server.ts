@@ -32,6 +32,8 @@ export interface GameCapabilities {
   playerIdentifier: "battleye-guid" | "steam-id";
   /** Whether game-specific log parsing is available (e.g., DayZ ADM logs for character IDs) */
   logParsing: boolean;
+  /** Whether whitelist/ban content can be directly edited as plain text (false for XML-based formats like 7DTD) */
+  playerListEditable: boolean;
 }
 
 // Database models

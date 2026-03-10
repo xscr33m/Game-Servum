@@ -101,6 +101,7 @@ export function PlayersTab({ server }: PlayersTabProps) {
 
   const hasWhitelist = capabilities?.whitelist !== false;
   const hasBanList = capabilities?.banList !== false;
+  const isPlayerListEditable = capabilities?.playerListEditable !== false;
 
   // Resolve the effective player ID for whitelist/ban based on game type:
   // DayZ uses BattlEye GUID (characterId from ADM logs), ARK/7DTD use SteamID64.
@@ -142,7 +143,7 @@ export function PlayersTab({ server }: PlayersTabProps) {
     }
   }, [server.id, api.servers]);
 
-  // Load whitelist/ban files (only for games that support them)
+  // Load whitelist/ban content (only for games that support them)
   const loadFiles = useCallback(async () => {
     if (!hasWhitelist && !hasBanList) {
       setFilesLoading(false);
@@ -153,12 +154,12 @@ export function PlayersTab({ server }: PlayersTabProps) {
     try {
       const promises: Promise<{ content: string }>[] = [];
       if (hasWhitelist) {
-        promises.push(api.servers.getFile(server.id, "whitelist.txt"));
+        promises.push(api.servers.getWhitelistContent(server.id));
       } else {
         promises.push(Promise.resolve({ content: "" }));
       }
       if (hasBanList) {
-        promises.push(api.servers.getFile(server.id, "ban.txt"));
+        promises.push(api.servers.getBanContent(server.id));
       } else {
         promises.push(Promise.resolve({ content: "" }));
       }
@@ -800,25 +801,27 @@ export function PlayersTab({ server }: PlayersTabProps) {
                       {countEntries(whitelistContent)} entries)
                     </CardDescription>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setWhitelistContent(originalWhitelist)}
-                      disabled={!whitelistChanged || saving}
-                    >
-                      <FaRotateLeft className="h-4 w-4 mr-2" />
-                      Reset
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={handleSaveWhitelist}
-                      disabled={!whitelistChanged || saving}
-                    >
-                      <FaFloppyDisk className="h-4 w-4 mr-2" />
-                      {saving ? "Saving..." : "Save"}
-                    </Button>
-                  </div>
+                  {isPlayerListEditable && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setWhitelistContent(originalWhitelist)}
+                        disabled={!whitelistChanged || saving}
+                      >
+                        <FaRotateLeft className="h-4 w-4 mr-2" />
+                        Reset
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleSaveWhitelist}
+                        disabled={!whitelistChanged || saving}
+                      >
+                        <FaFloppyDisk className="h-4 w-4 mr-2" />
+                        {saving ? "Saving..." : "Save"}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -834,11 +837,12 @@ export function PlayersTab({ server }: PlayersTabProps) {
                       onChange={(e) => setWhitelistContent(e.target.value)}
                       placeholder={`// Add player IDs here (one per line)`}
                       spellCheck={false}
+                      readOnly={!isPlayerListEditable}
                     />
                     <p className="text-sm text-muted-foreground">
-                      Add one player ID per line. Lines starting with // are
-                      comments. You can also use the player action buttons to
-                      add/remove players.
+                      {isPlayerListEditable
+                        ? "Add one player ID per line. Lines starting with // are comments. You can also use the player action buttons to add/remove players."
+                        : "This list is managed via the player action buttons. Use the buttons in the Players tab to add or remove entries."}
                     </p>
                   </>
                 )}
@@ -862,25 +866,27 @@ export function PlayersTab({ server }: PlayersTabProps) {
                       Banned players ({countEntries(banContent)} entries)
                     </CardDescription>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setBanContent(originalBan)}
-                      disabled={!banChanged || saving}
-                    >
-                      <FaRotateLeft className="h-4 w-4 mr-2" />
-                      Reset
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={handleSaveBan}
-                      disabled={!banChanged || saving}
-                    >
-                      <FaFloppyDisk className="h-4 w-4 mr-2" />
-                      {saving ? "Saving..." : "Save"}
-                    </Button>
-                  </div>
+                  {isPlayerListEditable && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setBanContent(originalBan)}
+                        disabled={!banChanged || saving}
+                      >
+                        <FaRotateLeft className="h-4 w-4 mr-2" />
+                        Reset
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleSaveBan}
+                        disabled={!banChanged || saving}
+                      >
+                        <FaFloppyDisk className="h-4 w-4 mr-2" />
+                        {saving ? "Saving..." : "Save"}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -896,11 +902,12 @@ export function PlayersTab({ server }: PlayersTabProps) {
                       onChange={(e) => setBanContent(e.target.value)}
                       placeholder={`// Add player IDs of banned players here (one per line)`}
                       spellCheck={false}
+                      readOnly={!isPlayerListEditable}
                     />
                     <p className="text-sm text-muted-foreground">
-                      Add one player ID per line. Lines starting with // are
-                      comments. You can also use the player action buttons to
-                      add/remove players.
+                      {isPlayerListEditable
+                        ? "Add one player ID per line. Lines starting with // are comments. You can also use the player action buttons to add/remove players."
+                        : "This list is managed via the player action buttons. Use the buttons in the Players tab to add or remove entries."}
                     </p>
                   </>
                 )}

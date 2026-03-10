@@ -17,6 +17,7 @@ import type {
   GameDefinition,
   RconConfig,
   PlayerFileConfig,
+  PlayerListResult,
   EditableFileConfig,
   LogPaths,
 } from "./types.js";
@@ -82,6 +83,7 @@ export class SevenDaysAdapter extends BaseGameAdapter {
       banList: "file",
       playerIdentifier: "steam-id",
       logParsing: false,
+      playerListEditable: false,
     },
     broadcastCommand: 'say "{MESSAGE}"',
     playerListCommand: "listplayers",
@@ -187,18 +189,22 @@ export class SevenDaysAdapter extends BaseGameAdapter {
 
   // Uses BaseGameAdapter defaults: no-op copyModToServer, empty generateModLaunchParams
 
-  // ── Player Management ────────────────────────────────────────────
+  // ── Player Management (serveradmin.xml) ──────────────────────────
+
+  private getServerAdminPath(server: GameServer): string {
+    return path.join(server.installPath, "serveradmin.xml");
+  }
 
   getWhitelistConfig(server: GameServer): PlayerFileConfig | null {
     return {
-      filePath: path.join(server.installPath, "whitelist.txt"),
+      filePath: this.getServerAdminPath(server),
       idType: "steam-id",
     };
   }
 
   getBanListConfig(server: GameServer): PlayerFileConfig | null {
     return {
-      filePath: path.join(server.installPath, "banned.txt"),
+      filePath: this.getServerAdminPath(server),
       idType: "steam-id",
     };
   }
@@ -208,7 +214,6 @@ export class SevenDaysAdapter extends BaseGameAdapter {
     playerId: string,
     _playerName?: string,
   ): string {
-    // 7DTD: one SteamID64 per line
     return playerId;
   }
 
@@ -218,6 +223,123 @@ export class SevenDaysAdapter extends BaseGameAdapter {
       return null;
     if (/^\d{17}$/.test(trimmed)) return trimmed;
     return null;
+  }
+
+  addToPlayerList(
+    server: GameServer,
+    type: "whitelist" | "ban",
+    playerId: string,
+    _playerName?: string,
+  ): PlayerListResult {
+    const adminPath = this.getServerAdminPath(server);
+    const listLabel = type === "ban" ? "ban list" : "whitelist";
+
+    try {
+      let content = "";
+      if (fs.existsSync(adminPath)) {
+        content = fs.readFileSync(adminPath, "utf-8");
+      } else {
+        content = getServerAdminTemplate();
+      }
+
+      if (content.includes(`steamID="${playerId}"`)) {
+        return {
+          success: false,
+          message: `Player is already on the ${listLabel}`,
+        };
+      }
+
+      if (type === "whitelist") {
+        const entry = `    <whitelisted steamID="${playerId}" />`;
+        content = content.replace(/<\/whitelist>/i, `${entry}\n  </whitelist>`);
+      } else {
+        const entry = `    <blacklisted steamID="${playerId}" unbandate="" />`;
+        content = content.replace(/<\/blacklist>/i, `${entry}\n  </blacklist>`);
+      }
+
+      fs.writeFileSync(adminPath, content, "utf-8");
+      return { success: true, message: `Player added to ${listLabel}` };
+    } catch (err) {
+      return {
+        success: false,
+        message: `Failed to update ${listLabel}: ${(err as Error).message}`,
+      };
+    }
+  }
+
+  removeFromPlayerList(
+    server: GameServer,
+    type: "whitelist" | "ban",
+    playerId: string,
+  ): PlayerListResult {
+    const adminPath = this.getServerAdminPath(server);
+    const listLabel = type === "ban" ? "ban list" : "whitelist";
+
+    try {
+      if (!fs.existsSync(adminPath)) {
+        return { success: false, message: `serveradmin.xml not found` };
+      }
+
+      const content = fs.readFileSync(adminPath, "utf-8");
+
+      let pattern: RegExp;
+      if (type === "whitelist") {
+        pattern = new RegExp(
+          `\\s*<whitelisted\\s+steamID="${playerId}"\\s*/>`,
+          "i",
+        );
+      } else {
+        pattern = new RegExp(
+          `\\s*<blacklisted\\s+steamID="${playerId}"[^/]*/?>`,
+          "i",
+        );
+      }
+
+      if (!pattern.test(content)) {
+        return {
+          success: false,
+          message: `Player not found on the ${listLabel}`,
+        };
+      }
+
+      const updated = content.replace(pattern, "");
+      fs.writeFileSync(adminPath, updated, "utf-8");
+      return { success: true, message: `Player removed from ${listLabel}` };
+    } catch (err) {
+      return {
+        success: false,
+        message: `Failed to update ${listLabel}: ${(err as Error).message}`,
+      };
+    }
+  }
+
+  getPlayerListContent(server: GameServer, type: "whitelist" | "ban"): string {
+    const adminPath = this.getServerAdminPath(server);
+    if (!fs.existsSync(adminPath)) return "";
+
+    try {
+      const content = fs.readFileSync(adminPath, "utf-8");
+
+      if (type === "whitelist") {
+        const ids: string[] = [];
+        const regex = /<whitelisted\s+steamID="(\d+)"\s*\/>/gi;
+        let match;
+        while ((match = regex.exec(content)) !== null) {
+          ids.push(match[1]);
+        }
+        return ids.join("\n");
+      } else {
+        const ids: string[] = [];
+        const regex = /<blacklisted\s+steamID="(\d+)"[^/]*\/?>/gi;
+        let match;
+        while ((match = regex.exec(content)) !== null) {
+          ids.push(match[1]);
+        }
+        return ids.join("\n");
+      }
+    } catch {
+      return "";
+    }
   }
 
   // ── Logs ─────────────────────────────────────────────────────────
@@ -243,14 +365,27 @@ export class SevenDaysAdapter extends BaseGameAdapter {
   getEditableFiles(server: GameServer): EditableFileConfig[] {
     return [
       {
-        name: "whitelist.txt",
-        path: path.join(server.installPath, "whitelist.txt"),
+        name: "serveradmin.xml",
+        path: path.join(server.installPath, "serveradmin.xml"),
       },
-      { name: "ban.txt", path: path.join(server.installPath, "banned.txt") },
       {
         name: "serverconfig.xml",
         path: path.join(server.installPath, "serverconfig.xml"),
       },
     ];
   }
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────
+
+function getServerAdminTemplate(): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<adminTools>
+  <admins>
+  </admins>
+  <whitelist>
+  </whitelist>
+  <blacklist>
+  </blacklist>
+</adminTools>\n`;
 }

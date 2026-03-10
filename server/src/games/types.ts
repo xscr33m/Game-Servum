@@ -76,6 +76,13 @@ export interface LogPaths {
   archiveDir: string;
 }
 
+// ── Player List Operation Result ─────────────────────────────────────
+
+export interface PlayerListResult {
+  success: boolean;
+  message: string;
+}
+
 // ── Mod Copy Result ──────────────────────────────────────────────────
 
 export interface ModCopyResult {
@@ -165,6 +172,36 @@ export interface GameAdapter {
    * Returns the player ID or null if line doesn't match.
    */
   parsePlayerEntry(line: string): string | null;
+
+  /**
+   * Add a player to a whitelist or ban list.
+   * Default: appends a text line to the file from getWhitelistConfig/getBanListConfig.
+   * Games with XML configs (7DTD) override this.
+   */
+  addToPlayerList(
+    server: GameServer,
+    type: "whitelist" | "ban",
+    playerId: string,
+    playerName?: string,
+  ): PlayerListResult;
+
+  /**
+   * Remove a player from a whitelist or ban list.
+   * Default: removes matching lines from the text file.
+   * Games with XML configs (7DTD) override this.
+   */
+  removeFromPlayerList(
+    server: GameServer,
+    type: "whitelist" | "ban",
+    playerId: string,
+  ): PlayerListResult;
+
+  /**
+   * Get the player list content as a simple text representation
+   * (one player ID per line) for status badge checks in the frontend.
+   * Games with XML configs (7DTD) override to extract IDs from XML.
+   */
+  getPlayerListContent(server: GameServer, type: "whitelist" | "ban"): string;
 
   // ── Logs ─────────────────────────────────────────────────────────
 

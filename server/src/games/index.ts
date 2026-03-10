@@ -104,6 +104,7 @@ export type {
   GameDefinition,
   RconConfig,
   PlayerFileConfig,
+  PlayerListResult,
   EditableFileConfig,
   ModCopyResult,
   LogPaths,
