@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import path from "path";
 import fs from "fs";
+import fsPromises from "fs/promises";
 import { exec } from "child_process";
 import { logger, broadcast } from "../index.js";
 import {
@@ -1077,7 +1078,7 @@ router.get("/:id/disk-usage", async (req: Request, res: Response) => {
   }
 
   try {
-    const totalSize = getDirectorySize(server.installPath);
+    const totalSize = await getDirectorySizeAsync(server.installPath);
     res.json({
       sizeBytes: totalSize,
       sizeFormatted: formatBytes(totalSize),
@@ -1975,18 +1976,18 @@ export { router as serversRouter };
 /**
  * Recursively calculate the total size of a directory in bytes
  */
-function getDirectorySize(dirPath: string): number {
+async function getDirectorySizeAsync(dirPath: string): Promise<number> {
   let totalSize = 0;
 
   try {
-    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    const entries = await fsPromises.readdir(dirPath, { withFileTypes: true });
     for (const entry of entries) {
       const fullPath = path.join(dirPath, entry.name);
       try {
         if (entry.isDirectory()) {
-          totalSize += getDirectorySize(fullPath);
+          totalSize += await getDirectorySizeAsync(fullPath);
         } else if (entry.isFile()) {
-          totalSize += fs.statSync(fullPath).size;
+          totalSize += (await fsPromises.stat(fullPath)).size;
         }
       } catch {
         // Skip files/dirs we can't access
