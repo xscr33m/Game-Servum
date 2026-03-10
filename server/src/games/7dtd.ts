@@ -84,6 +84,7 @@ export class SevenDaysAdapter extends BaseGameAdapter {
       playerIdentifier: "steam-id",
       logParsing: false,
       playerListEditable: false,
+      profilesPath: false,
     },
     broadcastCommand: 'say "{MESSAGE}"',
     playerListCommand: "listplayers",

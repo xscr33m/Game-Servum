@@ -34,6 +34,8 @@ export interface GameCapabilities {
   logParsing: boolean;
   /** Whether whitelist/ban content can be directly edited as plain text (false for XML-based formats like 7DTD) */
   playerListEditable: boolean;
+  /** Whether this game uses a configurable profiles path (e.g., DayZ -profiles= parameter) */
+  profilesPath: boolean;
 }
 
 // Database models

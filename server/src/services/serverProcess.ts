@@ -137,15 +137,19 @@ export function startServer(serverId: number): StartResult {
     }
   }
 
-  // Ensure profiles directory exists (required for DayZ and other servers)
+  // Resolve profiles path (used by DayZ for logs, crash analysis, etc.)
   const resolvedProfilesPath = path.isAbsolute(server.profilesPath)
     ? server.profilesPath
     : path.join(server.installPath, server.profilesPath);
-  if (!fs.existsSync(resolvedProfilesPath)) {
-    fs.mkdirSync(resolvedProfilesPath, { recursive: true });
-    logger.info(
-      `[ServerProcess] Created profiles directory: ${resolvedProfilesPath}`,
-    );
+
+  // Ensure profiles directory exists (only for games that use it, e.g. DayZ)
+  if (gameDef?.capabilities?.profilesPath) {
+    if (!fs.existsSync(resolvedProfilesPath)) {
+      fs.mkdirSync(resolvedProfilesPath, { recursive: true });
+      logger.info(
+        `[ServerProcess] Created profiles directory: ${resolvedProfilesPath}`,
+      );
+    }
   }
 
   // Parse launch parameters and replace placeholders
@@ -647,20 +651,25 @@ export function checkServerRequirements(serverId: number): RequirementsResult {
     }
   }
 
-  // Check 3: Profiles directory
-  const profilesPath = path.join(server.installPath, "profiles");
-  if (fs.existsSync(profilesPath)) {
-    checks.push({
-      name: "Profiles",
-      status: "ok",
-      message: "Profiles directory exists",
-    });
-  } else {
-    checks.push({
-      name: "Profiles",
-      status: "warning",
-      message: "Profiles directory will be created on first start",
-    });
+  // Check 3: Profiles directory (only for games that use it)
+  if (gameDef?.capabilities?.profilesPath) {
+    const profilesPath = path.join(
+      server.installPath,
+      server.profilesPath || "profiles",
+    );
+    if (fs.existsSync(profilesPath)) {
+      checks.push({
+        name: "Profiles",
+        status: "ok",
+        message: "Profiles directory exists",
+      });
+    } else {
+      checks.push({
+        name: "Profiles",
+        status: "warning",
+        message: "Profiles directory will be created on first start",
+      });
+    }
   }
 
   // Check 4: Windows-specific runtime checks

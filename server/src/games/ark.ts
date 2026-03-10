@@ -69,6 +69,7 @@ export class ArkAdapter extends BaseGameAdapter {
       playerIdentifier: "steam-id",
       logParsing: false,
       playerListEditable: true,
+      profilesPath: false,
     },
     broadcastCommand: "ServerChat {MESSAGE}",
     playerListCommand: "ListPlayers",

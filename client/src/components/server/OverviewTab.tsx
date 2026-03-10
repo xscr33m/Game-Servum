@@ -25,6 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useBackend } from "@/hooks/useBackend";
 import { useUptime } from "@/hooks/useUptime";
+import { useGameCapabilities } from "@/hooks/useGameCapabilities";
 import { toastSuccess } from "@/lib/toast";
 import { getGameName } from "@/lib/gameMetadata";
 import type { GameServer, GameDefinition } from "@/types";
@@ -36,6 +37,8 @@ interface OverviewTabProps {
 
 export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
   const { api, isConnected } = useBackend();
+  const { capabilities } = useGameCapabilities(server.gameId);
+  const hasProfilesPath = capabilities?.profilesPath !== false;
   // Server name editing
   const [editingName, setEditingName] = useState(false);
   const [serverName, setServerName] = useState(server.name);
@@ -411,127 +414,129 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
             </p>
           </div>
 
-          {/* Profiles Path (editable) */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-sm font-medium text-muted-foreground">
-                Profiles Path
-              </label>
-              <div className="flex items-center gap-2">
-                {editingProfilesPath ? (
-                  <>
+          {/* Profiles Path (editable, only for games that use it) */}
+          {hasProfilesPath && (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-sm font-medium text-muted-foreground">
+                  Profiles Path
+                </label>
+                <div className="flex items-center gap-2">
+                  {editingProfilesPath ? (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          handleRevertProfilesPath();
+                          setEditingProfilesPath(false);
+                          setShowDirPicker(false);
+                        }}
+                        disabled={profilesSaving}
+                      >
+                        <FaRotateLeft className="h-3.5 w-3.5 mr-1.5" />
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleSaveProfilesPath}
+                        disabled={!profilesPathChanged || profilesSaving}
+                      >
+                        <FaFloppyDisk className="h-3.5 w-3.5 mr-1.5" />
+                        {profilesSaving ? "Saving..." : "Save"}
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setEditingProfilesPath(true);
+                        loadDirectories();
+                      }}
+                    >
+                      <FaPencil className="h-3.5 w-3.5 mr-1.5" />
+                      Edit
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {editingProfilesPath ? (
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <Input
+                      className="font-mono text-sm flex-1"
+                      value={profilesPath}
+                      onChange={(e) => setProfilesPath(e.target.value)}
+                      spellCheck={false}
+                      placeholder="e.g. profiles or profiles/config1"
+                    />
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        handleRevertProfilesPath();
-                        setEditingProfilesPath(false);
-                        setShowDirPicker(false);
-                      }}
-                      disabled={profilesSaving}
+                      onClick={() => setShowDirPicker(!showDirPicker)}
+                      title="Browse existing folders"
+                      className="shrink-0"
                     >
-                      <FaRotateLeft className="h-3.5 w-3.5 mr-1.5" />
-                      Cancel
+                      <FaChevronDown className="h-4 w-4" />
                     </Button>
-                    <Button
-                      size="sm"
-                      onClick={handleSaveProfilesPath}
-                      disabled={!profilesPathChanged || profilesSaving}
-                    >
-                      <FaFloppyDisk className="h-3.5 w-3.5 mr-1.5" />
-                      {profilesSaving ? "Saving..." : "Save"}
-                    </Button>
-                  </>
-                ) : (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setEditingProfilesPath(true);
-                      loadDirectories();
-                    }}
-                  >
-                    <FaPencil className="h-3.5 w-3.5 mr-1.5" />
-                    Edit
-                  </Button>
-                )}
-              </div>
-            </div>
-            {editingProfilesPath ? (
-              <div className="space-y-2">
-                <div className="flex gap-2">
-                  <Input
-                    className="font-mono text-sm flex-1"
-                    value={profilesPath}
-                    onChange={(e) => setProfilesPath(e.target.value)}
-                    spellCheck={false}
-                    placeholder="e.g. profiles or profiles/config1"
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowDirPicker(!showDirPicker)}
-                    title="Browse existing folders"
-                    className="shrink-0"
-                  >
-                    <FaChevronDown className="h-4 w-4" />
-                  </Button>
-                </div>
-                {showDirPicker && availableDirs.length > 0 && (
-                  <div className="rounded border bg-muted/50 max-h-[160px] overflow-y-auto">
-                    {availableDirs.map((dir) => (
-                      <button
-                        key={dir}
-                        className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-muted transition-colors ${
-                          profilesPath === dir
-                            ? "bg-muted font-medium text-primary"
-                            : ""
-                        }`}
-                        onClick={() => {
-                          setProfilesPath(dir);
-                          setShowDirPicker(false);
-                        }}
-                      >
-                        <FaFolder className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <span className="font-mono truncate">{dir}</span>
-                      </button>
-                    ))}
                   </div>
-                )}
-                {showDirPicker && availableDirs.length === 0 && (
-                  <p className="text-xs text-muted-foreground px-1">
-                    No folders found in the server directory.
+                  {showDirPicker && availableDirs.length > 0 && (
+                    <div className="rounded border bg-muted/50 max-h-[160px] overflow-y-auto">
+                      {availableDirs.map((dir) => (
+                        <button
+                          key={dir}
+                          className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-muted transition-colors ${
+                            profilesPath === dir
+                              ? "bg-muted font-medium text-primary"
+                              : ""
+                          }`}
+                          onClick={() => {
+                            setProfilesPath(dir);
+                            setShowDirPicker(false);
+                          }}
+                        >
+                          <FaFolder className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="font-mono truncate">{dir}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {showDirPicker && availableDirs.length === 0 && (
+                    <p className="text-xs text-muted-foreground px-1">
+                      No folders found in the server directory.
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Relative paths resolve from the install directory. You can
+                    also type a subfolder path like{" "}
+                    <code className="font-mono text-primary bg-muted px-1 py-0.5 rounded">
+                      profiles/myconfig
+                    </code>
+                    . Used as{" "}
+                    <code className="font-mono text-primary bg-muted px-1 py-0.5 rounded">
+                      {"{PROFILES}"}
+                    </code>{" "}
+                    in launch parameters.
                   </p>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  Relative paths resolve from the install directory. You can
-                  also type a subfolder path like{" "}
-                  <code className="font-mono text-primary bg-muted px-1 py-0.5 rounded">
-                    profiles/myconfig
-                  </code>
-                  . Used as{" "}
-                  <code className="font-mono text-primary bg-muted px-1 py-0.5 rounded">
-                    {"{PROFILES}"}
-                  </code>{" "}
-                  in launch parameters.
+                  {profilesError && (
+                    <p className="text-xs text-red-500">{profilesError}</p>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <p className="text-sm font-mono bg-muted p-2 rounded break-all">
+                    {server.profilesPath || "profiles"}
+                  </p>
+                </div>
+              )}
+              {editingProfilesPath && server.status === "running" && (
+                <p className="text-xs text-yellow-500 mt-1">
+                  Changes will take effect after the next server restart.
                 </p>
-                {profilesError && (
-                  <p className="text-xs text-red-500">{profilesError}</p>
-                )}
-              </div>
-            ) : (
-              <div>
-                <p className="text-sm font-mono bg-muted p-2 rounded break-all">
-                  {server.profilesPath || "profiles"}
-                </p>
-              </div>
-            )}
-            {editingProfilesPath && server.status === "running" && (
-              <p className="text-xs text-yellow-500 mt-1">
-                Changes will take effect after the next server restart.
-              </p>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
           {/* Ports (editable) */}
           <div>
@@ -711,12 +716,16 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
                   <span className="text-muted-foreground/70">
                     ({server.port})
                   </span>{" "}
-                  <code className="font-mono text-primary bg-muted px-1 py-0.5 rounded">
-                    {"{PROFILES}"}
-                  </code>{" "}
-                  <span className="text-muted-foreground/70">
-                    ({server.profilesPath || "profiles"})
-                  </span>{" "}
+                  {hasProfilesPath && (
+                    <>
+                      <code className="font-mono text-primary bg-muted px-1 py-0.5 rounded">
+                        {"{PROFILES}"}
+                      </code>{" "}
+                      <span className="text-muted-foreground/70">
+                        ({server.profilesPath || "profiles"})
+                      </span>{" "}
+                    </>
+                  )}
                   <code className="font-mono text-primary bg-muted px-1 py-0.5 rounded">
                     {"{INSTALL_PATH}"}
                   </code>{" "}
