@@ -2,7 +2,7 @@ import path from "path";
 import fs from "fs";
 import { spawn, type ChildProcess } from "child_process";
 import { getConfig, getSteamCMDExecutable } from "./config.js";
-import { GAME_DEFINITIONS } from "./gameDefinitions.js";
+import { getGameAdapter, getGameDefinition } from "../games/index.js";
 import { broadcast, logger } from "../index.js";
 import {
   getModById,
@@ -21,7 +21,7 @@ import type { ServerMod } from "../types/index.js";
  * E.g. DayZ: game=221100, server=223350 — mods are under 221100.
  */
 function getWorkshopAppId(gameId: string, serverAppId: number): number {
-  const gameDef = GAME_DEFINITIONS[gameId];
+  const gameDef = getGameDefinition(gameId);
   return gameDef?.workshopAppId ?? serverAppId;
 }
 
@@ -266,6 +266,7 @@ export async function installMod(
         const copyResult = await copyModToServer(
           mod,
           server.installPath,
+          server.gameId,
           workshopAppId,
         );
 
@@ -368,11 +369,12 @@ export async function installMod(
 }
 
 /**
- * Copy downloaded mod from SteamCMD workshop folder to server directory
+ * Resolve workshop download path and delegate copy to game adapter.
  */
 async function copyModToServer(
   mod: ServerMod,
   serverPath: string,
+  gameId: string,
   appId: number,
 ): Promise<{ success: boolean; message: string; modName?: string }> {
   const config = getConfig();
@@ -417,93 +419,13 @@ async function copyModToServer(
     };
   }
 
-  // Get mod name from meta.cpp if available
-  let modName = mod.name;
-  const metaPath = path.join(workshopPath, "meta.cpp");
-  if (fs.existsSync(metaPath)) {
-    const metaContent = fs.readFileSync(metaPath, "utf-8");
-    const nameMatch = metaContent.match(/name\s*=\s*"([^"]+)"/);
-    if (nameMatch) {
-      modName = nameMatch[1];
-    }
+  // Delegate to game adapter for game-specific copy logic
+  const adapter = getGameAdapter(gameId);
+  if (!adapter) {
+    return { success: false, message: `No game adapter found for ${gameId}` };
   }
 
-  // Sanitize mod name for folder (remove special chars)
-  const safeFolderName = modName
-    .replace(/[^a-zA-Z0-9_-]/g, "_")
-    .replace(/_+/g, "_")
-    .substring(0, 50);
-
-  // Target folder in server directory: @ModName
-  const targetPath = path.join(serverPath, `@${safeFolderName}`);
-
-  try {
-    // Remove existing mod folder if it exists
-    if (fs.existsSync(targetPath)) {
-      fs.rmSync(targetPath, { recursive: true, force: true });
-    }
-
-    // Copy mod files
-    copyFolderRecursive(workshopPath, targetPath);
-
-    // Create mod.cpp if it doesn't exist (for DayZ Server to recognize mod)
-    const modCppPath = path.join(targetPath, "mod.cpp");
-    if (!fs.existsSync(modCppPath)) {
-      const modCppContent = `name = "${modName}";
-dir = "@${safeFolderName}";
-`;
-      fs.writeFileSync(modCppPath, modCppContent);
-    }
-
-    // Copy keys to server keys folder
-    const keysSource = path.join(targetPath, "keys");
-    const keysTarget = path.join(serverPath, "keys");
-
-    if (fs.existsSync(keysSource)) {
-      if (!fs.existsSync(keysTarget)) {
-        fs.mkdirSync(keysTarget, { recursive: true });
-      }
-
-      const keyFiles = fs.readdirSync(keysSource);
-      for (const keyFile of keyFiles) {
-        if (keyFile.endsWith(".bikey")) {
-          fs.copyFileSync(
-            path.join(keysSource, keyFile),
-            path.join(keysTarget, keyFile),
-          );
-        }
-      }
-    }
-
-    return { success: true, message: "Mod copied successfully", modName };
-  } catch (error) {
-    return {
-      success: false,
-      message: `Failed to copy mod: ${(error as Error).message}`,
-    };
-  }
-}
-
-/**
- * Recursively copy a folder
- */
-function copyFolderRecursive(source: string, target: string): void {
-  if (!fs.existsSync(target)) {
-    fs.mkdirSync(target, { recursive: true });
-  }
-
-  const entries = fs.readdirSync(source, { withFileTypes: true });
-
-  for (const entry of entries) {
-    const srcPath = path.join(source, entry.name);
-    const destPath = path.join(target, entry.name);
-
-    if (entry.isDirectory()) {
-      copyFolderRecursive(srcPath, destPath);
-    } else {
-      fs.copyFileSync(srcPath, destPath);
-    }
-  }
+  return adapter.copyModToServer(mod, serverPath, workshopPath);
 }
 
 /**
@@ -558,43 +480,27 @@ export async function uninstallMod(
 }
 
 /**
- * Generate mod launch parameters for DayZ
+ * Generate mod launch parameters for the server's game type.
+ * Delegates to the game adapter for game-specific param format.
  */
 export function generateModParams(serverId: number): {
   modParam: string;
   serverModParam: string;
 } {
+  const server = getServerById(serverId);
+  if (!server) {
+    return { modParam: "", serverModParam: "" };
+  }
+
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter) {
+    return { modParam: "", serverModParam: "" };
+  }
+
   const mods = getModsByServerId(serverId);
   const enabledMods = mods.filter((m) => m.enabled && m.status === "installed");
 
-  const clientMods = enabledMods
-    .filter((m) => !m.isServerMod)
-    .sort((a, b) => a.loadOrder - b.loadOrder)
-    .map((m) => {
-      // Sanitize name for folder path
-      const safeName = m.name
-        .replace(/[^a-zA-Z0-9_-]/g, "_")
-        .replace(/_+/g, "_")
-        .substring(0, 50);
-      return `@${safeName}`;
-    });
-
-  const serverMods = enabledMods
-    .filter((m) => m.isServerMod)
-    .sort((a, b) => a.loadOrder - b.loadOrder)
-    .map((m) => {
-      const safeName = m.name
-        .replace(/[^a-zA-Z0-9_-]/g, "_")
-        .replace(/_+/g, "_")
-        .substring(0, 50);
-      return `@${safeName}`;
-    });
-
-  return {
-    modParam: clientMods.length > 0 ? `-mod=${clientMods.join(";")}` : "",
-    serverModParam:
-      serverMods.length > 0 ? `-serverMod=${serverMods.join(";")}` : "",
-  };
+  return adapter.generateModLaunchParams(enabledMods);
 }
 
 /**

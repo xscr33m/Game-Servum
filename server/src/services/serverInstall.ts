@@ -18,7 +18,7 @@ import {
   getGameDefinition,
   getGameDefinitionByAppId,
   runPostInstall,
-} from "./gameDefinitions.js";
+} from "../games/index.js";
 
 // Track active installations
 const activeInstallations: Map<

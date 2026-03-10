@@ -3,8 +3,8 @@
  *
  * Handles log file archiving and cleanup for game servers.
  *
- * - **Archiving**: On server start, moves existing log files (.ADM, .RPT, .log)
- *   from the profiles directory into a timestamped archive subfolder.
+ * - **Archiving**: On server start, moves existing log files with game-specific
+ *   extensions from the profiles directory into a timestamped archive subfolder.
  * - **Cleanup**: Automatically deletes archived logs older than a configurable
  *   retention period (default: 30 days, 0 = keep forever).
  */
@@ -13,7 +13,7 @@ import path from "path";
 import fs from "fs";
 import { logger } from "../index.js";
 
-const LOG_EXTENSIONS = [".ADM", ".RPT", ".log"];
+const DEFAULT_LOG_EXTENSIONS = [".ADM", ".RPT", ".log"];
 const ARCHIVE_DIR_NAME = "log_archive";
 
 /**
@@ -36,22 +36,25 @@ function resolveProfilesPath(
 /**
  * Check if a file is a log file based on its extension
  */
-function isLogFile(filename: string): boolean {
-  return LOG_EXTENSIONS.some((ext) =>
+function isLogFile(filename: string, extensions: string[]): boolean {
+  return extensions.some((ext) =>
     filename.toUpperCase().endsWith(ext.toUpperCase()),
   );
 }
 
 /**
  * Archive existing log files before a server starts.
- * Moves all .ADM, .RPT, .log files from the profiles directory into profiles/log_archive/<timestamp>/
+ * Moves log files matching the given extensions from the profiles directory
+ * into profiles/log_archive/<timestamp>/
  * Returns the number of files archived.
  */
 export function archiveLogsBeforeStart(
   installPath: string,
   serverProfilesPath?: string,
+  logExtensions?: string[],
 ): number {
   const profilesPath = resolveProfilesPath(installPath, serverProfilesPath);
+  const extensions = logExtensions ?? DEFAULT_LOG_EXTENSIONS;
 
   if (!fs.existsSync(profilesPath)) {
     return 0;
@@ -63,7 +66,9 @@ export function archiveLogsBeforeStart(
     logFiles = fs
       .readdirSync(profilesPath)
       .filter(
-        (f) => isLogFile(f) && fs.statSync(path.join(profilesPath, f)).isFile(),
+        (f) =>
+          isLogFile(f, extensions) &&
+          fs.statSync(path.join(profilesPath, f)).isFile(),
       );
   } catch (error) {
     logger.error(
@@ -146,7 +151,7 @@ export function getCurrentLogs(
   try {
     const files = fs.readdirSync(profilesPath);
     for (const file of files) {
-      if (isLogFile(file)) {
+      if (isLogFile(file, DEFAULT_LOG_EXTENSIONS)) {
         const filePath = path.join(profilesPath, file);
         const stats = fs.statSync(filePath);
         if (stats.isFile()) {
@@ -206,7 +211,9 @@ export function getArchivedSessions(
 
     for (const folder of folders) {
       const folderPath = path.join(archivePath, folder);
-      const files = fs.readdirSync(folderPath).filter((f) => isLogFile(f));
+      const files = fs
+        .readdirSync(folderPath)
+        .filter((f) => isLogFile(f, DEFAULT_LOG_EXTENSIONS));
 
       let totalSize = 0;
       for (const file of files) {
@@ -273,7 +280,7 @@ export function getArchivedSessionFiles(
 
   try {
     for (const file of fs.readdirSync(sessionPath)) {
-      if (isLogFile(file)) {
+      if (isLogFile(file, DEFAULT_LOG_EXTENSIONS)) {
         const filePath = path.join(sessionPath, file);
         const stats = fs.statSync(filePath);
         if (stats.isFile()) {
@@ -310,7 +317,7 @@ export function readLogContent(
   serverProfilesPath?: string,
 ): { content: string; totalLines: number; returnedLines: number } | null {
   // Security: Only allow log file extensions
-  if (!isLogFile(filename)) {
+  if (!isLogFile(filename, DEFAULT_LOG_EXTENSIONS)) {
     return null;
   }
 

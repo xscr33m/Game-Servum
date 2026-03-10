@@ -102,6 +102,16 @@ export function PlayersTab({ server }: PlayersTabProps) {
   const hasWhitelist = capabilities?.whitelist !== false;
   const hasBanList = capabilities?.banList !== false;
 
+  // Resolve the effective player ID for whitelist/ban based on game type:
+  // DayZ uses BattlEye GUID (characterId from ADM logs), ARK/7DTD use SteamID64.
+  function getPlayerId(player: PlayerSummary): string | null {
+    if (capabilities?.playerIdentifier === "steam-id") return player.steamId;
+    return player.characterId;
+  }
+
+  const playerIdLabel =
+    capabilities?.playerIdentifier === "steam-id" ? "Steam ID" : "Character ID";
+
   /**
    * Check if a character ID is present in the whitelist content
    */
@@ -301,10 +311,10 @@ export function PlayersTab({ server }: PlayersTabProps) {
   /**
    * Copy character ID to clipboard
    */
-  async function handleCopyId(characterId: string) {
+  async function handleCopyId(id: string) {
     try {
-      await navigator.clipboard.writeText(characterId);
-      toastSuccess("Character ID copied to clipboard");
+      await navigator.clipboard.writeText(id);
+      toastSuccess(`${playerIdLabel} copied to clipboard`);
     } catch {
       toastError("Failed to copy to clipboard");
     }
@@ -436,8 +446,8 @@ export function PlayersTab({ server }: PlayersTabProps) {
                           <p className="font-medium truncate">
                             {player.playerName}
                           </p>
-                          {player.characterId &&
-                            isWhitelisted(player.characterId) && (
+                          {getPlayerId(player) &&
+                            isWhitelisted(getPlayerId(player)) && (
                               <Badge
                                 variant="outline"
                                 className="text-[10px] px-1.5 py-0 border-blue-500 text-blue-500"
@@ -446,8 +456,8 @@ export function PlayersTab({ server }: PlayersTabProps) {
                                 WL
                               </Badge>
                             )}
-                          {player.characterId &&
-                            isBanned(player.characterId) && (
+                          {getPlayerId(player) &&
+                            isBanned(getPlayerId(player)) && (
                               <Badge
                                 variant="outline"
                                 className="text-[10px] px-1.5 py-0 border-red-500 text-red-500"
@@ -457,27 +467,27 @@ export function PlayersTab({ server }: PlayersTabProps) {
                               </Badge>
                             )}
                         </div>
-                        {player.characterId ? (
+                        {getPlayerId(player) ? (
                           <div className="flex items-center gap-1 mt-0.5">
                             <span
                               className="font-mono text-xs text-muted-foreground truncate max-w-[300px]"
-                              title={player.characterId}
+                              title={getPlayerId(player)!}
                             >
-                              {player.characterId}
+                              {getPlayerId(player)}
                             </span>
                             <Button
                               variant="ghost"
                               size="sm"
                               className="h-5 w-5 p-0"
-                              onClick={() => handleCopyId(player.characterId!)}
-                              title="Copy Character ID"
+                              onClick={() => handleCopyId(getPlayerId(player)!)}
+                              title={`Copy ${playerIdLabel}`}
                             >
                               <FaCopy className="h-3 w-3" />
                             </Button>
                           </div>
                         ) : (
                           <span className="font-mono text-xs text-muted-foreground/50 mt-0.5">
-                            Character ID pending...
+                            {playerIdLabel} pending...
                           </span>
                         )}
                       </div>
@@ -488,16 +498,16 @@ export function PlayersTab({ server }: PlayersTabProps) {
                             ? formatSessionDuration(player.currentSessionStart)
                             : "—"}
                         </div>
-                        {player.characterId && (
+                        {getPlayerId(player) && (
                           <div className="flex items-center gap-0.5 ml-1">
-                            {isWhitelisted(player.characterId) ? (
+                            {isWhitelisted(getPlayerId(player)) ? (
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 w-7 p-0 text-blue-500 hover:text-blue-600"
                                 onClick={() =>
                                   handleRemoveFromWhitelist(
-                                    player.characterId!,
+                                    getPlayerId(player)!,
                                     player.playerName,
                                   )
                                 }
@@ -513,7 +523,7 @@ export function PlayersTab({ server }: PlayersTabProps) {
                                 className="h-7 w-7 p-0 text-muted-foreground hover:text-blue-500"
                                 onClick={() =>
                                   handleAddToWhitelist(
-                                    player.characterId!,
+                                    getPlayerId(player)!,
                                     player.playerName,
                                   )
                                 }
@@ -523,14 +533,14 @@ export function PlayersTab({ server }: PlayersTabProps) {
                                 <FaUserShield className="h-4 w-4" />
                               </Button>
                             )}
-                            {isBanned(player.characterId) ? (
+                            {isBanned(getPlayerId(player)) ? (
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 w-7 p-0 text-red-500 hover:text-red-600"
                                 onClick={() =>
                                   handleRemoveFromBanList(
-                                    player.characterId!,
+                                    getPlayerId(player)!,
                                     player.playerName,
                                   )
                                 }
@@ -546,7 +556,7 @@ export function PlayersTab({ server }: PlayersTabProps) {
                                 className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500"
                                 onClick={() =>
                                   handleAddToBanList(
-                                    player.characterId!,
+                                    getPlayerId(player)!,
                                     player.playerName,
                                   )
                                 }
@@ -625,8 +635,8 @@ export function PlayersTab({ server }: PlayersTabProps) {
                                   Offline
                                 </Badge>
                               )}
-                              {player.characterId &&
-                                isWhitelisted(player.characterId) && (
+                              {getPlayerId(player) &&
+                                isWhitelisted(getPlayerId(player)) && (
                                   <Badge
                                     variant="outline"
                                     className="text-[10px] px-1 py-0 border-blue-500 text-blue-500"
@@ -634,8 +644,8 @@ export function PlayersTab({ server }: PlayersTabProps) {
                                     WL
                                   </Badge>
                                 )}
-                              {player.characterId &&
-                                isBanned(player.characterId) && (
+                              {getPlayerId(player) &&
+                                isBanned(getPlayerId(player)) && (
                                   <Badge
                                     variant="outline"
                                     className="text-[10px] px-1 py-0 border-red-500 text-red-500"
@@ -688,16 +698,16 @@ export function PlayersTab({ server }: PlayersTabProps) {
                           </td>
                           {(hasWhitelist || hasBanList) && (
                             <td className="py-2.5">
-                              {player.characterId ? (
+                              {getPlayerId(player) ? (
                                 <div className="flex items-center gap-0.5">
-                                  {isWhitelisted(player.characterId) ? (
+                                  {isWhitelisted(getPlayerId(player)) ? (
                                     <Button
                                       variant="ghost"
                                       size="sm"
                                       className="h-7 w-7 p-0 text-blue-500 hover:text-blue-600"
                                       onClick={() =>
                                         handleRemoveFromWhitelist(
-                                          player.characterId!,
+                                          getPlayerId(player)!,
                                           player.playerName,
                                         )
                                       }
@@ -713,7 +723,7 @@ export function PlayersTab({ server }: PlayersTabProps) {
                                       className="h-7 w-7 p-0 text-muted-foreground hover:text-blue-500"
                                       onClick={() =>
                                         handleAddToWhitelist(
-                                          player.characterId!,
+                                          getPlayerId(player)!,
                                           player.playerName,
                                         )
                                       }
@@ -723,14 +733,14 @@ export function PlayersTab({ server }: PlayersTabProps) {
                                       <FaUserShield className="h-3.5 w-3.5" />
                                     </Button>
                                   )}
-                                  {isBanned(player.characterId) ? (
+                                  {isBanned(getPlayerId(player)) ? (
                                     <Button
                                       variant="ghost"
                                       size="sm"
                                       className="h-7 w-7 p-0 text-red-500 hover:text-red-600"
                                       onClick={() =>
                                         handleRemoveFromBanList(
-                                          player.characterId!,
+                                          getPlayerId(player)!,
                                           player.playerName,
                                         )
                                       }
@@ -746,7 +756,7 @@ export function PlayersTab({ server }: PlayersTabProps) {
                                       className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500"
                                       onClick={() =>
                                         handleAddToBanList(
-                                          player.characterId!,
+                                          getPlayerId(player)!,
                                           player.playerName,
                                         )
                                       }
@@ -822,11 +832,11 @@ export function PlayersTab({ server }: PlayersTabProps) {
                       className="font-mono text-sm h-[400px]"
                       value={whitelistContent}
                       onChange={(e) => setWhitelistContent(e.target.value)}
-                      placeholder="// Add Character IDs here (one per line)&#10;// The 44-character ID can be found in the ADM log file"
+                      placeholder={`// Add player IDs here (one per line)`}
                       spellCheck={false}
                     />
                     <p className="text-sm text-muted-foreground">
-                      Add one Character ID per line. Lines starting with // are
+                      Add one player ID per line. Lines starting with // are
                       comments. You can also use the player action buttons to
                       add/remove players.
                     </p>
@@ -884,11 +894,11 @@ export function PlayersTab({ server }: PlayersTabProps) {
                       className="font-mono text-sm h-[400px]"
                       value={banContent}
                       onChange={(e) => setBanContent(e.target.value)}
-                      placeholder="// Add Character IDs of banned players here (one per line)&#10;// The 44-character ID can be found in the ADM log file"
+                      placeholder={`// Add player IDs of banned players here (one per line)`}
                       spellCheck={false}
                     />
                     <p className="text-sm text-muted-foreground">
-                      Add one Character ID per line. Lines starting with // are
+                      Add one player ID per line. Lines starting with // are
                       comments. You can also use the player action buttons to
                       add/remove players.
                     </p>

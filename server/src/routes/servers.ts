@@ -42,7 +42,8 @@ import { getSteamConfig, getUsedPorts } from "../db/index.js";
 import {
   getAllGameDefinitions,
   getGameDefinition,
-} from "../services/gameDefinitions.js";
+  getGameAdapter,
+} from "../games/index.js";
 import {
   installServer,
   cancelInstallation,
@@ -1185,30 +1186,23 @@ router.get("/:id/files/:filename", (req: Request, res: Response) => {
     return res.status(404).json({ error: "Server not found" });
   }
 
-  // Security: Only allow specific files
-  const allowedFiles = ["ban.txt", "whitelist.txt", "BEServer_x64.cfg"];
-  if (!allowedFiles.includes(filename)) {
+  // Security: Use game adapter to determine allowed files and paths
+  const adapter = getGameAdapter(server.gameId);
+  const editableFiles = adapter?.getEditableFiles(server) ?? [];
+  const fileConfig = editableFiles.find((f) => f.name === filename);
+
+  if (!fileConfig) {
     return res
       .status(403)
       .json({ error: "Access to this file is not allowed" });
   }
 
-  let filePath: string;
-  if (filename === "BEServer_x64.cfg") {
-    const resolvedProfiles = path.isAbsolute(server.profilesPath)
-      ? server.profilesPath
-      : path.join(server.installPath, server.profilesPath);
-    filePath = path.join(resolvedProfiles, "BattlEye", filename);
-  } else {
-    filePath = path.join(server.installPath, filename);
-  }
-
-  if (!fs.existsSync(filePath)) {
+  if (!fs.existsSync(fileConfig.path)) {
     return res.json({ content: "", exists: false });
   }
 
   try {
-    const content = fs.readFileSync(filePath, "utf-8");
+    const content = fs.readFileSync(fileConfig.path, "utf-8");
     res.json({ content, exists: true });
   } catch (err) {
     res.status(500).json({
@@ -1228,9 +1222,12 @@ router.put("/:id/files/:filename", (req: Request, res: Response) => {
     return res.status(404).json({ error: "Server not found" });
   }
 
-  // Security: Only allow specific files
-  const allowedFiles = ["ban.txt", "whitelist.txt"];
-  if (!allowedFiles.includes(filename)) {
+  // Security: Use game adapter to determine allowed writable files
+  const adapter = getGameAdapter(server.gameId);
+  const editableFiles = adapter?.getEditableFiles(server) ?? [];
+  const fileConfig = editableFiles.find((f) => f.name === filename);
+
+  if (!fileConfig || fileConfig.readonly) {
     return res
       .status(403)
       .json({ error: "Modification of this file is not allowed" });
@@ -1240,11 +1237,8 @@ router.put("/:id/files/:filename", (req: Request, res: Response) => {
     return res.status(400).json({ error: "Content is required" });
   }
 
-  let filePath: string;
-  filePath = path.join(server.installPath, filename);
-
   try {
-    fs.writeFileSync(filePath, content, "utf-8");
+    fs.writeFileSync(fileConfig.path, content, "utf-8");
     res.json({ success: true, message: "File saved" });
   } catch (err) {
     res.status(500).json({
@@ -1695,11 +1689,19 @@ router.post("/:id/players/whitelist", (req: Request, res: Response) => {
     return res.status(404).json({ error: "Server not found" });
   }
 
-  if (!characterId || characterId.length < 20) {
-    return res.status(400).json({ error: "Valid character ID is required" });
+  if (!characterId || characterId.length < 10) {
+    return res.status(400).json({ error: "Valid player ID is required" });
   }
 
-  const filePath = path.join(server.installPath, "whitelist.txt");
+  const adapter = getGameAdapter(server.gameId);
+  const whitelistConfig = adapter?.getWhitelistConfig(server);
+  if (!whitelistConfig) {
+    return res
+      .status(400)
+      .json({ error: "This game does not support file-based whitelist" });
+  }
+
+  const filePath = whitelistConfig.filePath;
 
   try {
     let content = "";
@@ -1707,15 +1709,17 @@ router.post("/:id/players/whitelist", (req: Request, res: Response) => {
       content = fs.readFileSync(filePath, "utf-8");
     }
 
-    // Check if character ID already exists
     if (content.includes(characterId)) {
       return res
         .status(400)
         .json({ error: "Player is already on the whitelist" });
     }
 
-    // Append the character ID with optional player name comment
-    const entry = playerName ? `${characterId}\t//${playerName}` : characterId;
+    const entry = adapter!.formatPlayerEntry(
+      "whitelist",
+      characterId,
+      playerName,
+    );
     const newContent =
       content.endsWith("\n") || content === ""
         ? `${content}${entry}\n`
@@ -1744,10 +1748,18 @@ router.delete("/:id/players/whitelist", (req: Request, res: Response) => {
   }
 
   if (!characterId) {
-    return res.status(400).json({ error: "Character ID is required" });
+    return res.status(400).json({ error: "Player ID is required" });
   }
 
-  const filePath = path.join(server.installPath, "whitelist.txt");
+  const adapter = getGameAdapter(server.gameId);
+  const whitelistConfig = adapter?.getWhitelistConfig(server);
+  if (!whitelistConfig) {
+    return res
+      .status(400)
+      .json({ error: "This game does not support file-based whitelist" });
+  }
+
+  const filePath = whitelistConfig.filePath;
 
   try {
     if (!fs.existsSync(filePath)) {
@@ -1788,11 +1800,19 @@ router.post("/:id/players/ban", (req: Request, res: Response) => {
     return res.status(404).json({ error: "Server not found" });
   }
 
-  if (!characterId || characterId.length < 20) {
-    return res.status(400).json({ error: "Valid character ID is required" });
+  if (!characterId || characterId.length < 10) {
+    return res.status(400).json({ error: "Valid player ID is required" });
   }
 
-  const filePath = path.join(server.installPath, "ban.txt");
+  const adapter = getGameAdapter(server.gameId);
+  const banConfig = adapter?.getBanListConfig(server);
+  if (!banConfig) {
+    return res
+      .status(400)
+      .json({ error: "This game does not support file-based banning" });
+  }
+
+  const filePath = banConfig.filePath;
 
   try {
     let content = "";
@@ -1800,15 +1820,13 @@ router.post("/:id/players/ban", (req: Request, res: Response) => {
       content = fs.readFileSync(filePath, "utf-8");
     }
 
-    // Check if character ID already exists
     if (content.includes(characterId)) {
       return res
         .status(400)
         .json({ error: "Player is already on the ban list" });
     }
 
-    // Append the character ID with optional player name comment
-    const entry = playerName ? `${characterId} //${playerName}` : characterId;
+    const entry = adapter!.formatPlayerEntry("ban", characterId, playerName);
     const newContent =
       content.endsWith("\n") || content === ""
         ? `${content}${entry}\n`
@@ -1837,10 +1855,18 @@ router.delete("/:id/players/ban", (req: Request, res: Response) => {
   }
 
   if (!characterId) {
-    return res.status(400).json({ error: "Character ID is required" });
+    return res.status(400).json({ error: "Player ID is required" });
   }
 
-  const filePath = path.join(server.installPath, "ban.txt");
+  const adapter = getGameAdapter(server.gameId);
+  const banConfig = adapter?.getBanListConfig(server);
+  if (!banConfig) {
+    return res
+      .status(400)
+      .json({ error: "This game does not support file-based banning" });
+  }
+
+  const filePath = banConfig.filePath;
 
   try {
     if (!fs.existsSync(filePath)) {

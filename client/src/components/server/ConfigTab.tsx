@@ -24,6 +24,18 @@ import { SevenDaysConfigEditor } from "@/components/server/config-editors/SevenD
 import { ArkConfigEditor } from "@/components/server/config-editors/ArkConfigEditor";
 import type { GameServer } from "@/types";
 
+interface ConfigEditorProps {
+  rawContent: string;
+  originalContent: string;
+  onContentChange: (content: string) => void;
+}
+
+const CONFIG_EDITORS: Record<string, React.ComponentType<ConfigEditorProps>> = {
+  dayz: DayZConfigEditor,
+  "7dtd": SevenDaysConfigEditor,
+  ark: ArkConfigEditor,
+};
+
 interface ConfigTabProps {
   server: GameServer;
 }
@@ -151,31 +163,23 @@ export function ConfigTab({ server }: ConfigTabProps) {
         </div>
 
         <TabsContent value="form" className="space-y-4">
-          {server.gameId === "dayz" ? (
-            <DayZConfigEditor
-              rawContent={rawContent}
-              originalContent={originalContent}
-              onContentChange={handleContentChange}
-            />
-          ) : server.gameId === "7dtd" ? (
-            <SevenDaysConfigEditor
-              rawContent={rawContent}
-              originalContent={originalContent}
-              onContentChange={handleContentChange}
-            />
-          ) : server.gameId === "ark" ? (
-            <ArkConfigEditor
-              rawContent={rawContent}
-              originalContent={originalContent}
-              onContentChange={handleContentChange}
-            />
-          ) : (
-            <Card>
-              <CardContent className="py-8 text-center text-muted-foreground">
-                No form editor available for this game. Use the Raw Editor tab.
-              </CardContent>
-            </Card>
-          )}
+          {(() => {
+            const Editor = CONFIG_EDITORS[server.gameId];
+            return Editor ? (
+              <Editor
+                rawContent={rawContent}
+                originalContent={originalContent}
+                onContentChange={handleContentChange}
+              />
+            ) : (
+              <Card>
+                <CardContent className="py-8 text-center text-muted-foreground">
+                  No form editor available for this game. Use the Raw Editor
+                  tab.
+                </CardContent>
+              </Card>
+            );
+          })()}
         </TabsContent>
 
         <TabsContent value="raw">

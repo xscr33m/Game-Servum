@@ -28,6 +28,8 @@ export interface GameCapabilities {
   whitelist: "file" | "rcon" | false;
   /** How ban list management works: 'file' = text file, 'rcon' = RCON commands, false = not supported */
   banList: "file" | "rcon" | false;
+  /** Which player identifier is used for whitelist/ban file operations */
+  playerIdentifier: "battleye-guid" | "steam-id";
   /** Whether game-specific log parsing is available (e.g., DayZ ADM logs for character IDs) */
   logParsing: boolean;
 }

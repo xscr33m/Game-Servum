@@ -12,7 +12,7 @@
 import { execFile } from "child_process";
 import path from "path";
 import { logger } from "../index.js";
-import { getGameDefinition } from "./gameDefinitions.js";
+import { getGameDefinition } from "../games/index.js";
 import type {
   FirewallRuleDefinition,
   FirewallStatus,

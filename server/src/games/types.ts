@@ -1,0 +1,195 @@
+/**
+ * Game Adapter Types
+ *
+ * Defines the contract all game adapters must implement.
+ * Each game (DayZ, ARK, 7DTD) provides an adapter that encapsulates
+ * all game-specific logic: post-install, RCON config, mod handling,
+ * player list management, log parsing, and crash analysis.
+ */
+
+import type {
+  GameCapabilities,
+  FirewallRuleDefinition,
+} from "@game-servum/shared";
+import type { GameServer } from "../types/index.js";
+import type { ServerMod } from "../types/index.js";
+
+// ── Game Definition (static metadata) ────────────────────────────────
+
+export interface GameDefinition {
+  id: string;
+  name: string;
+  appId: number;
+  workshopAppId?: number;
+  executable: string;
+  defaultPort: number;
+  portCount: number;
+  portStride?: number;
+  queryPort?: number;
+  queryPortOffset?: number;
+  requiresLogin: boolean;
+  defaultLaunchParams: string;
+  description: string;
+  configFiles?: string[];
+  firewallRules?: FirewallRuleDefinition[];
+  capabilities: GameCapabilities;
+  broadcastCommand?: string;
+  playerListCommand?: string;
+  rconPortOffset?: number;
+}
+
+// ── RCON Config ──────────────────────────────────────────────────────
+
+export interface RconConfig {
+  password: string;
+  port: number;
+}
+
+// ── Player List File Config ──────────────────────────────────────────
+
+export interface PlayerFileConfig {
+  /** Absolute path to the file */
+  filePath: string;
+  /** How player IDs are stored ("battleye-guid" or "steam-id") */
+  idType: "battleye-guid" | "steam-id";
+}
+
+// ── Editable File Config ─────────────────────────────────────────────
+
+export interface EditableFileConfig {
+  /** Identifier used in API requests (e.g., "ban.txt", "BEServer_x64.cfg") */
+  name: string;
+  /** Absolute path to the file on disk */
+  path: string;
+  /** If true, file can be read but not written via API */
+  readonly?: boolean;
+}
+
+// ── Mod Copy Result ──────────────────────────────────────────────────
+
+export interface ModCopyResult {
+  success: boolean;
+  message: string;
+  modName?: string;
+}
+
+// ── GameAdapter Interface ────────────────────────────────────────────
+
+export interface GameAdapter {
+  /** Static game definition (metadata, ports, capabilities, etc.) */
+  readonly definition: GameDefinition;
+
+  // ── Lifecycle ────────────────────────────────────────────────────
+
+  /**
+   * Run post-install setup after SteamCMD installs the server.
+   * Examples: create config files, patch defaults, create directories.
+   */
+  postInstall(
+    installPath: string,
+    serverName: string,
+    port: number,
+  ): Promise<void>;
+
+  /**
+   * Validate server state before starting. Return error messages or empty array if OK.
+   * Examples: check config file exists, ensure BattlEye dir, create defaults.
+   */
+  validatePreStart(server: GameServer): string[];
+
+  // ── RCON ─────────────────────────────────────────────────────────
+
+  /**
+   * Read RCON connection config from server files or launch params.
+   * Returns null if RCON is not available or config cannot be determined.
+   */
+  readRconConfig(server: GameServer): RconConfig | null;
+
+  // ── Mods ─────────────────────────────────────────────────────────
+
+  /**
+   * Copy a downloaded Workshop mod into the correct server directory.
+   * Called after SteamCMD finishes downloading.
+   * Default: generic copy to @ModName directory.
+   */
+  copyModToServer(
+    mod: ServerMod,
+    serverInstallPath: string,
+    workshopContentPath: string,
+  ): Promise<ModCopyResult>;
+
+  /**
+   * Generate launch parameter strings for active mods.
+   * Returns { modParam, serverModParam } for appending to launch command.
+   */
+  generateModLaunchParams(mods: ServerMod[]): {
+    modParam: string;
+    serverModParam: string;
+  };
+
+  // ── Player Management ────────────────────────────────────────────
+
+  /**
+   * Get whitelist file config, or null if not supported / not file-based.
+   */
+  getWhitelistConfig(server: GameServer): PlayerFileConfig | null;
+
+  /**
+   * Get ban list file config, or null if not supported / not file-based.
+   */
+  getBanListConfig(server: GameServer): PlayerFileConfig | null;
+
+  /**
+   * Format a player entry for writing to whitelist/ban file.
+   * Returns the line to append.
+   */
+  formatPlayerEntry(
+    type: "whitelist" | "ban",
+    playerId: string,
+    playerName?: string,
+  ): string;
+
+  /**
+   * Parse a player ID from a line in a whitelist/ban file.
+   * Returns the player ID or null if line doesn't match.
+   */
+  parsePlayerEntry(line: string): string | null;
+
+  // ── Logs ─────────────────────────────────────────────────────────
+
+  /**
+   * File extensions to archive when rotating logs (e.g. [".ADM", ".RPT", ".log"]).
+   */
+  getLogFileExtensions(): string[];
+
+  /**
+   * List of files that the frontend may read/edit via the files API.
+   * Includes resolved paths and read-only flags.
+   */
+  getEditableFiles(server: GameServer): EditableFileConfig[];
+
+  // ── Optional: Game-Specific Features ─────────────────────────────
+
+  /**
+   * Parse game-specific server logs to backfill player history.
+   * Only some games support this (e.g. DayZ ADM logs).
+   */
+  parseServerLogs?(serverId: number, installPath: string): void;
+
+  /**
+   * Periodically sync extra player data from logs (e.g. DayZ character IDs).
+   * Called during RCON polling loop.
+   */
+  syncPlayerDataFromLogs?(serverId: number, installPath: string): void;
+
+  /**
+   * Extract player identity mappings from logs.
+   * Returns Map of playerName → characterId.
+   */
+  extractPlayerMappingsFromLogs?(installPath: string): Map<string, string>;
+
+  /**
+   * Read crash logs and return a human-readable summary, or null.
+   */
+  analyzeCrash?(server: GameServer, profilesPath: string): string | null;
+}
