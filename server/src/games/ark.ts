@@ -149,6 +149,7 @@ export class ArkAdapter extends BaseGameAdapter {
     description: "Dinosaur survival game. Can be downloaded anonymously.",
     configFiles: [
       "ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini",
+      "ShooterGame/Saved/Config/WindowsServer/Game.ini",
     ],
     firewallRules: [
       {
@@ -234,7 +235,7 @@ export class ArkAdapter extends BaseGameAdapter {
       }
     }
 
-    // Configure GameUserSettings.ini with server-specific settings
+    // Configure GameUserSettings.ini with server-specific settings + all form editor defaults
     const gusPath = path.join(savedConfigPath, "GameUserSettings.ini");
     try {
       let gusContent = fs.readFileSync(gusPath, "utf-8");
@@ -242,41 +243,62 @@ export class ArkAdapter extends BaseGameAdapter {
       const rconPort = port + (this.definition.rconPortOffset || 19243);
       const queryPort = port + (this.definition.queryPortOffset || 19238);
 
+      // All [ServerSettings] keys the form editor expects
+      const serverSettings: Record<string, string> = {
+        SessionName: serverName,
+        ServerPassword: "",
+        ServerAdminPassword: adminPassword,
+        RCONEnabled: "True",
+        RCONPort: String(rconPort),
+        Port: String(port),
+        QueryPort: String(queryPort),
+        AllowThirdPersonPlayer: "True",
+        ShowMapPlayerLocation: "True",
+        ServerCrosshair: "True",
+        AllowHitMarkers: "True",
+        EnablePvPGamma: "True",
+        AllowFlyerCarryPvE: "False",
+        DifficultyOffset: "1.000000",
+        OverrideOfficialDifficulty: "5.000000",
+        MaxTamedDinos: "5000.000000",
+        ItemStackSizeMultiplier: "1.000000",
+        TheMaxStructuresInRange: "10500.000000",
+        PerPlatformMaxStructuresMultiplier: "1.000000",
+        PlatformSaddleBuildAreaBoundsMultiplier: "1.000000",
+        StructurePickupTimeAfterPlacement: "30.000000",
+        StructurePickupHoldDuration: "0.500000",
+        StructurePreventResourceRadiusMultiplier: "1.000000",
+        AllowIntegratedSPlusStructures: "True",
+        DisableStructureDecayPvE: "False",
+        PvEDinoDecayPeriodMultiplier: "1.000000",
+        AutoSavePeriodMinutes: "15.000000",
+        KickIdlePlayersPeriod: "3600.000000",
+        TribeNameChangeCooldown: "15.000000",
+        AllowHideDamageSourceFromLogs: "True",
+        RCONServerGameLogBuffer: "600.000000",
+        RaidDinoCharacterFoodDrainMultiplier: "1.000000",
+        OxygenSwimSpeedStatMultiplier: "1.000000",
+        ListenServerTetherDistanceMultiplier: "1.000000",
+      };
+
+      for (const [key, value] of Object.entries(serverSettings)) {
+        gusContent = setIniProperty(gusContent, "ServerSettings", key, value);
+      }
+
+      // [SessionSettings] SessionName
       gusContent = setIniProperty(
         gusContent,
-        "ServerSettings",
+        "SessionSettings",
         "SessionName",
         serverName,
       );
+
+      // [/Script/Engine.GameSession] MaxPlayers
       gusContent = setIniProperty(
         gusContent,
-        "ServerSettings",
-        "RCONEnabled",
-        "True",
-      );
-      gusContent = setIniProperty(
-        gusContent,
-        "ServerSettings",
-        "RCONPort",
-        String(rconPort),
-      );
-      gusContent = setIniProperty(
-        gusContent,
-        "ServerSettings",
-        "ServerAdminPassword",
-        adminPassword,
-      );
-      gusContent = setIniProperty(
-        gusContent,
-        "ServerSettings",
-        "Port",
-        String(port),
-      );
-      gusContent = setIniProperty(
-        gusContent,
-        "ServerSettings",
-        "QueryPort",
-        String(queryPort),
+        "/Script/Engine.GameSession",
+        "MaxPlayers",
+        "70",
       );
 
       fs.writeFileSync(gusPath, gusContent, "utf-8");
@@ -285,6 +307,53 @@ export class ArkAdapter extends BaseGameAdapter {
       );
     } catch (err) {
       logger.error(`[ARK] Failed to configure GameUserSettings.ini:`, err);
+    }
+
+    // Configure Game.ini with default multiplier values
+    const gamePath = path.join(savedConfigPath, "Game.ini");
+    try {
+      let gameContent = fs.readFileSync(gamePath, "utf-8");
+
+      const modeSettings: Record<string, string> = {
+        XPMultiplier: "1.000000",
+        TamingSpeedMultiplier: "1.000000",
+        HarvestAmountMultiplier: "1.000000",
+        DayCycleSpeedScale: "1.000000",
+        NightTimeSpeedScale: "1.000000",
+        DinoDamageMultiplier: "1.000000",
+        PlayerDamageMultiplier: "1.000000",
+        StructureDamageMultiplier: "1.000000",
+        PlayerResistanceMultiplier: "1.000000",
+        DinoResistanceMultiplier: "1.000000",
+        StructureResistanceMultiplier: "1.000000",
+        DinoCountMultiplier: "1.000000",
+        ResourcesRespawnPeriodMultiplier: "1.000000",
+        EggHatchSpeedMultiplier: "1.000000",
+        BabyMatureSpeedMultiplier: "1.000000",
+        MatingIntervalMultiplier: "1.000000",
+        BabyFoodConsumptionSpeedMultiplier: "1.000000",
+        CropGrowthSpeedMultiplier: "1.000000",
+        FuelConsumptionIntervalMultiplier: "1.000000",
+        KillXPMultiplier: "1.000000",
+        HarvestXPMultiplier: "1.000000",
+        CraftXPMultiplier: "1.000000",
+        GenericXPMultiplier: "1.000000",
+        SpecialXPMultiplier: "1.000000",
+      };
+
+      for (const [key, value] of Object.entries(modeSettings)) {
+        gameContent = setIniProperty(
+          gameContent,
+          "/Script/ShooterGame.ShooterGameMode",
+          key,
+          value,
+        );
+      }
+
+      fs.writeFileSync(gamePath, gameContent, "utf-8");
+      logger.info(`[ARK] Configured Game.ini with default multiplier values`);
+    } catch (err) {
+      logger.error(`[ARK] Failed to configure Game.ini:`, err);
     }
 
     logger.info(`[ARK] Post-install complete for ${serverName}`);
@@ -303,6 +372,182 @@ export class ArkAdapter extends BaseGameAdapter {
     // No hard error for missing config
 
     return errors;
+  }
+
+  /**
+   * Ensure all required INI sections/keys exist in config files.
+   * Called at startup for existing ARK servers that were installed before
+   * the enhanced postInstall — adds missing sections/keys with defaults.
+   */
+  ensureConfigSections(server: GameServer): void {
+    const savedConfigPath = path.join(
+      server.installPath,
+      "ShooterGame",
+      "Saved",
+      "Config",
+      "WindowsServer",
+    );
+
+    // ── GameUserSettings.ini ──
+    const gusPath = path.join(savedConfigPath, "GameUserSettings.ini");
+    if (fs.existsSync(gusPath)) {
+      try {
+        let gusContent = fs.readFileSync(gusPath, "utf-8");
+        let modified = false;
+
+        // [ServerSettings] defaults — only add keys that are missing
+        const serverDefaults: Record<string, string> = {
+          ServerPassword: "",
+          AllowThirdPersonPlayer: "True",
+          ShowMapPlayerLocation: "True",
+          ServerCrosshair: "True",
+          AllowHitMarkers: "True",
+          EnablePvPGamma: "True",
+          AllowFlyerCarryPvE: "False",
+          DifficultyOffset: "1.000000",
+          OverrideOfficialDifficulty: "5.000000",
+          MaxTamedDinos: "5000.000000",
+          ItemStackSizeMultiplier: "1.000000",
+          TheMaxStructuresInRange: "10500.000000",
+          PerPlatformMaxStructuresMultiplier: "1.000000",
+          PlatformSaddleBuildAreaBoundsMultiplier: "1.000000",
+          StructurePickupTimeAfterPlacement: "30.000000",
+          StructurePickupHoldDuration: "0.500000",
+          StructurePreventResourceRadiusMultiplier: "1.000000",
+          AllowIntegratedSPlusStructures: "True",
+          DisableStructureDecayPvE: "False",
+          PvEDinoDecayPeriodMultiplier: "1.000000",
+          AutoSavePeriodMinutes: "15.000000",
+          KickIdlePlayersPeriod: "3600.000000",
+          TribeNameChangeCooldown: "15.000000",
+          AllowHideDamageSourceFromLogs: "True",
+          RCONServerGameLogBuffer: "600.000000",
+          RaidDinoCharacterFoodDrainMultiplier: "1.000000",
+          OxygenSwimSpeedStatMultiplier: "1.000000",
+          ListenServerTetherDistanceMultiplier: "1.000000",
+        };
+
+        for (const [key, value] of Object.entries(serverDefaults)) {
+          if (getIniProperty(gusContent, "ServerSettings", key) === null) {
+            gusContent = setIniProperty(
+              gusContent,
+              "ServerSettings",
+              key,
+              value,
+            );
+            modified = true;
+          }
+        }
+
+        // [SessionSettings] SessionName
+        if (
+          getIniProperty(gusContent, "SessionSettings", "SessionName") === null
+        ) {
+          gusContent = setIniProperty(
+            gusContent,
+            "SessionSettings",
+            "SessionName",
+            server.name,
+          );
+          modified = true;
+        }
+
+        // [/Script/Engine.GameSession] MaxPlayers
+        if (
+          getIniProperty(
+            gusContent,
+            "/Script/Engine.GameSession",
+            "MaxPlayers",
+          ) === null
+        ) {
+          gusContent = setIniProperty(
+            gusContent,
+            "/Script/Engine.GameSession",
+            "MaxPlayers",
+            "70",
+          );
+          modified = true;
+        }
+
+        if (modified) {
+          fs.writeFileSync(gusPath, gusContent, "utf-8");
+          logger.info(
+            `[ARK] Repaired missing sections/keys in GameUserSettings.ini for "${server.name}"`,
+          );
+        }
+      } catch (err) {
+        logger.error(
+          `[ARK] Failed to repair GameUserSettings.ini for "${server.name}":`,
+          err,
+        );
+      }
+    }
+
+    // ── Game.ini ──
+    const gamePath = path.join(savedConfigPath, "Game.ini");
+    if (fs.existsSync(gamePath)) {
+      try {
+        let gameContent = fs.readFileSync(gamePath, "utf-8");
+        let modified = false;
+
+        const modeDefaults: Record<string, string> = {
+          XPMultiplier: "1.000000",
+          TamingSpeedMultiplier: "1.000000",
+          HarvestAmountMultiplier: "1.000000",
+          DayCycleSpeedScale: "1.000000",
+          NightTimeSpeedScale: "1.000000",
+          DinoDamageMultiplier: "1.000000",
+          PlayerDamageMultiplier: "1.000000",
+          StructureDamageMultiplier: "1.000000",
+          PlayerResistanceMultiplier: "1.000000",
+          DinoResistanceMultiplier: "1.000000",
+          StructureResistanceMultiplier: "1.000000",
+          DinoCountMultiplier: "1.000000",
+          ResourcesRespawnPeriodMultiplier: "1.000000",
+          EggHatchSpeedMultiplier: "1.000000",
+          BabyMatureSpeedMultiplier: "1.000000",
+          MatingIntervalMultiplier: "1.000000",
+          BabyFoodConsumptionSpeedMultiplier: "1.000000",
+          CropGrowthSpeedMultiplier: "1.000000",
+          FuelConsumptionIntervalMultiplier: "1.000000",
+          KillXPMultiplier: "1.000000",
+          HarvestXPMultiplier: "1.000000",
+          CraftXPMultiplier: "1.000000",
+          GenericXPMultiplier: "1.000000",
+          SpecialXPMultiplier: "1.000000",
+        };
+
+        for (const [key, value] of Object.entries(modeDefaults)) {
+          if (
+            getIniProperty(
+              gameContent,
+              "/Script/ShooterGame.ShooterGameMode",
+              key,
+            ) === null
+          ) {
+            gameContent = setIniProperty(
+              gameContent,
+              "/Script/ShooterGame.ShooterGameMode",
+              key,
+              value,
+            );
+            modified = true;
+          }
+        }
+
+        if (modified) {
+          fs.writeFileSync(gamePath, gameContent, "utf-8");
+          logger.info(
+            `[ARK] Repaired missing sections/keys in Game.ini for "${server.name}"`,
+          );
+        }
+      } catch (err) {
+        logger.error(
+          `[ARK] Failed to repair Game.ini for "${server.name}":`,
+          err,
+        );
+      }
+    }
   }
 
   // ── RCON ─────────────────────────────────────────────────────────

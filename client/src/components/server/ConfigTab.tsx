@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   FaFloppyDisk,
   FaRotateLeft,
@@ -28,6 +28,7 @@ interface ConfigEditorProps {
   rawContent: string;
   originalContent: string;
   onContentChange: (content: string) => void;
+  fileName?: string;
 }
 
 const CONFIG_EDITORS: Record<string, React.ComponentType<ConfigEditorProps>> = {
@@ -35,6 +36,13 @@ const CONFIG_EDITORS: Record<string, React.ComponentType<ConfigEditorProps>> = {
   "7dtd": SevenDaysConfigEditor,
   ark: ArkConfigEditor,
 };
+
+interface FileState {
+  rawContent: string;
+  originalContent: string;
+  hasChanges: boolean;
+  loaded: boolean;
+}
 
 interface ConfigTabProps {
   server: GameServer;
@@ -45,43 +53,81 @@ export function ConfigTab({ server }: ConfigTabProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [rawContent, setRawContent] = useState("");
-  const [originalContent, setOriginalContent] = useState("");
-  const [hasChanges, setHasChanges] = useState(false);
+  const [configFiles, setConfigFiles] = useState<string[]>([]);
+  const [activeFile, setActiveFile] = useState<string>("");
+  const fileStates = useRef<Map<string, FileState>>(new Map());
+  // Force re-render when fileStates change
+  const [, setRenderKey] = useState(0);
 
-  const loadConfig = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await api.servers.getConfig(server.id);
-      setRawContent(data.content);
-      setOriginalContent(data.content);
-      setHasChanges(false);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [server.id, api.servers]);
+  const loadFile = useCallback(
+    async (fileName?: string) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await api.servers.getConfig(server.id, fileName);
+
+        // Set available config files from first response
+        if (data.configFiles && data.configFiles.length > 0) {
+          setConfigFiles(data.configFiles);
+        } else if (configFiles.length === 0) {
+          setConfigFiles([data.fileName]);
+        }
+
+        const targetFile = data.fileName;
+        fileStates.current.set(targetFile, {
+          rawContent: data.content,
+          originalContent: data.content,
+          hasChanges: false,
+          loaded: true,
+        });
+
+        if (!activeFile) {
+          setActiveFile(targetFile);
+        }
+        setRenderKey((k) => k + 1);
+      } catch (err) {
+        setError((err as Error).message);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [server.id, api.servers, activeFile, configFiles.length],
+  );
 
   useEffect(() => {
     if (!isConnected) return;
-    loadConfig();
-  }, [loadConfig, isConnected]);
+    loadFile();
+  }, [isConnected]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleFileSwitch(fileName: string) {
+    setActiveFile(fileName);
+    const state = fileStates.current.get(fileName);
+    if (!state?.loaded) {
+      loadFile(fileName);
+    }
+  }
 
   function handleContentChange(content: string) {
-    setRawContent(content);
-    setHasChanges(true);
+    const state = fileStates.current.get(activeFile);
+    if (state) {
+      state.rawContent = content;
+      state.hasChanges = true;
+      setRenderKey((k) => k + 1);
+    }
   }
 
   async function handleSave() {
+    const state = fileStates.current.get(activeFile);
+    if (!state) return;
+
     setSaving(true);
     setError(null);
     try {
-      await api.servers.saveConfig(server.id, rawContent);
-      setOriginalContent(rawContent);
+      await api.servers.saveConfig(server.id, state.rawContent, activeFile);
+      state.originalContent = state.rawContent;
+      state.hasChanges = false;
       toastSuccess("Configuration saved successfully");
-      setHasChanges(false);
+      setRenderKey((k) => k + 1);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -90,11 +136,20 @@ export function ConfigTab({ server }: ConfigTabProps) {
   }
 
   function handleReset() {
-    setRawContent(originalContent);
-    setHasChanges(false);
+    const state = fileStates.current.get(activeFile);
+    if (state) {
+      state.rawContent = state.originalContent;
+      state.hasChanges = false;
+      setRenderKey((k) => k + 1);
+    }
   }
 
-  if (loading) {
+  const currentState = fileStates.current.get(activeFile);
+  const anyUnsaved = Array.from(fileStates.current.values()).some(
+    (s) => s.hasChanges,
+  );
+
+  if (loading && !currentState?.loaded) {
     return (
       <Card>
         <CardContent className="py-8 text-center text-muted-foreground">
@@ -104,7 +159,7 @@ export function ConfigTab({ server }: ConfigTabProps) {
     );
   }
 
-  if (error && !rawContent) {
+  if (error && !currentState?.rawContent) {
     return (
       <Card>
         <CardContent className="py-8">
@@ -118,6 +173,7 @@ export function ConfigTab({ server }: ConfigTabProps) {
   }
 
   const isRunning = server.status === "running";
+  const hasMultipleFiles = configFiles.length > 1;
 
   return (
     <div className="space-y-4">
@@ -129,78 +185,104 @@ export function ConfigTab({ server }: ConfigTabProps) {
         </Alert>
       )}
 
-      {/* Config Editor */}
-      <Tabs defaultValue="form">
-        <div className="flex items-center justify-between sticky top-0 z-10 bg-background/95 backdrop-blur-sm py-2 -mt-2">
+      {/* File selector tabs for multi-file games */}
+      {hasMultipleFiles && (
+        <Tabs value={activeFile} onValueChange={handleFileSwitch}>
           <TabsList>
-            <TabsTrigger value="form">Form Editor</TabsTrigger>
-            <TabsTrigger value="raw" className="gap-2">
-              <FaFileCode className="h-4 w-4 text-ring/70" />
-              Raw Editor
-            </TabsTrigger>
+            {configFiles.map((file) => {
+              const state = fileStates.current.get(file);
+              return (
+                <TabsTrigger key={file} value={file} className="gap-2">
+                  {file}
+                  {state?.hasChanges && (
+                    <span className="h-2 w-2 rounded-full bg-yellow-500" />
+                  )}
+                </TabsTrigger>
+              );
+            })}
           </TabsList>
-          <div className="flex items-center gap-2">
-            {hasChanges && <Badge variant="warning">Unsaved Changes</Badge>}
-            {isRunning && <Badge variant="destructive">Restart required</Badge>}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleReset}
-              disabled={!hasChanges || saving}
-            >
-              <FaRotateLeft className="h-4 w-4 mr-2" />
-              Reset
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleSave}
-              disabled={!hasChanges || saving || isRunning}
-            >
-              <FaFloppyDisk className="h-4 w-4 mr-2" />
-              {saving ? "Saving..." : "Save"}
-            </Button>
+        </Tabs>
+      )}
+
+      {/* Config Editor */}
+      {currentState && (
+        <Tabs defaultValue="form">
+          <div className="flex items-center justify-between sticky top-0 z-10 bg-background/95 backdrop-blur-sm py-2 -mt-2">
+            <TabsList>
+              <TabsTrigger value="form">Form Editor</TabsTrigger>
+              <TabsTrigger value="raw" className="gap-2">
+                <FaFileCode className="h-4 w-4 text-ring/70" />
+                Raw Editor
+              </TabsTrigger>
+            </TabsList>
+            <div className="flex items-center gap-2">
+              {(currentState.hasChanges || anyUnsaved) && (
+                <Badge variant="warning">Unsaved Changes</Badge>
+              )}
+              {isRunning && (
+                <Badge variant="destructive">Restart required</Badge>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleReset}
+                disabled={!currentState.hasChanges || saving}
+              >
+                <FaRotateLeft className="h-4 w-4 mr-2" />
+                Reset
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={!currentState.hasChanges || saving || isRunning}
+              >
+                <FaFloppyDisk className="h-4 w-4 mr-2" />
+                {saving ? "Saving..." : "Save"}
+              </Button>
+            </div>
           </div>
-        </div>
 
-        <TabsContent value="form" className="space-y-4">
-          {(() => {
-            const Editor = CONFIG_EDITORS[server.gameId];
-            return Editor ? (
-              <Editor
-                rawContent={rawContent}
-                originalContent={originalContent}
-                onContentChange={handleContentChange}
-              />
-            ) : (
-              <Card>
-                <CardContent className="py-8 text-center text-muted-foreground">
-                  No form editor available for this game. Use the Raw Editor
-                  tab.
-                </CardContent>
-              </Card>
-            );
-          })()}
-        </TabsContent>
+          <TabsContent value="form" className="space-y-4">
+            {(() => {
+              const Editor = CONFIG_EDITORS[server.gameId];
+              return Editor ? (
+                <Editor
+                  rawContent={currentState.rawContent}
+                  originalContent={currentState.originalContent}
+                  onContentChange={handleContentChange}
+                  fileName={activeFile}
+                />
+              ) : (
+                <Card>
+                  <CardContent className="py-8 text-center text-muted-foreground">
+                    No form editor available for this game. Use the Raw Editor
+                    tab.
+                  </CardContent>
+                </Card>
+              );
+            })()}
+          </TabsContent>
 
-        <TabsContent value="raw">
-          <Card>
-            <CardHeader>
-              <CardTitle>Raw Configuration</CardTitle>
-              <CardDescription>
-                Edit the configuration file directly
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Textarea
-                className="font-mono text-sm h-[500px]"
-                value={rawContent}
-                onChange={(e) => handleContentChange(e.target.value)}
-                spellCheck={false}
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="raw">
+            <Card>
+              <CardHeader>
+                <CardTitle>Raw Configuration</CardTitle>
+                <CardDescription>
+                  Edit the configuration file directly
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Textarea
+                  className="font-mono text-sm h-[500px]"
+                  value={currentState.rawContent}
+                  onChange={(e) => handleContentChange(e.target.value)}
+                  spellCheck={false}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      )}
     </div>
   );
 }

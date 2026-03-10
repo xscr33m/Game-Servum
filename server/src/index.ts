@@ -20,6 +20,9 @@ import {
   startAutoUpdateCheck,
   stopAutoUpdateCheck,
 } from "./services/agentUpdater.js";
+import { getAllServers } from "./db/index.js";
+import { getGameAdapter } from "./games/index.js";
+import type { ArkAdapter } from "./games/ark.js";
 import {
   startMetricsCollection,
   stopMetricsCollection,
@@ -66,6 +69,21 @@ async function main() {
 
   // Restore server states (check if any servers were running before restart)
   restoreServerStates();
+
+  // Repair ARK config files for existing servers (adds missing sections/keys)
+  try {
+    const allServers = getAllServers();
+    for (const server of allServers) {
+      if (server.gameId === "ark") {
+        const adapter = getGameAdapter("ark") as ArkAdapter | undefined;
+        if (adapter?.ensureConfigSections) {
+          adapter.ensureConfigSections(server);
+        }
+      }
+    }
+  } catch (err) {
+    logger.warn("[Server] Failed to repair ARK config files:", err);
+  }
 
   // Initialize scheduled restarts
   initializeSchedules();

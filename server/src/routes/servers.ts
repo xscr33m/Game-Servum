@@ -1099,10 +1099,24 @@ router.get("/:id/config", (req: Request, res: Response) => {
 
   // Determine config file from game definition
   const gameDef = getGameDefinition(server.gameId);
-  const configFileName = gameDef?.configFiles?.[0];
-  if (!configFileName) {
+  const configFiles = gameDef?.configFiles;
+  if (!configFiles || configFiles.length === 0) {
     return res.status(404).json({
       error: "No config file defined for this game",
+    });
+  }
+
+  // Support ?file= query param for multi-file games (default: first file)
+  const requestedFile = req.query.file as string | undefined;
+  const configFileName = requestedFile
+    ? configFiles.find(
+        (f) => path.basename(f) === requestedFile || f === requestedFile,
+      )
+    : configFiles[0];
+
+  if (!configFileName) {
+    return res.status(400).json({
+      error: "Requested config file is not allowed for this game",
     });
   }
 
@@ -1121,6 +1135,7 @@ router.get("/:id/config", (req: Request, res: Response) => {
       fileName: path.basename(configFileName),
       path: configPath,
       content,
+      configFiles: configFiles.map((f) => path.basename(f)),
     });
   } catch (err) {
     res.status(500).json({
@@ -1151,10 +1166,24 @@ router.put("/:id/config", (req: Request, res: Response) => {
 
   // Determine config file from game definition
   const gameDef = getGameDefinition(server.gameId);
-  const configFileName = gameDef?.configFiles?.[0];
-  if (!configFileName) {
+  const configFiles = gameDef?.configFiles;
+  if (!configFiles || configFiles.length === 0) {
     return res.status(404).json({
       error: "No config file defined for this game",
+    });
+  }
+
+  // Support ?file= query param for multi-file games (default: first file)
+  const requestedFile = req.query.file as string | undefined;
+  const configFileName = requestedFile
+    ? configFiles.find(
+        (f) => path.basename(f) === requestedFile || f === requestedFile,
+      )
+    : configFiles[0];
+
+  if (!configFileName) {
+    return res.status(400).json({
+      error: "Requested config file is not allowed for this game",
     });
   }
 
