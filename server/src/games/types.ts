@@ -253,4 +253,10 @@ export interface GameAdapter {
    * Read crash logs and return a human-readable summary, or null.
    */
   analyzeCrash?(server: GameServer, profilesPath: string): string | null;
+
+  /**
+   * Update game-specific config file after mod list changes.
+   * E.g. ARK writes ActiveMods= into GameUserSettings.ini.
+   */
+  updateActiveModsInConfig?(serverInstallPath: string, mods: ServerMod[]): void;
 }

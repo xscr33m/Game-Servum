@@ -319,7 +319,11 @@ export function readLogContent(
   }
 
   try {
-    const content = fs.readFileSync(filePath, "utf-8");
+    let content = fs.readFileSync(filePath, "utf-8");
+    // Strip UTF-8 BOM that some game engines prepend to log files
+    if (content.charCodeAt(0) === 0xfeff) {
+      content = content.slice(1);
+    }
     const allLines = content.split("\n");
 
     // maxLines <= 0 means return everything

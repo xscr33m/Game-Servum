@@ -294,6 +294,18 @@ export async function installMod(
             serverId: server.id,
             name: copyResult.modName || mod.name,
           });
+
+          // Sync active mods in game config (e.g. ARK's GameUserSettings.ini)
+          try {
+            const adapter = getGameAdapter(server.gameId);
+            const allMods = getModsByServerId(server.id);
+            adapter?.updateActiveModsInConfig?.(server.installPath, allMods);
+          } catch (err) {
+            logger.error(
+              `[Mod Install] Failed to update config after install: ${(err as Error).message}`,
+            );
+          }
+
           resolve({ success: true, message: "Mod installed successfully" });
         } else {
           logger.error(

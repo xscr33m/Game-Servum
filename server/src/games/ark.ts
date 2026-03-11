@@ -26,6 +26,11 @@ import type { ServerMod } from "../types/index.js";
 
 // ── Helpers ────────────────────────────────────────────────────────
 
+/** Strip UTF-8 BOM that Unreal Engine 4 prepends to INI files. */
+function stripBom(content: string): string {
+  return content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
+}
+
 function generatePassword(length: number = 16): string {
   const chars =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -235,10 +240,16 @@ export class ArkAdapter extends BaseGameAdapter {
       }
     }
 
+    // Ensure Logs directory exists (ARK writes to ShooterGame/Saved/Logs/)
+    const logsPath = path.join(installPath, "ShooterGame", "Saved", "Logs");
+    if (!fs.existsSync(logsPath)) {
+      fs.mkdirSync(logsPath, { recursive: true });
+    }
+
     // Configure GameUserSettings.ini with server-specific settings + all form editor defaults
     const gusPath = path.join(savedConfigPath, "GameUserSettings.ini");
     try {
-      let gusContent = fs.readFileSync(gusPath, "utf-8");
+      let gusContent = stripBom(fs.readFileSync(gusPath, "utf-8"));
       const adminPassword = generatePassword(20);
       const rconPort = port + (this.definition.rconPortOffset || 19243);
       const queryPort = port + (this.definition.queryPortOffset || 19238);
@@ -312,7 +323,7 @@ export class ArkAdapter extends BaseGameAdapter {
     // Configure Game.ini with default multiplier values
     const gamePath = path.join(savedConfigPath, "Game.ini");
     try {
-      let gameContent = fs.readFileSync(gamePath, "utf-8");
+      let gameContent = stripBom(fs.readFileSync(gamePath, "utf-8"));
 
       const modeSettings: Record<string, string> = {
         XPMultiplier: "1.000000",
@@ -392,7 +403,7 @@ export class ArkAdapter extends BaseGameAdapter {
     const gusPath = path.join(savedConfigPath, "GameUserSettings.ini");
     if (fs.existsSync(gusPath)) {
       try {
-        let gusContent = fs.readFileSync(gusPath, "utf-8");
+        let gusContent = stripBom(fs.readFileSync(gusPath, "utf-8"));
         let modified = false;
 
         // [ServerSettings] defaults — only add keys that are missing
@@ -487,7 +498,7 @@ export class ArkAdapter extends BaseGameAdapter {
     const gamePath = path.join(savedConfigPath, "Game.ini");
     if (fs.existsSync(gamePath)) {
       try {
-        let gameContent = fs.readFileSync(gamePath, "utf-8");
+        let gameContent = stripBom(fs.readFileSync(gamePath, "utf-8"));
         let modified = false;
 
         const modeDefaults: Record<string, string> = {
@@ -565,7 +576,7 @@ export class ArkAdapter extends BaseGameAdapter {
 
     if (fs.existsSync(gusPath)) {
       try {
-        const content = fs.readFileSync(gusPath, "utf-8");
+        const content = stripBom(fs.readFileSync(gusPath, "utf-8"));
         const password = getIniProperty(
           content,
           "ServerSettings",
@@ -682,7 +693,7 @@ export class ArkAdapter extends BaseGameAdapter {
     if (!fs.existsSync(gusPath)) return;
 
     try {
-      let content = fs.readFileSync(gusPath, "utf-8");
+      let content = stripBom(fs.readFileSync(gusPath, "utf-8"));
       const enabledMods = mods
         .filter((m) => m.enabled && m.status === "installed")
         .sort((a, b) => a.loadOrder - b.loadOrder)
@@ -762,6 +773,8 @@ export class ArkAdapter extends BaseGameAdapter {
     return {
       directories: [
         path.join(server.installPath, "ShooterGame", "Saved", "Logs"),
+        // ARK also writes logs next to the executable
+        path.join(server.installPath, "ShooterGame", "Binaries", "Win64"),
       ],
       extensions: [".log"],
       archiveDir: path.join(

@@ -1132,10 +1132,13 @@ router.get("/:id/config", (req: Request, res: Response) => {
 
   try {
     const content = fs.readFileSync(configPath, "utf-8");
+    // Strip UTF-8 BOM that Unreal Engine prepends to INI files
+    const cleanContent =
+      content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
     res.json({
       fileName: path.basename(configFileName),
       path: configPath,
-      content,
+      content: cleanContent,
       configFiles: configFiles.map((f) => path.basename(f)),
     });
   } catch (err) {
@@ -1233,7 +1236,10 @@ router.get("/:id/files/:filename", (req: Request, res: Response) => {
 
   try {
     const content = fs.readFileSync(fileConfig.path, "utf-8");
-    res.json({ content, exists: true });
+    // Strip UTF-8 BOM that Unreal Engine prepends to INI files
+    const cleanContent =
+      content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
+    res.json({ content: cleanContent, exists: true });
   } catch (err) {
     res.status(500).json({
       error: `Failed to read file: ${(err as Error).message}`,
@@ -1607,6 +1613,17 @@ router.put("/:id/mods/:modId", (req: Request, res: Response) => {
     updateModLoadOrder(modId, loadOrder);
   }
 
+  // Sync active mods in game config (e.g. ARK's GameUserSettings.ini)
+  try {
+    const adapter = getGameAdapter(server.gameId);
+    const updatedMods = getModsByServerId(serverId);
+    adapter?.updateActiveModsInConfig?.(server.installPath, updatedMods);
+  } catch (err) {
+    logger.error(
+      `[Mods] Failed to update config after mod change: ${(err as Error).message}`,
+    );
+  }
+
   res.json({ success: true, message: "Mod updated" });
 });
 
@@ -1656,6 +1673,16 @@ router.delete("/:id/mods/:modId", async (req: Request, res: Response) => {
   const result = await uninstallMod(modId);
 
   if (result.success) {
+    // Sync active mods in game config after removal
+    try {
+      const adapter = getGameAdapter(server.gameId);
+      const remainingMods = getModsByServerId(serverId);
+      adapter?.updateActiveModsInConfig?.(server.installPath, remainingMods);
+    } catch (err) {
+      logger.error(
+        `[Mods] Failed to update config after mod removal: ${(err as Error).message}`,
+      );
+    }
     res.json({ success: true, message: result.message });
   } else {
     res.status(500).json({ error: result.message });
@@ -1680,6 +1707,17 @@ router.post("/:id/mods/reorder", (req: Request, res: Response) => {
   modIds.forEach((modId, index) => {
     updateModLoadOrder(modId, index);
   });
+
+  // Sync active mods in game config after reorder
+  try {
+    const adapter = getGameAdapter(server.gameId);
+    const updatedMods = getModsByServerId(serverId);
+    adapter?.updateActiveModsInConfig?.(server.installPath, updatedMods);
+  } catch (err) {
+    logger.error(
+      `[Mods] Failed to update config after mod reorder: ${(err as Error).message}`,
+    );
+  }
 
   res.json({ success: true, message: "Mod order updated" });
 });

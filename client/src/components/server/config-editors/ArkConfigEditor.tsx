@@ -16,13 +16,17 @@ import {
 } from "@/components/ui/select";
 
 // ── Section-aware INI helpers ──────────────────────────────────────
-
+/** Strip UTF-8 BOM that Unreal Engine prepends to INI files. */
+function stripBom(content: string): string {
+  return content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
+}
 function getIniValue(
   content: string,
   section: string,
   key: string,
 ): string | null {
-  const lines = content.split("\n");
+  const clean = stripBom(content);
+  const lines = clean.split("\n");
   const sectionHeader = `[${section}]`;
   let inSection = false;
   const keyLower = key.toLowerCase();
@@ -56,37 +60,55 @@ function setIniValue(
   key: string,
   value: string,
 ): string {
-  const lines = content.split("\n");
+  const clean = stripBom(content);
+  const lines = clean.split("\n");
   const sectionHeader = `[${section}]`;
-  let inSection = false;
+  let sectionStart = -1;
+  let sectionEnd = lines.length;
   const keyLower = key.toLowerCase();
 
+  // Find the section
   for (let i = 0; i < lines.length; i++) {
     const trimmed = lines[i].trim();
     if (trimmed.toLowerCase() === sectionHeader.toLowerCase()) {
-      inSection = true;
-      continue;
-    }
-    if (trimmed.startsWith("[")) {
-      if (inSection) break;
-      continue;
-    }
-    if (inSection) {
-      const eqIdx = trimmed.indexOf("=");
-      if (eqIdx > 0) {
-        const existingKey = trimmed.substring(0, eqIdx).trim();
-        if (existingKey.toLowerCase() === keyLower) {
-          lines[i] = `${existingKey}=${value}`;
-          return lines.join("\n");
+      sectionStart = i;
+      for (let j = i + 1; j < lines.length; j++) {
+        if (lines[j].trim().startsWith("[")) {
+          sectionEnd = j;
+          break;
         }
+      }
+      break;
+    }
+  }
+
+  if (sectionStart === -1) {
+    // Section not found — append section + key
+    const newLines = clean.endsWith("\n") ? [] : [""];
+    newLines.push(sectionHeader, `${key}=${value}`);
+    return clean + newLines.join("\n") + "\n";
+  }
+
+  // Look for existing key in section
+  for (let i = sectionStart + 1; i < sectionEnd; i++) {
+    const trimmed = lines[i].trim();
+    const eqIdx = trimmed.indexOf("=");
+    if (eqIdx > 0) {
+      const existingKey = trimmed.substring(0, eqIdx).trim();
+      if (existingKey.toLowerCase() === keyLower) {
+        lines[i] = `${existingKey}=${value}`;
+        return lines.join("\n");
       }
     }
   }
-  return content;
+
+  // Key not found in section — insert before section end
+  lines.splice(sectionEnd, 0, `${key}=${value}`);
+  return lines.join("\n");
 }
 
 function hasIniKey(content: string, section: string, key: string): boolean {
-  return getIniValue(content, section, key) !== null;
+  return getIniValue(stripBom(content), section, key) !== null;
 }
 
 // ── Field & Section definitions ────────────────────────────────────
@@ -856,6 +878,14 @@ export function ArkConfigEditor({
 
   return (
     <>
+      {visibleSections.length === 0 && (
+        <Card>
+          <CardContent className="py-6 text-center text-muted-foreground">
+            No configuration fields found. Use the Raw Editor tab to view and
+            edit the file directly.
+          </CardContent>
+        </Card>
+      )}
       {visibleSections.map((section) => {
         const renderedFields = section.fields
           .map((field) => renderField(field, config, handleChange))
