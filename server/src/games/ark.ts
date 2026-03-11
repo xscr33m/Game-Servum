@@ -13,6 +13,7 @@ import fs from "fs";
 import crypto from "crypto";
 import { logger } from "../index.js";
 import { BaseGameAdapter } from "./base.js";
+import { readGameFile } from "./encoding.js";
 import type {
   GameDefinition,
   RconConfig,
@@ -25,11 +26,6 @@ import type { GameServer } from "../types/index.js";
 import type { ServerMod } from "../types/index.js";
 
 // ── Helpers ────────────────────────────────────────────────────────
-
-/** Strip UTF-8 BOM that Unreal Engine 4 prepends to INI files. */
-function stripBom(content: string): string {
-  return content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
-}
 
 function generatePassword(length: number = 16): string {
   const chars =
@@ -249,7 +245,7 @@ export class ArkAdapter extends BaseGameAdapter {
     // Configure GameUserSettings.ini with server-specific settings + all form editor defaults
     const gusPath = path.join(savedConfigPath, "GameUserSettings.ini");
     try {
-      let gusContent = stripBom(fs.readFileSync(gusPath, "utf-8"));
+      let gusContent = readGameFile(gusPath);
       const adminPassword = generatePassword(20);
       const rconPort = port + (this.definition.rconPortOffset || 19243);
       const queryPort = port + (this.definition.queryPortOffset || 19238);
@@ -323,7 +319,7 @@ export class ArkAdapter extends BaseGameAdapter {
     // Configure Game.ini with default multiplier values
     const gamePath = path.join(savedConfigPath, "Game.ini");
     try {
-      let gameContent = stripBom(fs.readFileSync(gamePath, "utf-8"));
+      let gameContent = readGameFile(gamePath);
 
       const modeSettings: Record<string, string> = {
         XPMultiplier: "1.000000",
@@ -403,7 +399,7 @@ export class ArkAdapter extends BaseGameAdapter {
     const gusPath = path.join(savedConfigPath, "GameUserSettings.ini");
     if (fs.existsSync(gusPath)) {
       try {
-        let gusContent = stripBom(fs.readFileSync(gusPath, "utf-8"));
+        let gusContent = readGameFile(gusPath);
         let modified = false;
 
         // [ServerSettings] defaults — only add keys that are missing
@@ -498,7 +494,7 @@ export class ArkAdapter extends BaseGameAdapter {
     const gamePath = path.join(savedConfigPath, "Game.ini");
     if (fs.existsSync(gamePath)) {
       try {
-        let gameContent = stripBom(fs.readFileSync(gamePath, "utf-8"));
+        let gameContent = readGameFile(gamePath);
         let modified = false;
 
         const modeDefaults: Record<string, string> = {
@@ -576,7 +572,7 @@ export class ArkAdapter extends BaseGameAdapter {
 
     if (fs.existsSync(gusPath)) {
       try {
-        const content = stripBom(fs.readFileSync(gusPath, "utf-8"));
+        const content = readGameFile(gusPath);
         const password = getIniProperty(
           content,
           "ServerSettings",
@@ -693,7 +689,7 @@ export class ArkAdapter extends BaseGameAdapter {
     if (!fs.existsSync(gusPath)) return;
 
     try {
-      let content = stripBom(fs.readFileSync(gusPath, "utf-8"));
+      let content = readGameFile(gusPath);
       const enabledMods = mods
         .filter((m) => m.enabled && m.status === "installed")
         .sort((a, b) => a.loadOrder - b.loadOrder)

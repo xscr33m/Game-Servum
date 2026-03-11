@@ -45,6 +45,7 @@ import {
   getGameDefinition,
   getGameAdapter,
 } from "../games/index.js";
+import { readGameFile } from "../games/encoding.js";
 import {
   installServer,
   cancelInstallation,
@@ -1131,14 +1132,11 @@ router.get("/:id/config", (req: Request, res: Response) => {
   }
 
   try {
-    const content = fs.readFileSync(configPath, "utf-8");
-    // Strip UTF-8 BOM that Unreal Engine prepends to INI files
-    const cleanContent =
-      content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
+    const content = readGameFile(configPath);
     res.json({
       fileName: path.basename(configFileName),
       path: configPath,
-      content: cleanContent,
+      content,
       configFiles: configFiles.map((f) => path.basename(f)),
     });
   } catch (err) {
@@ -1235,11 +1233,8 @@ router.get("/:id/files/:filename", (req: Request, res: Response) => {
   }
 
   try {
-    const content = fs.readFileSync(fileConfig.path, "utf-8");
-    // Strip UTF-8 BOM that Unreal Engine prepends to INI files
-    const cleanContent =
-      content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
-    res.json({ content: cleanContent, exists: true });
+    const content = readGameFile(fileConfig.path);
+    res.json({ content, exists: true });
   } catch (err) {
     res.status(500).json({
       error: `Failed to read file: ${(err as Error).message}`,
