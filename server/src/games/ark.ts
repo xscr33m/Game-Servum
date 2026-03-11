@@ -12,6 +12,7 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import { logger } from "../index.js";
+import { recordPlayerConnect, recordPlayerDisconnect } from "../db/index.js";
 import { BaseGameAdapter } from "./base.js";
 import { readGameFile } from "./encoding.js";
 import type {
@@ -146,7 +147,7 @@ export class ArkAdapter extends BaseGameAdapter {
     queryPortOffset: 19238,
     requiresLogin: false,
     defaultLaunchParams:
-      "TheIsland?listen?SessionName={SERVER_NAME}?Port={PORT}?QueryPort={QUERY_PORT}?RCONEnabled=True -server -log -forcelogflush",
+      "TheIsland?listen?SessionName={SERVER_NAME}?Port={PORT}?QueryPort={QUERY_PORT}?RCONEnabled=True -servergamelog -log -forcelogflush",
     description: "Dinosaur survival game. Can be downloaded anonymously.",
     configFiles: [
       "ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini",
@@ -176,7 +177,7 @@ export class ArkAdapter extends BaseGameAdapter {
       whitelist: "file",
       banList: "file",
       playerIdentifier: "steam-id",
-      logParsing: false,
+      logParsing: true,
       playerListEditable: true,
       profilesPath: false,
     },
@@ -716,6 +717,90 @@ export class ArkAdapter extends BaseGameAdapter {
   }
 
   // ── Player Management ────────────────────────────────────────────
+
+  /**
+   * Backfill player history from ShooterGame.log on server start.
+   * ARK logs player joins/leaves with SteamID64 in parentheses.
+   */
+  parseServerLogs(serverId: number, installPath: string): void {
+    const logsDir = path.join(installPath, "ShooterGame", "Saved", "Logs");
+    if (!fs.existsSync(logsDir)) return;
+
+    const logFile = this.findLatestLogFile(logsDir);
+    if (!logFile) return;
+
+    try {
+      const content = readGameFile(logFile);
+      const lines = content.split("\n").filter((l) => l.trim());
+
+      logger.info(
+        `[ARK] Backfilling from ${path.basename(logFile)} (${lines.length} lines)`,
+      );
+
+      let connectCount = 0;
+      let disconnectCount = 0;
+
+      for (const line of lines) {
+        // Join pattern: "PlayerName joined this ARK!" or "PlayerName ist diesem ARK beigetreten!"
+        // Followed by: "PlayerName joined this ARK! (SteamID) (TribeID: X)" or German equivalent
+        // The SteamID line contains the 17-digit ID in parentheses
+        const joinMatch = line.match(
+          /\](.+?)\s+(?:joined this ARK!|ist diesem ARK beigetreten!)\s+\((\d{17})\)/,
+        );
+        if (joinMatch) {
+          const playerName = joinMatch[1].trim();
+          const steamId = joinMatch[2];
+          recordPlayerConnect(serverId, steamId, playerName);
+          connectCount++;
+          continue;
+        }
+
+        // Leave pattern: "PlayerName left this ARK!" or "PlayerName hat diesen ARK verlassen!"
+        const leaveMatch = line.match(
+          /\](.+?)\s+(?:left this ARK!|hat diesen ARK verlassen!)\s+\((\d{17})\)/,
+        );
+        if (leaveMatch) {
+          const steamId = leaveMatch[2];
+          recordPlayerDisconnect(serverId, steamId);
+          disconnectCount++;
+        }
+      }
+
+      if (connectCount > 0 || disconnectCount > 0) {
+        logger.info(
+          `[ARK] Backfill complete: ${connectCount} connects, ${disconnectCount} disconnects`,
+        );
+      }
+    } catch (error) {
+      logger.debug(
+        `[ARK] Could not read log for backfill: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  /**
+   * Find the latest ShooterGame.log in the logs directory.
+   * Prefers ShooterGame.log over ServerGame.xxx.log for player data.
+   */
+  private findLatestLogFile(logsDir: string): string | null {
+    try {
+      const shooterGameLog = path.join(logsDir, "ShooterGame.log");
+      if (fs.existsSync(shooterGameLog)) {
+        const stats = fs.statSync(shooterGameLog);
+        if (stats.size > 0) return shooterGameLog;
+      }
+
+      // Fallback: find the newest ServerGame.xxx.log
+      const files = fs
+        .readdirSync(logsDir)
+        .filter((f) => f.startsWith("ServerGame") && f.endsWith(".log"));
+      if (files.length === 0) return null;
+      files.sort();
+      return path.join(logsDir, files[files.length - 1]);
+    } catch {
+      return null;
+    }
+  }
 
   getWhitelistConfig(server: GameServer): PlayerFileConfig | null {
     return {
