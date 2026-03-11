@@ -257,6 +257,21 @@ export function startServer(serverId: number): StartResult {
       rconConfig || undefined,
     );
 
+    // Capture stdout/stderr to a log file for the LogsTab
+    let consoleLogStream: fs.WriteStream | null = null;
+    if (logPaths && logPaths.directories.length > 0) {
+      const consoleLogDir = logPaths.directories[0];
+      if (!fs.existsSync(consoleLogDir)) {
+        fs.mkdirSync(consoleLogDir, { recursive: true });
+      }
+      const consoleLogPath = path.join(consoleLogDir, "console-output.log");
+      consoleLogStream = fs.createWriteStream(consoleLogPath, { flags: "w" });
+      consoleLogStream.on("error", (err) => {
+        logger.error(`[ServerProcess] Console log write error: ${err.message}`);
+        consoleLogStream = null;
+      });
+    }
+
     // Collect stderr output for error reporting
     let lastStderrOutput = "";
 
@@ -264,6 +279,7 @@ export function startServer(serverId: number): StartResult {
     child.stdout?.on("data", (data: Buffer) => {
       const output = data.toString();
       logger.debug(`[Server ${serverId}] ${output}`);
+      consoleLogStream?.write(output);
       broadcast("server:output", {
         serverId,
         type: "stdout",
@@ -277,6 +293,7 @@ export function startServer(serverId: number): StartResult {
       logger.error(`[Server ${serverId}] STDERR: ${output}`);
       // Keep last stderr output for crash reporting
       lastStderrOutput = output;
+      consoleLogStream?.write(output);
       broadcast("server:output", {
         serverId,
         type: "stderr",
@@ -286,6 +303,10 @@ export function startServer(serverId: number): StartResult {
 
     // Handle process exit
     child.on("exit", (code, signal) => {
+      // Close console log stream
+      consoleLogStream?.end();
+      consoleLogStream = null;
+
       logger.info(
         `[ServerProcess] Server ${serverId} exited with code ${code}, signal ${signal}`,
       );

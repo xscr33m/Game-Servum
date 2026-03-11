@@ -146,7 +146,7 @@ export class ArkAdapter extends BaseGameAdapter {
     queryPortOffset: 19238,
     requiresLogin: false,
     defaultLaunchParams:
-      "TheIsland?listen?SessionName={SERVER_NAME}?Port={PORT}?QueryPort={QUERY_PORT}?RCONEnabled=True -server -log",
+      "TheIsland?listen?SessionName={SERVER_NAME}?Port={PORT}?QueryPort={QUERY_PORT}?RCONEnabled=True -server -log -forcelogflush",
     description: "Dinosaur survival game. Can be downloaded anonymously.",
     configFiles: [
       "ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini",
