@@ -748,7 +748,7 @@ export class ArkAdapter extends BaseGameAdapter {
           /\](.+?)\s+(?:joined this ARK!|ist diesem ARK beigetreten!)\s+\((\d{17})\)/,
         );
         if (joinMatch) {
-          const playerName = joinMatch[1].trim();
+          const playerName = joinMatch[1].replace(/[⎝⧹⧸⎠]/g, "").trim();
           const steamId = joinMatch[2];
           recordPlayerConnect(serverId, steamId, playerName);
           connectCount++;
