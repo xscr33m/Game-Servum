@@ -298,8 +298,8 @@ export function parseSourcePlayersResponse(
   const lines = response.split("\n");
 
   for (const line of lines) {
-    // Match: index. PlayerName, SteamID
-    const match = line.match(/^\s*\d+\.\s+(.+?),\s+(\d+)\s*$/);
+    // Match: index. PlayerName, SteamID64 (greedy name match handles commas in names)
+    const match = line.match(/^\s*\d+\.\s+(.+),\s+(\d{17})\s*$/);
     if (match) {
       players.push({
         id: match[2],

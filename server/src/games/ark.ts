@@ -406,6 +406,7 @@ export class ArkAdapter extends BaseGameAdapter {
         // [ServerSettings] defaults — only add keys that are missing
         const serverDefaults: Record<string, string> = {
           ServerPassword: "",
+          RCONEnabled: "True",
           AllowThirdPersonPlayer: "True",
           ShowMapPlayerLocation: "True",
           ServerCrosshair: "True",
@@ -445,6 +446,32 @@ export class ArkAdapter extends BaseGameAdapter {
             );
             modified = true;
           }
+        }
+
+        // Ensure RCON config exists (critical for player tracking)
+        // These keys need dynamic values so they can't go in the static defaults above
+        const existingPassword = getIniProperty(
+          gusContent,
+          "ServerSettings",
+          "ServerAdminPassword",
+        );
+        if (!existingPassword) {
+          gusContent = setIniProperty(
+            gusContent,
+            "ServerSettings",
+            "ServerAdminPassword",
+            generatePassword(20),
+          );
+          modified = true;
+        }
+        if (getIniProperty(gusContent, "ServerSettings", "RCONPort") === null) {
+          gusContent = setIniProperty(
+            gusContent,
+            "ServerSettings",
+            "RCONPort",
+            String(server.port + (this.definition.rconPortOffset || 19243)),
+          );
+          modified = true;
         }
 
         // [SessionSettings] SessionName
