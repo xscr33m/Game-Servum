@@ -188,6 +188,12 @@ export class ArkAdapter extends BaseGameAdapter {
     startupLogFile: "ShooterGame/Saved/Logs/ShooterGame.log",
   };
 
+  // Cache of SteamID → correct player name extracted from ShooterGame.log
+  // ARK RCON replaces non-ASCII characters with '?'; the log preserves them.
+  private playerNameCache = new Map<string, string>();
+  private nameCacheLastRefresh = 0;
+  private static readonly NAME_CACHE_TTL_MS = 60_000; // Re-read log at most once per minute
+
   // ── Lifecycle ────────────────────────────────────────────────────
 
   async postInstall(
@@ -808,6 +814,7 @@ export class ArkAdapter extends BaseGameAdapter {
         if (joinMatch) {
           const playerName = joinMatch[1].replace(/[⎝⧹⧸⎠]/g, "").trim();
           const steamId = joinMatch[2];
+          this.playerNameCache.set(steamId, playerName);
           recordPlayerConnect(serverId, steamId, playerName);
           connectCount++;
           continue;
@@ -833,6 +840,53 @@ export class ArkAdapter extends BaseGameAdapter {
       logger.debug(
         `[ARK] Could not read log for backfill: ${(error as Error).message}`,
       );
+    }
+  }
+
+  /**
+   * Correct RCON-sourced player names using the ShooterGame.log.
+   * ARK RCON replaces non-ASCII characters (emoji etc.) with '?',
+   * but the log file preserves full Unicode names.
+   */
+  resolvePlayerNames(
+    steamIdToName: Map<string, string>,
+    installPath: string,
+  ): void {
+    this.refreshPlayerNameCache(installPath);
+
+    for (const [steamId] of steamIdToName) {
+      const correctName = this.playerNameCache.get(steamId);
+      if (correctName) {
+        steamIdToName.set(steamId, correctName);
+      }
+    }
+  }
+
+  /**
+   * Refresh the SteamID → player name cache from ShooterGame.log.
+   * Throttled to read the log at most once per minute.
+   */
+  private refreshPlayerNameCache(installPath: string): void {
+    const now = Date.now();
+    if (now - this.nameCacheLastRefresh < ArkAdapter.NAME_CACHE_TTL_MS) return;
+    this.nameCacheLastRefresh = now;
+
+    const logsDir = path.join(installPath, "ShooterGame", "Saved", "Logs");
+    const logFile = this.findLatestLogFile(logsDir);
+    if (!logFile) return;
+
+    try {
+      const content = readGameFile(logFile);
+      const joinRegex =
+        /\](.+?)\s+(?:joined this ARK!|ist diesem ARK beigetreten!)\s+\((\d{17})\)/g;
+      let match;
+      while ((match = joinRegex.exec(content)) !== null) {
+        const name = match[1].replace(/[⎝⧹⧸⎠]/g, "").trim();
+        const steamId = match[2];
+        this.playerNameCache.set(steamId, name);
+      }
+    } catch {
+      // Log file reading failed — keep existing cache
     }
   }
 

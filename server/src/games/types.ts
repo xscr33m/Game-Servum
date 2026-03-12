@@ -261,6 +261,16 @@ export interface GameAdapter {
   analyzeCrash?(server: GameServer, profilesPath: string): string | null;
 
   /**
+   * Correct player names from RCON using a more reliable source (e.g. log files).
+   * ARK RCON replaces non-ASCII characters with '?'; the log file preserves them.
+   * Mutates the map in-place, replacing names where a better source is available.
+   */
+  resolvePlayerNames?(
+    steamIdToName: Map<string, string>,
+    installPath: string,
+  ): void;
+
+  /**
    * Update game-specific config file after mod list changes.
    * E.g. ARK writes ActiveMods= into GameUserSettings.ini.
    */

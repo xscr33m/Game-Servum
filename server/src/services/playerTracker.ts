@@ -320,6 +320,16 @@ async function pollPlayers(serverId: number, rcon: RconClient): Promise<void> {
       currentMap.set(player.id, player.name);
     }
 
+    const info = serverInfo.get(serverId);
+
+    // Correct player names from game logs when RCON mangles encoding (e.g. ARK)
+    if (info) {
+      const adapter = getGameAdapter(info.gameId);
+      if (adapter?.resolvePlayerNames) {
+        adapter.resolvePlayerNames(currentMap, info.installPath);
+      }
+    }
+
     const previousMap =
       lastKnownPlayers.get(serverId) || new Map<string, string>();
 
@@ -365,7 +375,6 @@ async function pollPlayers(serverId: number, rcon: RconClient): Promise<void> {
     lastKnownPlayers.set(serverId, currentMap);
 
     // Game-specific: Periodically try to sync player data from logs
-    const info = serverInfo.get(serverId);
     if (info) {
       const adapter = getGameAdapter(info.gameId);
       if (adapter?.syncPlayerDataFromLogs) {
