@@ -36,9 +36,12 @@ export interface GameDefinition {
   broadcastCommand?: string;
   playerListCommand?: string;
   rconPortOffset?: number;
-  /** Regex pattern matched against stdout to detect server startup completion.
+  /** Regex pattern matched against server log output to detect startup completion.
    *  When matched, RCON connection is triggered. If not set, uses a fixed delay. */
   startupCompletePattern?: string;
+  /** Relative path (from installPath) to the log file to watch for startupCompletePattern.
+   *  If not set, only stdout is checked. */
+  startupLogFile?: string;
 }
 
 // ── RCON Config ──────────────────────────────────────────────────────

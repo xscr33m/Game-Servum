@@ -185,6 +185,7 @@ export class ArkAdapter extends BaseGameAdapter {
     playerListCommand: "ListPlayers",
     rconPortOffset: 19243,
     startupCompletePattern: "Full Startup: .+ seconds",
+    startupLogFile: "ShooterGame/Saved/Logs/ShooterGame.log",
   };
 
   // ── Lifecycle ────────────────────────────────────────────────────

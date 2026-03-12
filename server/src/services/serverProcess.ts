@@ -295,15 +295,89 @@ export function startServer(serverId: number): StartResult {
         message: output,
       });
 
-      // Detect startup completion to trigger RCON connection
-      if (!startupDetected && startupPattern && startupPattern.test(output)) {
+      // Detect startup completion from stdout (fallback for games without startupLogFile)
+      if (
+        !startupDetected &&
+        startupPattern &&
+        !gameDef?.startupLogFile &&
+        startupPattern.test(output)
+      ) {
         startupDetected = true;
-        logger.info(
-          `[ServerProcess] Startup complete detected for server ${serverId}`,
-        );
-        notifyServerReady(serverId);
+        onStartupComplete();
       }
     });
+
+    // Detect startup completion from game log file (ARK writes to file, not stdout)
+    let logWatchInterval: ReturnType<typeof setInterval> | null = null;
+    let lastLogSize = 0;
+
+    function onStartupComplete(): void {
+      logger.info(
+        `[ServerProcess] Startup complete detected for server ${serverId}`,
+      );
+
+      // Stop log file watcher
+      if (logWatchInterval) {
+        clearInterval(logWatchInterval);
+        logWatchInterval = null;
+      }
+
+      // Re-apply RCON config after start (ARK may have overwritten the INI)
+      if (adapter) {
+        const freshServer = getServerById(serverId);
+        if (freshServer) {
+          adapter.validatePreStart(freshServer);
+        }
+      }
+
+      notifyServerReady(serverId);
+    }
+
+    if (startupPattern && gameDef?.startupLogFile) {
+      const logFilePath = path.join(server.installPath, gameDef.startupLogFile);
+
+      // Initialize to current file size so we only read NEW content after spawn
+      try {
+        if (fs.existsSync(logFilePath)) {
+          lastLogSize = fs.statSync(logFilePath).size;
+        }
+      } catch {
+        // File doesn't exist yet — will be created by the game server
+      }
+
+      // Poll the log file every 3 seconds for the startup pattern
+      logWatchInterval = setInterval(() => {
+        if (startupDetected) {
+          if (logWatchInterval) clearInterval(logWatchInterval);
+          return;
+        }
+        try {
+          if (!fs.existsSync(logFilePath)) return;
+          const stat = fs.statSync(logFilePath);
+          // If file was truncated/recreated (ARK creates fresh log on start), reset position
+          if (stat.size < lastLogSize) {
+            lastLogSize = 0;
+          }
+          if (stat.size <= lastLogSize) return;
+
+          // Read only the new portion of the file
+          const fd = fs.openSync(logFilePath, "r");
+          const newBytes = stat.size - lastLogSize;
+          const buf = Buffer.alloc(newBytes);
+          fs.readSync(fd, buf, 0, newBytes, lastLogSize);
+          fs.closeSync(fd);
+          lastLogSize = stat.size;
+
+          const newContent = buf.toString("utf-8");
+          if (startupPattern.test(newContent)) {
+            startupDetected = true;
+            onStartupComplete();
+          }
+        } catch {
+          // File may not exist yet or be locked — retry next interval
+        }
+      }, 3000);
+    }
 
     // Handle stderr
     child.stderr?.on("data", (data: Buffer) => {
@@ -324,6 +398,12 @@ export function startServer(serverId: number): StartResult {
       // Close console log stream
       consoleLogStream?.end();
       consoleLogStream = null;
+
+      // Stop log file watcher if still active
+      if (logWatchInterval) {
+        clearInterval(logWatchInterval);
+        logWatchInterval = null;
+      }
 
       logger.info(
         `[ServerProcess] Server ${serverId} exited with code ${code}, signal ${signal}`,
