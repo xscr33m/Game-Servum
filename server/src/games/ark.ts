@@ -184,6 +184,7 @@ export class ArkAdapter extends BaseGameAdapter {
     broadcastCommand: "ServerChat {MESSAGE}",
     playerListCommand: "ListPlayers",
     rconPortOffset: 19243,
+    startupCompletePattern: "Full Startup: .+ seconds",
   };
 
   // ── Lifecycle ────────────────────────────────────────────────────
@@ -207,34 +208,16 @@ export class ArkAdapter extends BaseGameAdapter {
       fs.mkdirSync(savedConfigPath, { recursive: true });
     }
 
-    // Copy default INI templates from ShooterGame/Config/ to Saved/Config/WindowsServer/
-    const defaultConfigDir = path.join(installPath, "ShooterGame", "Config");
-    const iniMappings: Array<{ source: string; target: string }> = [
-      {
-        source: path.join(defaultConfigDir, "DefaultGameUserSettings.ini"),
-        target: path.join(savedConfigPath, "GameUserSettings.ini"),
-      },
-      {
-        source: path.join(defaultConfigDir, "DefaultGame.ini"),
-        target: path.join(savedConfigPath, "Game.ini"),
-      },
-    ];
-
-    for (const { source, target } of iniMappings) {
-      if (!fs.existsSync(target)) {
-        if (fs.existsSync(source)) {
-          fs.copyFileSync(source, target);
-          logger.info(
-            `[ARK] Copied ${path.basename(source)} → ${path.basename(target)}`,
-          );
-        } else {
-          // Create empty file so config editor can work
-          fs.writeFileSync(target, "", "utf-8");
-          logger.warn(
-            `[ARK] Default template ${path.basename(source)} not found, created empty ${path.basename(target)}`,
-          );
-        }
-      }
+    // Create minimal INI files from scratch.
+    // ARK overwrites configs copied from DefaultGameUserSettings.ini on first start,
+    // but respects pre-existing minimal files and merges its own defaults on top.
+    const gusTarget = path.join(savedConfigPath, "GameUserSettings.ini");
+    if (!fs.existsSync(gusTarget)) {
+      fs.writeFileSync(gusTarget, "", "utf-8");
+    }
+    const gameTarget = path.join(savedConfigPath, "Game.ini");
+    if (!fs.existsSync(gameTarget)) {
+      fs.writeFileSync(gameTarget, "", "utf-8");
     }
 
     // Ensure Logs directory exists (ARK writes to ShooterGame/Saved/Logs/)
@@ -376,10 +359,80 @@ export class ArkAdapter extends BaseGameAdapter {
       errors.push(`Server executable not found: ${server.executable}`);
     }
 
-    // ARK config is optional (generated on first launch) — just warn if missing
-    // No hard error for missing config
+    // Ensure RCON config exists before every start.
+    // ARK may overwrite the INI on first launch, losing the RCON settings
+    // written by postInstall. This re-applies them if missing.
+    this.ensureRconConfig(server);
 
     return errors;
+  }
+
+  /**
+   * Ensure RCON-critical keys exist in GameUserSettings.ini.
+   * Called before every server start and on agent startup (via ensureConfigSections).
+   */
+  private ensureRconConfig(server: GameServer): void {
+    const gusPath = path.join(
+      server.installPath,
+      "ShooterGame",
+      "Saved",
+      "Config",
+      "WindowsServer",
+      "GameUserSettings.ini",
+    );
+    if (!fs.existsSync(gusPath)) return;
+
+    try {
+      let content = readGameFile(gusPath);
+      let modified = false;
+
+      const existingPassword = getIniProperty(
+        content,
+        "ServerSettings",
+        "ServerAdminPassword",
+      );
+      if (!existingPassword) {
+        content = setIniProperty(
+          content,
+          "ServerSettings",
+          "ServerAdminPassword",
+          generatePassword(20),
+        );
+        modified = true;
+      }
+
+      if (getIniProperty(content, "ServerSettings", "RCONEnabled") === null) {
+        content = setIniProperty(
+          content,
+          "ServerSettings",
+          "RCONEnabled",
+          "True",
+        );
+        modified = true;
+      }
+
+      if (getIniProperty(content, "ServerSettings", "RCONPort") === null) {
+        content = setIniProperty(
+          content,
+          "ServerSettings",
+          "RCONPort",
+          String(server.port + (this.definition.rconPortOffset || 19243)),
+        );
+        modified = true;
+      }
+
+      if (modified) {
+        fs.writeFileSync(gusPath, content, "utf-8");
+        logger.info(
+          `[ARK] Repaired RCON config in GameUserSettings.ini for "${server.name}"`,
+        );
+      }
+    } catch (err) {
+      logger.error(
+        `[ARK] Failed to ensure RCON config for "${server.name}":`,
+        err,
+      );
+    }
   }
 
   /**
@@ -448,31 +501,8 @@ export class ArkAdapter extends BaseGameAdapter {
           }
         }
 
-        // Ensure RCON config exists (critical for player tracking)
-        // These keys need dynamic values so they can't go in the static defaults above
-        const existingPassword = getIniProperty(
-          gusContent,
-          "ServerSettings",
-          "ServerAdminPassword",
-        );
-        if (!existingPassword) {
-          gusContent = setIniProperty(
-            gusContent,
-            "ServerSettings",
-            "ServerAdminPassword",
-            generatePassword(20),
-          );
-          modified = true;
-        }
-        if (getIniProperty(gusContent, "ServerSettings", "RCONPort") === null) {
-          gusContent = setIniProperty(
-            gusContent,
-            "ServerSettings",
-            "RCONPort",
-            String(server.port + (this.definition.rconPortOffset || 19243)),
-          );
-          modified = true;
-        }
+        // Ensure RCON config exists (delegates to shared helper)
+        this.ensureRconConfig(server);
 
         // [SessionSettings] SessionName
         if (

@@ -27,7 +27,11 @@ import {
   type GameDefinition,
 } from "../games/index.js";
 import { generateModParams } from "./modManager.js";
-import { startPlayerTracking, stopPlayerTracking } from "./playerTracker.js";
+import {
+  startPlayerTracking,
+  stopPlayerTracking,
+  notifyServerReady,
+} from "./playerTracker.js";
 import { archiveLogsBeforeStart, cleanupOldArchives } from "./logManager.js";
 import { getLogSettings } from "../db/index.js";
 import { startSchedule, clearSchedule } from "./scheduler.js";
@@ -276,6 +280,11 @@ export function startServer(serverId: number): StartResult {
     let lastStderrOutput = "";
 
     // Handle stdout
+    let startupDetected = false;
+    const startupPattern = gameDef?.startupCompletePattern
+      ? new RegExp(gameDef.startupCompletePattern)
+      : null;
+
     child.stdout?.on("data", (data: Buffer) => {
       const output = data.toString();
       logger.debug(`[Server ${serverId}] ${output}`);
@@ -285,6 +294,15 @@ export function startServer(serverId: number): StartResult {
         type: "stdout",
         message: output,
       });
+
+      // Detect startup completion to trigger RCON connection
+      if (!startupDetected && startupPattern && startupPattern.test(output)) {
+        startupDetected = true;
+        logger.info(
+          `[ServerProcess] Startup complete detected for server ${serverId}`,
+        );
+        notifyServerReady(serverId);
+      }
     });
 
     // Handle stderr
@@ -808,6 +826,7 @@ export function restoreServerStates(): void {
           server.installPath,
           server.port,
           restoredRconConfig ?? undefined,
+          true, // alreadyRunning — skip startup pattern wait
         );
       } else {
         logger.info(
