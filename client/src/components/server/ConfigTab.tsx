@@ -19,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useBackend } from "@/hooks/useBackend";
 import { toastSuccess } from "@/lib/toast";
-import { getConfigEditor } from "@/games/registry";
+import { getConfigEditor } from "@/components/server/games/registry";
 import type { GameServer } from "@/types";
 
 interface FileState {

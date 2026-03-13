@@ -28,7 +28,7 @@ import { useBackend } from "@/hooks/useBackend";
 import { useGameCapabilities } from "@/hooks/useGameCapabilities";
 import { AgentControlPanel } from "@/components/agent/AgentControlPanel";
 import { AppHeader } from "@/components/AppHeader";
-import { AgentStatusBanner } from "@/components/AgentStatusBanner";
+import { AgentStatusBanner } from "@/components/agent/AgentStatusBanner";
 import {
   toastSuccess,
   toastError,

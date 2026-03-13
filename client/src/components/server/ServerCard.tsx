@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { publicAsset } from "@/lib/assets";
-import { getGameName, getGameLogo } from "@/games/registry";
+import { getGameName, getGameLogo } from "@/components/server/games/registry";
 import { useUptime } from "@/hooks/useUptime";
 import type { GameServer } from "@/types";
 

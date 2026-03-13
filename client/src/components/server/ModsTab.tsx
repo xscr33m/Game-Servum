@@ -37,7 +37,10 @@ import { Badge } from "@/components/ui/badge";
 import { useBackend } from "@/hooks/useBackend";
 import { useGameCapabilities } from "@/hooks/useGameCapabilities";
 import { toastSuccess } from "@/lib/toast";
-import { getGameName, getWorkshopUrl } from "@/games/registry";
+import {
+  getGameName,
+  getWorkshopUrl,
+} from "@/components/server/games/registry";
 import type { GameServer, ServerMod } from "@/types";
 
 interface ModsTabProps {
