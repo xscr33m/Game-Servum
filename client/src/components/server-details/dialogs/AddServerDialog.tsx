@@ -23,7 +23,7 @@ import {
 import { useBackend } from "@/hooks/useBackend";
 import { SteamAccountDialog } from "@/components/agent/SteamAccountDialog";
 import { publicAsset } from "@/lib/assets";
-import { getGameLogo } from "@/components/server/games/registry";
+import { getGameLogo } from "@/components/server-details/games/registry";
 import { toastSuccess } from "@/lib/toast";
 import type { GameDefinition, GameServer, SteamCMDStatus } from "@/types";
 

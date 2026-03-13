@@ -27,7 +27,7 @@ import { useBackend } from "@/hooks/useBackend";
 import { useUptime } from "@/hooks/useUptime";
 import { useGameCapabilities } from "@/hooks/useGameCapabilities";
 import { toastSuccess } from "@/lib/toast";
-import { getGameName } from "@/components/server/games/registry";
+import { getGameName } from "@/components/server-details/games/registry";
 import type { GameServer, GameDefinition } from "@/types";
 
 interface OverviewTabProps {

@@ -40,7 +40,7 @@ import { toastSuccess } from "@/lib/toast";
 import {
   getGameName,
   getWorkshopUrl,
-} from "@/components/server/games/registry";
+} from "@/components/server-details/games/registry";
 import type { GameServer, ServerMod } from "@/types";
 
 interface ModsTabProps {
