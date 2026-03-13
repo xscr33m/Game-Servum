@@ -676,6 +676,29 @@ export class ArkAdapter extends BaseGameAdapter {
     return null;
   }
 
+  /**
+   * Inject ServerAdminPassword and RCONPort into launch params.
+   * ARK overwrites GameUserSettings.ini on first start, losing RCON settings.
+   * Passing them as command-line args ensures RCON works from the very first boot.
+   */
+  getAdditionalLaunchParams(server: GameServer): string {
+    const rconConfig = this.readRconConfig(server);
+    if (!rconConfig) return "";
+
+    const params: string[] = [];
+
+    // Only append if not already in the user's launch params
+    const existingParams = server.launchParams || "";
+    if (!/ServerAdminPassword=/i.test(existingParams)) {
+      params.push(`?ServerAdminPassword=${rconConfig.password}`);
+    }
+    if (!/RCONPort=/i.test(existingParams)) {
+      params.push(`?RCONPort=${rconConfig.port}`);
+    }
+
+    return params.join("");
+  }
+
   // ── Mods ─────────────────────────────────────────────────────────
 
   async copyModToServer(

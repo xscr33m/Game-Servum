@@ -235,6 +235,13 @@ export interface GameAdapter {
    */
   getSpawnEnvironment(server: GameServer): Record<string, string>;
 
+  /**
+   * Return additional launch parameters to append before spawning.
+   * Used to inject RCON credentials into the command line so the server
+   * picks them up even if it overwrites config files on first start (e.g. ARK).
+   */
+  getAdditionalLaunchParams?(server: GameServer): string;
+
   // ── Optional: Game-Specific Features ─────────────────────────────
 
   /**

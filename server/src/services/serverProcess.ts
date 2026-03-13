@@ -205,6 +205,23 @@ export function startServer(serverId: number): StartResult {
     );
   }
 
+  // Append game-specific additional launch params (e.g. ARK RCON credentials)
+  // Insert ?key=value params before -flag params so UE4 parses them correctly
+  if (adapter?.getAdditionalLaunchParams) {
+    const extra = adapter.getAdditionalLaunchParams(server);
+    if (extra) {
+      const dashIndex = launchParams.search(/\s+-/);
+      if (dashIndex !== -1) {
+        launchParams =
+          launchParams.slice(0, dashIndex) +
+          extra +
+          launchParams.slice(dashIndex);
+      } else {
+        launchParams += extra;
+      }
+    }
+  }
+
   // Parse arguments - same for all platforms
   const args = parseArguments(launchParams);
   logger.debug(`[ServerProcess] Parsed args: ${JSON.stringify(args)}`);
@@ -332,7 +349,7 @@ export function startServer(serverId: number): StartResult {
         logWatchInterval = null;
       }
 
-      // Re-apply RCON config after start (ARK may have overwritten the INI)
+      // Re-apply RCON config to INI after start (ARK may have overwritten it)
       if (adapter) {
         const freshServer = getServerById(serverId);
         if (freshServer) {
