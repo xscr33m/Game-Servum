@@ -61,14 +61,34 @@ const pollCounters = new Map<number, number>();
 
 const POLL_INTERVAL_MS = 30000; // 30 seconds
 const RCON_RECONNECT_DELAY_MS = 30000; // 30 seconds
-const RCON_CONNECT_DELAY_MS = 15000; // Wait 15s after server start before first RCON connect
+const RCON_CONNECT_DELAY_MS = 15000; // Fallback: wait 15s when no startup pattern defined
 const CHARACTER_ID_SYNC_INTERVAL = 5; // Sync character IDs every N polls
+
+// Servers waiting for a startup-complete signal before connecting RCON
+const pendingReadyServers = new Set<number>();
 
 /**
  * Get cached count of online players for a server
  */
 export function getOnlinePlayerCount(serverId: number): number {
   return getOnlinePlayers(serverId).length;
+}
+
+/**
+ * Notify that a server has finished starting (detected via stdout log pattern).
+ * Triggers RCON connection for servers waiting for the startup-complete signal.
+ */
+export function notifyServerReady(serverId: number): void {
+  if (!pendingReadyServers.has(serverId)) return;
+  pendingReadyServers.delete(serverId);
+
+  const info = serverInfo.get(serverId);
+  if (info) {
+    logger.info(
+      `[PlayerTracker] Server ${serverId} startup complete, connecting RCON now`,
+    );
+    connectRcon(serverId, info.installPath, info.port, info.rconConfig);
+  }
 }
 
 /**
@@ -80,6 +100,8 @@ export function startPlayerTracking(
   installPath: string,
   gamePort = 2302,
   rconConfig?: { password: string; port: number },
+  /** When true, skip startup pattern wait (server already running, e.g. restored after agent restart) */
+  alreadyRunning = false,
 ): void {
   // Stop any existing tracking
   stopPlayerTracking(serverId);
@@ -110,16 +132,27 @@ export function startPlayerTracking(
   // closed by RCON disconnect events. RCON polling will establish the true live state.
   disconnectAllPlayers(serverId);
 
-  // Step 2: Connect to RCON with a delay (server needs time to start BattlEye)
-  logger.info(
-    `[PlayerTracker] Will connect RCON in ${RCON_CONNECT_DELAY_MS / 1000}s for server ${serverId}`,
-  );
-  const connectTimer = setTimeout(() => {
-    reconnectTimers.delete(serverId);
-    connectRcon(serverId, installPath, gamePort, rconConfig);
-  }, RCON_CONNECT_DELAY_MS);
+  // Step 2: Connect to RCON — either wait for startup-complete signal or use fixed delay.
+  // For freshly started servers with a startup pattern, wait for the log signal.
+  // For restored servers (already running), always use the fixed delay.
+  const hasStartupPattern =
+    !alreadyRunning && !!adapter?.definition.startupCompletePattern;
+  if (hasStartupPattern) {
+    logger.info(
+      `[PlayerTracker] Waiting for startup-complete signal before connecting RCON for server ${serverId}`,
+    );
+    pendingReadyServers.add(serverId);
+  } else {
+    logger.info(
+      `[PlayerTracker] Will connect RCON in ${RCON_CONNECT_DELAY_MS / 1000}s for server ${serverId}`,
+    );
+    const connectTimer = setTimeout(() => {
+      reconnectTimers.delete(serverId);
+      connectRcon(serverId, installPath, gamePort, rconConfig);
+    }, RCON_CONNECT_DELAY_MS);
 
-  reconnectTimers.set(serverId, connectTimer);
+    reconnectTimers.set(serverId, connectTimer);
+  }
 }
 
 /**
@@ -151,6 +184,7 @@ export function stopPlayerTracking(serverId: number): void {
   disconnectAllPlayers(serverId);
   lastKnownPlayers.delete(serverId);
   pollCounters.delete(serverId);
+  pendingReadyServers.delete(serverId);
   serverInfo.delete(serverId);
 
   logger.info(`[PlayerTracker] Stopped tracking for server ${serverId}`);
@@ -286,6 +320,16 @@ async function pollPlayers(serverId: number, rcon: RconClient): Promise<void> {
       currentMap.set(player.id, player.name);
     }
 
+    const info = serverInfo.get(serverId);
+
+    // Correct player names from game logs when RCON mangles encoding (e.g. ARK)
+    if (info) {
+      const adapter = getGameAdapter(info.gameId);
+      if (adapter?.resolvePlayerNames) {
+        adapter.resolvePlayerNames(currentMap, info.installPath);
+      }
+    }
+
     const previousMap =
       lastKnownPlayers.get(serverId) || new Map<string, string>();
 
@@ -331,7 +375,6 @@ async function pollPlayers(serverId: number, rcon: RconClient): Promise<void> {
     lastKnownPlayers.set(serverId, currentMap);
 
     // Game-specific: Periodically try to sync player data from logs
-    const info = serverInfo.get(serverId);
     if (info) {
       const adapter = getGameAdapter(info.gameId);
       if (adapter?.syncPlayerDataFromLogs) {

@@ -14,6 +14,7 @@
 import path from "path";
 import fs from "fs";
 import { logger } from "../index.js";
+import { readGameFile } from "../games/encoding.js";
 import type { LogPaths } from "../games/index.js";
 
 /**
@@ -319,7 +320,7 @@ export function readLogContent(
   }
 
   try {
-    const content = fs.readFileSync(filePath, "utf-8");
+    const content = readGameFile(filePath);
     const allLines = content.split("\n");
 
     // maxLines <= 0 means return everything

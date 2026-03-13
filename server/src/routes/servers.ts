@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import path from "path";
 import fs from "fs";
+import fsPromises from "fs/promises";
 import { exec } from "child_process";
 import { logger, broadcast } from "../index.js";
 import {
@@ -44,6 +45,7 @@ import {
   getGameDefinition,
   getGameAdapter,
 } from "../games/index.js";
+import { readGameFile } from "../games/encoding.js";
 import {
   installServer,
   cancelInstallation,
@@ -1077,7 +1079,7 @@ router.get("/:id/disk-usage", async (req: Request, res: Response) => {
   }
 
   try {
-    const totalSize = getDirectorySize(server.installPath);
+    const totalSize = await getDirectorySizeAsync(server.installPath);
     res.json({
       sizeBytes: totalSize,
       sizeFormatted: formatBytes(totalSize),
@@ -1099,10 +1101,24 @@ router.get("/:id/config", (req: Request, res: Response) => {
 
   // Determine config file from game definition
   const gameDef = getGameDefinition(server.gameId);
-  const configFileName = gameDef?.configFiles?.[0];
-  if (!configFileName) {
+  const configFiles = gameDef?.configFiles;
+  if (!configFiles || configFiles.length === 0) {
     return res.status(404).json({
       error: "No config file defined for this game",
+    });
+  }
+
+  // Support ?file= query param for multi-file games (default: first file)
+  const requestedFile = req.query.file as string | undefined;
+  const configFileName = requestedFile
+    ? configFiles.find(
+        (f) => path.basename(f) === requestedFile || f === requestedFile,
+      )
+    : configFiles[0];
+
+  if (!configFileName) {
+    return res.status(400).json({
+      error: "Requested config file is not allowed for this game",
     });
   }
 
@@ -1116,11 +1132,12 @@ router.get("/:id/config", (req: Request, res: Response) => {
   }
 
   try {
-    const content = fs.readFileSync(configPath, "utf-8");
+    const content = readGameFile(configPath);
     res.json({
       fileName: path.basename(configFileName),
       path: configPath,
       content,
+      configFiles: configFiles.map((f) => path.basename(f)),
     });
   } catch (err) {
     res.status(500).json({
@@ -1151,10 +1168,24 @@ router.put("/:id/config", (req: Request, res: Response) => {
 
   // Determine config file from game definition
   const gameDef = getGameDefinition(server.gameId);
-  const configFileName = gameDef?.configFiles?.[0];
-  if (!configFileName) {
+  const configFiles = gameDef?.configFiles;
+  if (!configFiles || configFiles.length === 0) {
     return res.status(404).json({
       error: "No config file defined for this game",
+    });
+  }
+
+  // Support ?file= query param for multi-file games (default: first file)
+  const requestedFile = req.query.file as string | undefined;
+  const configFileName = requestedFile
+    ? configFiles.find(
+        (f) => path.basename(f) === requestedFile || f === requestedFile,
+      )
+    : configFiles[0];
+
+  if (!configFileName) {
+    return res.status(400).json({
+      error: "Requested config file is not allowed for this game",
     });
   }
 
@@ -1202,7 +1233,7 @@ router.get("/:id/files/:filename", (req: Request, res: Response) => {
   }
 
   try {
-    const content = fs.readFileSync(fileConfig.path, "utf-8");
+    const content = readGameFile(fileConfig.path);
     res.json({ content, exists: true });
   } catch (err) {
     res.status(500).json({
@@ -1577,6 +1608,17 @@ router.put("/:id/mods/:modId", (req: Request, res: Response) => {
     updateModLoadOrder(modId, loadOrder);
   }
 
+  // Sync active mods in game config (e.g. ARK's GameUserSettings.ini)
+  try {
+    const adapter = getGameAdapter(server.gameId);
+    const updatedMods = getModsByServerId(serverId);
+    adapter?.updateActiveModsInConfig?.(server.installPath, updatedMods);
+  } catch (err) {
+    logger.error(
+      `[Mods] Failed to update config after mod change: ${(err as Error).message}`,
+    );
+  }
+
   res.json({ success: true, message: "Mod updated" });
 });
 
@@ -1626,6 +1668,16 @@ router.delete("/:id/mods/:modId", async (req: Request, res: Response) => {
   const result = await uninstallMod(modId);
 
   if (result.success) {
+    // Sync active mods in game config after removal
+    try {
+      const adapter = getGameAdapter(server.gameId);
+      const remainingMods = getModsByServerId(serverId);
+      adapter?.updateActiveModsInConfig?.(server.installPath, remainingMods);
+    } catch (err) {
+      logger.error(
+        `[Mods] Failed to update config after mod removal: ${(err as Error).message}`,
+      );
+    }
     res.json({ success: true, message: result.message });
   } else {
     res.status(500).json({ error: result.message });
@@ -1650,6 +1702,17 @@ router.post("/:id/mods/reorder", (req: Request, res: Response) => {
   modIds.forEach((modId, index) => {
     updateModLoadOrder(modId, index);
   });
+
+  // Sync active mods in game config after reorder
+  try {
+    const adapter = getGameAdapter(server.gameId);
+    const updatedMods = getModsByServerId(serverId);
+    adapter?.updateActiveModsInConfig?.(server.installPath, updatedMods);
+  } catch (err) {
+    logger.error(
+      `[Mods] Failed to update config after mod reorder: ${(err as Error).message}`,
+    );
+  }
 
   res.json({ success: true, message: "Mod order updated" });
 });
@@ -1946,18 +2009,18 @@ export { router as serversRouter };
 /**
  * Recursively calculate the total size of a directory in bytes
  */
-function getDirectorySize(dirPath: string): number {
+async function getDirectorySizeAsync(dirPath: string): Promise<number> {
   let totalSize = 0;
 
   try {
-    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    const entries = await fsPromises.readdir(dirPath, { withFileTypes: true });
     for (const entry of entries) {
       const fullPath = path.join(dirPath, entry.name);
       try {
         if (entry.isDirectory()) {
-          totalSize += getDirectorySize(fullPath);
+          totalSize += await getDirectorySizeAsync(fullPath);
         } else if (entry.isFile()) {
-          totalSize += fs.statSync(fullPath).size;
+          totalSize += (await fsPromises.stat(fullPath)).size;
         }
       } catch {
         // Skip files/dirs we can't access

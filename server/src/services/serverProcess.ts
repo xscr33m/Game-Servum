@@ -27,7 +27,11 @@ import {
   type GameDefinition,
 } from "../games/index.js";
 import { generateModParams } from "./modManager.js";
-import { startPlayerTracking, stopPlayerTracking } from "./playerTracker.js";
+import {
+  startPlayerTracking,
+  stopPlayerTracking,
+  notifyServerReady,
+} from "./playerTracker.js";
 import { archiveLogsBeforeStart, cleanupOldArchives } from "./logManager.js";
 import { getLogSettings } from "../db/index.js";
 import { startSchedule, clearSchedule } from "./scheduler.js";
@@ -157,6 +161,7 @@ export function startServer(serverId: number): StartResult {
 
   launchParams = launchParams
     .replace(/\{PORT\}/g, server.port.toString())
+    .replace(/\{QUERY_PORT\}/g, (server.queryPort ?? server.port).toString())
     .replace(/\{PROFILES\}/g, server.profilesPath)
     .replace(/\{INSTALL_PATH\}/g, server.installPath)
     .replace(/\{SERVER_NAME\}/g, server.name);
@@ -198,6 +203,23 @@ export function startServer(serverId: number): StartResult {
     logger.debug(
       `[ServerProcess] Pre-read RCON config: port=${rconConfig.port}`,
     );
+  }
+
+  // Append game-specific additional launch params (e.g. ARK RCON credentials)
+  // Insert ?key=value params before -flag params so UE4 parses them correctly
+  if (adapter?.getAdditionalLaunchParams) {
+    const extra = adapter.getAdditionalLaunchParams(server);
+    if (extra) {
+      const dashIndex = launchParams.search(/\s+-/);
+      if (dashIndex !== -1) {
+        launchParams =
+          launchParams.slice(0, dashIndex) +
+          extra +
+          launchParams.slice(dashIndex);
+      } else {
+        launchParams += extra;
+      }
+    }
   }
 
   // Parse arguments - same for all platforms
@@ -256,19 +278,133 @@ export function startServer(serverId: number): StartResult {
       rconConfig || undefined,
     );
 
+    // Capture stdout/stderr to a log file for the LogsTab (created lazily on first write)
+    let consoleLogStream: fs.WriteStream | null = null;
+    let consoleLogPath: string | null = null;
+    if (logPaths && logPaths.directories.length > 0) {
+      const consoleLogDir = logPaths.directories[0];
+      if (!fs.existsSync(consoleLogDir)) {
+        fs.mkdirSync(consoleLogDir, { recursive: true });
+      }
+      consoleLogPath = path.join(consoleLogDir, "console-output.log");
+    }
+
+    function writeConsoleLog(data: string): void {
+      if (!consoleLogPath) return;
+      if (!consoleLogStream) {
+        consoleLogStream = fs.createWriteStream(consoleLogPath, { flags: "w" });
+        consoleLogStream.on("error", (err) => {
+          logger.error(
+            `[ServerProcess] Console log write error: ${err.message}`,
+          );
+          consoleLogStream = null;
+        });
+      }
+      consoleLogStream.write(data);
+    }
+
     // Collect stderr output for error reporting
     let lastStderrOutput = "";
 
     // Handle stdout
+    let startupDetected = false;
+    const startupPattern = gameDef?.startupCompletePattern
+      ? new RegExp(gameDef.startupCompletePattern)
+      : null;
+
     child.stdout?.on("data", (data: Buffer) => {
       const output = data.toString();
       logger.debug(`[Server ${serverId}] ${output}`);
+      writeConsoleLog(output);
       broadcast("server:output", {
         serverId,
         type: "stdout",
         message: output,
       });
+
+      // Detect startup completion from stdout (fallback for games without startupLogFile)
+      if (
+        !startupDetected &&
+        startupPattern &&
+        !gameDef?.startupLogFile &&
+        startupPattern.test(output)
+      ) {
+        startupDetected = true;
+        onStartupComplete();
+      }
     });
+
+    // Detect startup completion from game log file (ARK writes to file, not stdout)
+    let logWatchInterval: ReturnType<typeof setInterval> | null = null;
+    let lastLogSize = 0;
+
+    function onStartupComplete(): void {
+      logger.info(
+        `[ServerProcess] Startup complete detected for server ${serverId}`,
+      );
+
+      // Stop log file watcher
+      if (logWatchInterval) {
+        clearInterval(logWatchInterval);
+        logWatchInterval = null;
+      }
+
+      // Re-apply RCON config to INI after start (ARK may have overwritten it)
+      if (adapter) {
+        const freshServer = getServerById(serverId);
+        if (freshServer) {
+          adapter.validatePreStart(freshServer);
+        }
+      }
+
+      notifyServerReady(serverId);
+    }
+
+    if (startupPattern && gameDef?.startupLogFile) {
+      const logFilePath = path.join(server.installPath, gameDef.startupLogFile);
+
+      // Initialize to current file size so we only read NEW content after spawn
+      try {
+        if (fs.existsSync(logFilePath)) {
+          lastLogSize = fs.statSync(logFilePath).size;
+        }
+      } catch {
+        // File doesn't exist yet — will be created by the game server
+      }
+
+      // Poll the log file every 3 seconds for the startup pattern
+      logWatchInterval = setInterval(() => {
+        if (startupDetected) {
+          if (logWatchInterval) clearInterval(logWatchInterval);
+          return;
+        }
+        try {
+          if (!fs.existsSync(logFilePath)) return;
+          const stat = fs.statSync(logFilePath);
+          // If file was truncated/recreated (ARK creates fresh log on start), reset position
+          if (stat.size < lastLogSize) {
+            lastLogSize = 0;
+          }
+          if (stat.size <= lastLogSize) return;
+
+          // Read only the new portion of the file
+          const fd = fs.openSync(logFilePath, "r");
+          const newBytes = stat.size - lastLogSize;
+          const buf = Buffer.alloc(newBytes);
+          fs.readSync(fd, buf, 0, newBytes, lastLogSize);
+          fs.closeSync(fd);
+          lastLogSize = stat.size;
+
+          const newContent = buf.toString("utf-8");
+          if (startupPattern.test(newContent)) {
+            startupDetected = true;
+            onStartupComplete();
+          }
+        } catch {
+          // File may not exist yet or be locked — retry next interval
+        }
+      }, 3000);
+    }
 
     // Handle stderr
     child.stderr?.on("data", (data: Buffer) => {
@@ -276,6 +412,7 @@ export function startServer(serverId: number): StartResult {
       logger.error(`[Server ${serverId}] STDERR: ${output}`);
       // Keep last stderr output for crash reporting
       lastStderrOutput = output;
+      writeConsoleLog(output);
       broadcast("server:output", {
         serverId,
         type: "stderr",
@@ -285,6 +422,16 @@ export function startServer(serverId: number): StartResult {
 
     // Handle process exit
     child.on("exit", (code, signal) => {
+      // Close console log stream
+      consoleLogStream?.end();
+      consoleLogStream = null;
+
+      // Stop log file watcher if still active
+      if (logWatchInterval) {
+        clearInterval(logWatchInterval);
+        logWatchInterval = null;
+      }
+
       logger.info(
         `[ServerProcess] Server ${serverId} exited with code ${code}, signal ${signal}`,
       );
@@ -786,6 +933,7 @@ export function restoreServerStates(): void {
           server.installPath,
           server.port,
           restoredRconConfig ?? undefined,
+          true, // alreadyRunning — skip startup pattern wait
         );
       } else {
         logger.info(

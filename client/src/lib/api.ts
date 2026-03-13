@@ -196,10 +196,17 @@ export interface ServersApiClient {
   ) => Promise<{ success: boolean; message: string }>;
   getConfig: (
     id: number,
-  ) => Promise<{ fileName: string; path: string; content: string }>;
+    file?: string,
+  ) => Promise<{
+    fileName: string;
+    path: string;
+    content: string;
+    configFiles?: string[];
+  }>;
   saveConfig: (
     id: number,
     content: string,
+    file?: string,
   ) => Promise<{ success: boolean; message: string }>;
   getFile: (
     id: number,
@@ -687,15 +694,23 @@ function createServersApi(fetchApi: FetchApiFn): ServersApiClient {
         method: "DELETE",
         body: JSON.stringify({ confirmName }),
       }),
-    getConfig: (id: number) =>
-      fetchApi<{ fileName: string; path: string; content: string }>(
-        `/servers/${id}/config`,
+    getConfig: (id: number, file?: string) =>
+      fetchApi<{
+        fileName: string;
+        path: string;
+        content: string;
+        configFiles?: string[];
+      }>(
+        `/servers/${id}/config${file ? `?file=${encodeURIComponent(file)}` : ""}`,
       ),
-    saveConfig: (id: number, content: string) =>
-      fetchApi<{ success: boolean; message: string }>(`/servers/${id}/config`, {
-        method: "PUT",
-        body: JSON.stringify({ content }),
-      }),
+    saveConfig: (id: number, content: string, file?: string) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${id}/config${file ? `?file=${encodeURIComponent(file)}` : ""}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ content }),
+        },
+      ),
     getFile: (id: number, filename: string) =>
       fetchApi<{ content: string; exists: boolean }>(
         `/servers/${id}/files/${filename}`,

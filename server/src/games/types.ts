@@ -36,6 +36,12 @@ export interface GameDefinition {
   broadcastCommand?: string;
   playerListCommand?: string;
   rconPortOffset?: number;
+  /** Regex pattern matched against server log output to detect startup completion.
+   *  When matched, RCON connection is triggered. If not set, uses a fixed delay. */
+  startupCompletePattern?: string;
+  /** Relative path (from installPath) to the log file to watch for startupCompletePattern.
+   *  If not set, only stdout is checked. */
+  startupLogFile?: string;
 }
 
 // ── RCON Config ──────────────────────────────────────────────────────
@@ -229,6 +235,13 @@ export interface GameAdapter {
    */
   getSpawnEnvironment(server: GameServer): Record<string, string>;
 
+  /**
+   * Return additional launch parameters to append before spawning.
+   * Used to inject RCON credentials into the command line so the server
+   * picks them up even if it overwrites config files on first start (e.g. ARK).
+   */
+  getAdditionalLaunchParams?(server: GameServer): string;
+
   // ── Optional: Game-Specific Features ─────────────────────────────
 
   /**
@@ -253,4 +266,20 @@ export interface GameAdapter {
    * Read crash logs and return a human-readable summary, or null.
    */
   analyzeCrash?(server: GameServer, profilesPath: string): string | null;
+
+  /**
+   * Correct player names from RCON using a more reliable source (e.g. log files).
+   * ARK RCON replaces non-ASCII characters with '?'; the log file preserves them.
+   * Mutates the map in-place, replacing names where a better source is available.
+   */
+  resolvePlayerNames?(
+    steamIdToName: Map<string, string>,
+    installPath: string,
+  ): void;
+
+  /**
+   * Update game-specific config file after mod list changes.
+   * E.g. ARK writes ActiveMods= into GameUserSettings.ini.
+   */
+  updateActiveModsInConfig?(serverInstallPath: string, mods: ServerMod[]): void;
 }
