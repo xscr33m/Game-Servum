@@ -10,9 +10,11 @@
 
 **Critical Files:**
 
-- [`server/src/services/gameDefinitions.ts`](../server/src/services/gameDefinitions.ts) — Add new game server support here
+- [`server/src/games/`](../server/src/games/) — Game adapter modules (one directory per game: `dayz/`, `ark/`, `7dtd/`)
+- [`client/src/games/`](../client/src/games/) — Frontend game plugins (config editors, metadata, registry)
 - [`packages/shared/src/constants/index.ts`](../packages/shared/src/constants/index.ts) — Version constants (must match `package.json`)
-- [`server/src/db/index.ts`](../server/src/db/index.ts) — Database schema & migrations (manual, no ORM)
+- [`server/src/db/index.ts`](../server/src/db/index.ts) — Database CRUD operations
+- [`server/src/db/migrations.ts`](../server/src/db/migrations.ts) — Versioned DB schema migrations
 - [`client/src/contexts/BackendContext.tsx`](../client/src/contexts/BackendContext.tsx) — Multi-agent connection management
 - [`electron/main/main-unified.js`](../electron/main/main-unified.js) — Electron entry point (Dashboard only)
 - [`service/winsw/GameServumAgent.xml`](../service/winsw/GameServumAgent.xml) — WinSW Windows Service configuration for Agent
@@ -95,13 +97,12 @@ npm run clean                # Clear build caches and dist folders
 - `agentSettings.ts` — Manages Windows Service auto-start toggle via `sc.exe` commands. `getAutoStartEnabled()` checks `sc qc GameServumAgent` (`AUTO_START=2`), `setAutoStartEnabled()` uses `sc config start= auto/demand`. Also provides `getServiceState()` for service status. Platform guard: returns false/null on non-Windows
 - `agentUpdater.ts` — Standalone self-updater using GitHub Releases API. Checks `https://api.github.com/repos/xscr33m/Game-Servum/releases/latest` for update ZIPs. Downloads to `data/.update-staging/`, installs via PowerShell script (stop service → extract → start). State persisted to `data/.agent-update-state.json`. Auto-check timer: configurable interval (default 4h). Broadcasts WebSocket events: `update:detected`, `update-check:complete`, `update:applied`, `update:restart`
 - `auth.ts` — API-Key + Password authentication. PBKDF2 (100k iterations, SHA-512) password hashing, SHA-256 key hashing, JWT session tokens (24h). Auto-generates initial credentials on first start when auth enabled, writes `CREDENTIALS.txt` to data directory
-- `gameDefinitions.ts` — `GAME_DEFINITIONS` is a `Record<string, GameDefinition>` keyed by game ID. Currently defines: `dayz`, `7dtd`, `ark`. Each entry has optional `postInstall()` hook, optional `workshopAppId`, `portCount`, `portStride`, `queryPortOffset`, and `configFiles[]`
-- `serverProcess.ts` — Spawns game servers, tracks PIDs in `runningProcesses` Map, handles graceful shutdown (`taskkill` on Windows). Crash protection: max 3 crashes in 10 minutes, 10s restart delay. On start: resolves launch param placeholders via `variableResolver`, appends mod params, archives old logs, starts player tracking + scheduler + message broadcaster + update checker
+- `serverProcess.ts` — Spawns game servers, tracks PIDs in `runningProcesses` Map, handles graceful shutdown (`taskkill` on Windows). Crash protection: max 3 crashes in 10 minutes, 10s restart delay. On start: resolves launch param placeholders via `variableResolver`, appends mod params, archives old logs, starts player tracking + scheduler + message broadcaster + update checker. Startup detection delegates to `adapter.getStartupDetector()` (stdout pattern, logfile watcher, or timeout)
 - `serverInstall.ts` — Drives SteamCMD to install/update game servers, tracks active installs in a Map. Progress tracking via `console_log.txt` polling (500ms). Exports `updateServer()` for validate+update flows
-- `modManager.ts` — Workshop mod install/uninstall via SteamCMD, copies mods to server directory as `@SafeModName`, generates `-mod=` and `-serverMod=` launch params. Update checking via Steam Workshop API (`time_updated` comparison). Supports `cancelModInstallation()`
+- `modManager.ts` — Workshop mod install/uninstall via SteamCMD, copies mods to server directory as `@SafeModName`, generates `-mod=` and `-serverMod=` launch params. Update checking via Steam Workshop API (`time_updated` comparison). Supports `cancelModInstallation()`. Mod uninstall delegates to `adapter.uninstallMod()` for game-specific cleanup
 - `playerTracker.ts` — Dual tracking: RCON polling (primary, every 15s) + ADM log parsing (historical backfill). Auto-reconnect RCON on disconnect (30s delay). Character ID sync from ADM logs
 - `steamcmd.ts` — Downloads SteamCMD, handles interactive login (including Steam Guard flow) with state machine: `idle → started → awaiting_guard → success/failed`. 60s login timeout
-- `rcon.ts` — Full BattlEye RCON protocol implementation over UDP. CRC32 validation, keep-alive (30s), multi-part response reassembly, player list parsing
+- RCON protocols now live in `server/src/core/rcon/` (BattlEye UDP, Source TCP, Telnet) — see Game Module System below
 - `scheduler.ts` — Configurable restart interval (hours) with pre-restart RCON warnings at configurable minute offsets. Warning message templates support `{MINUTES}` placeholder. Exports `startSchedule()`, `clearSchedule()`, `initializeSchedules()`
 - `messageBroadcaster.ts` — Sends recurring RCON messages at per-message configurable intervals. Uses `variableResolver` for template variables. Exports `startMessageBroadcaster()`, `stopMessageBroadcaster()`, `reloadMessageBroadcaster()`, `initializeMessageBroadcasters()`
 - `updateChecker.ts` — Checks for game server updates (SteamCMD `app_info_print` + buildid comparison) and mod updates (Workshop API). Auto-restart on update: configurable delay, RCON warning schedule, stop → update → restart. First check 30s after server starts. Broadcasts `update:detected` and `update:restart` WS events
@@ -110,11 +111,11 @@ npm run clean                # Clear build caches and dist folders
 - `systemMonitor.ts` — CPU (via `os.cpus()` delta), memory (`os.totalmem()`/`os.freemem()`), disk (PowerShell `Get-CimInstance`), network (`netstat -e` with rate calculation)
 - `logger.ts` — App-level logging service (not game server logs). Zero-dependency, uses only Node.js `fs`. Daily rotation, configurable buffering (100 entries), auto-cleanup based on retention. Logs to `{logsPath}/{context}-{date}.log`. Supports runtime settings updates via `updateSettings()`. Buffer flushes every 5s
 
-### Database (`server/src/db/index.ts`)
+### Database (`server/src/db/`)
 
 - Uses **sql.js** (SQLite compiled to WASM, runs in-memory). Must call `saveDatabase()` after every mutation to flush to disk at `data/gameservum.db`
 - All queries use raw SQL with positional `?` params and manual row-to-object mapping (no ORM)
-- Schema migrations are manual checks in `runMigrations()` using `PRAGMA table_info()` — add new columns by checking if they exist first
+- **Migrations** (`db/migrations.ts`): Versioned migration system with `schema_versions` table. Each migration has an `up()` function wrapped in a transaction. Add new migrations to the `MIGRATIONS` array with an incremented version number. `runMigrations()` applies pending migrations in order
 - Tables:
   - `steam_config` — Steam credentials
   - `game_servers` — Server instances (18+ columns including `profiles_path`, `auto_restart`)
@@ -185,6 +186,7 @@ npm run clean                # Clear build caches and dist folders
 
 - **Pages**: `Dashboard.tsx` (server list + onboarding wizard + system monitor), `ServerDetail.tsx` (6-tab server management), `Settings.tsx` (global app settings + auto-update controls), `Logs.tsx` (app-level logs viewer + settings)
 - **Server detail tabs**: `components/server/` — `OverviewTab`, `ConfigTab`, `LogsTab`, `ModsTab`, `PlayersTab`, `SettingsTab`, `UpdateCheckDialog`
+- **Game plugins**: `games/` — Per-game UI modules (`dayz/`, `ark/`, `7dtd/`) with config editors. Central `registry.ts` provides `getGamePlugin()`, `getGameName()`, `getGameLogo()`, `getConfigEditor()`
 - **UI primitives**: `components/ui/` (shadcn/ui — don't modify directly)
 - **Dialogs**: `AddServerDialog.tsx`, `DeleteServerDialog.tsx`, `AddAgentDialog.tsx`, `UpdateNotification.tsx`
 - **Onboarding**: `components/onboarding/` — `OnboardingWizard.tsx` with step components (`WelcomeStep`, `ConnectAgentStep`, `SteamCmdInstallStep`, `SteamLoginStep`, `SteamGuardStep`, `CompleteStep`). Dashboard flow includes agent connection step
@@ -238,6 +240,7 @@ npm run clean                # Clear build caches and dist folders
 
 - **Constants**: `APP_VERSION`, `API_VERSION`, `MIN_COMPATIBLE_AGENT_VERSION`, `compareSemVer()`, `isAgentCompatible()`, `DEFAULT_AGENT_PORT`, `DEFAULT_DASHBOARD_PORT`, `TOKEN_LIFETIME_SECONDS`
 - **Types**: `ServerStatus` (7 states: `installing`, `stopped`, `starting`, `running`, `stopping`, `error`, `updating`), `GameServer`, `ServerMod`, `ModStatus`, `WSMessageType` (28 event types), API request/response types
+- **Game types**: `GameMetadata` (id, name, logo, description), `StartupDetector` (type: stdout|logfile, pattern, logFile, timeoutMs)
 
 ## Agent Windows Service (`service/winsw/`)
 
@@ -314,28 +317,125 @@ Dashboard-only Electron app (no agent code):
 - Linux builds contain ONLY the Dashboard. No Agent, no Node.js runtime, no game server management. Dashboard connects to remote Windows Agents over network.
 - **Agent runtime is Windows-only** (game servers require Windows)
 
-## Adding a New Game Server Definition
+## Game Module System
 
-Add entry to `GAME_DEFINITIONS` record in `server/src/services/gameDefinitions.ts`:
+Each game is a self-contained module in `server/src/games/{gameId}/`:
+
+```
+server/src/games/
+├── base.ts              # Abstract BaseGameAdapter with sensible defaults
+├── types.ts             # GameAdapter interface, GameDefinition type
+├── index.ts             # Registry: getGameAdapter(), getAllGameDefinitions(), etc.
+├── dayz/
+│   ├── adapter.ts       # DayZAdapter extends BaseGameAdapter
+│   └── index.ts         # Re-exports adapter
+├── ark/
+│   ├── adapter.ts       # ArkAdapter extends BaseGameAdapter
+│   └── index.ts
+└── 7dtd/
+    ├── adapter.ts       # SevenDaysToDieAdapter extends BaseGameAdapter
+    └── index.ts
+```
+
+Frontend game plugins in `client/src/games/{gameId}/`:
+
+```
+client/src/games/
+├── types.ts             # ConfigEditorProps, GameUIPlugin interfaces
+├── registry.ts          # getGamePlugin(), getGameName(), getConfigEditor(), etc.
+├── dayz/
+│   ├── ConfigEditor.tsx  # DayZ config editor component
+│   └── index.ts          # GameUIPlugin export
+├── ark/
+│   ├── ConfigEditor.tsx
+│   └── index.ts
+└── 7dtd/
+    ├── ConfigEditor.tsx
+    └── index.ts
+```
+
+Core protocols in `server/src/core/`:
+
+```
+server/src/core/
+├── rcon/                # RCON protocol implementations
+│   ├── battleye.ts      # BattlEye RCON (UDP) — DayZ
+│   ├── source.ts        # Source RCON (TCP) — ARK
+│   ├── telnet.ts        # Telnet RCON — 7DTD
+│   ├── types.ts         # Shared RCON types
+│   └── index.ts
+└── installers/
+    ├── types.ts         # GameInstaller interface (future use)
+    └── index.ts
+```
+
+### Adding a New Game
+
+**1. Create backend adapter** in `server/src/games/mygame/adapter.ts`:
 
 ```typescript
-mygame: {
+import { BaseGameAdapter } from "../base.js";
+import type { GameDefinition } from "../types.js";
+
+const definition: GameDefinition = {
   id: "mygame",
   name: "My Game",
+  logo: "mygame.png",
   appId: 123456,
-  workshopAppId: 123456,       // Only if workshop uses different App ID
+  workshopAppId: 123456, // Only if workshop uses different App ID
   executable: "server.exe",
   defaultPort: 27015,
-  portCount: 1,                // Number of consecutive ports used
-  portStride: 1,               // Increment between server instances (defaults to portCount)
-  queryPortOffset: 1,          // Query port = defaultPort + offset
+  portCount: 1,
+  portStride: 1,
+  queryPortOffset: 1,
   requiresLogin: false,
   defaultLaunchParams: "-port={PORT}",
   description: "Brief description",
-  configFiles: ["config.cfg"], // Optional: important config files
-  postInstall: async (installPath, serverName) => { /* optional setup */ },
+  configFiles: ["config.cfg"],
+};
+
+export class MyGameAdapter extends BaseGameAdapter {
+  constructor() {
+    super(definition);
+  }
+  // Override methods as needed: readConfig(), writeConfig(), parsePlayerList(), etc.
 }
 ```
+
+**2. Create `server/src/games/mygame/index.ts`**:
+
+```typescript
+export { MyGameAdapter } from "./adapter.js";
+```
+
+**3. Register in `server/src/games/index.ts`**:
+
+```typescript
+import { MyGameAdapter } from "./mygame/index.js";
+// Add to GAME_ADAPTERS map:
+GAME_ADAPTERS.set("mygame", new MyGameAdapter());
+```
+
+**4. Create frontend plugin** in `client/src/games/mygame/index.ts`:
+
+```typescript
+import type { GameUIPlugin } from "../types";
+export const plugin: GameUIPlugin = {
+  gameId: "mygame",
+  name: "My Game",
+  logo: "mygame.png",
+  // configEditor: MyGameConfigEditor,  // Optional
+};
+```
+
+**5. Register in `client/src/games/registry.ts`**:
+
+```typescript
+import { plugin as mygamePlugin } from "./mygame";
+GAME_PLUGINS.set("mygame", mygamePlugin);
+```
+
+**6. Add logo** to `client/public/game-logos/mygame.png`
 
 ## Data Flow: Server Installation
 
@@ -429,16 +529,18 @@ import { broadcast } from "../index.js";
 broadcast("server:status", { serverId, status: "running" });
 ```
 
-**Database migrations:**
+**Database migrations** (versioned system in `server/src/db/migrations.ts`):
 
 ```typescript
-// Check if column exists before adding (manual migration pattern)
-const columns = db.exec(`PRAGMA table_info(game_servers)`)[0];
-const hasColumn = columns.values.some((row) => row[1] === "new_column");
-if (!hasColumn) {
-  db.run(`ALTER TABLE game_servers ADD COLUMN new_column TEXT DEFAULT ''`);
-  saveDatabase();
+// Add a new migration to the MIGRATIONS array:
+{
+  version: 5,
+  name: "add_my_new_column",
+  up: (db: Database) => {
+    db.run(`ALTER TABLE game_servers ADD COLUMN new_column TEXT DEFAULT ''`);
+  },
 }
+// Migrations run automatically on startup in order. Each is wrapped in a transaction.
 ```
 
 **Debugging server processes:**

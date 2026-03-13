@@ -8,10 +8,10 @@
  * - GAME_DEFINITIONS — backward-compatible record of all definitions
  */
 
-import type { GameAdapter, GameDefinition } from "./types.js";
-import { DayZAdapter } from "./dayz.js";
-import { ArkAdapter } from "./ark.js";
-import { SevenDaysAdapter } from "./7dtd.js";
+import type { GameAdapter, GameDefinition, GameMetadata } from "./types.js";
+import { DayZAdapter } from "./dayz/index.js";
+import { ArkAdapter } from "./ark/index.js";
+import { SevenDaysAdapter } from "./7dtd/index.js";
 
 // ── Adapter Instances (singletons) ─────────────────────────────────
 
@@ -71,6 +71,13 @@ export function getAllGameDefinitions(): GameDefinition[] {
 }
 
 /**
+ * Get metadata for all registered games (for frontend display).
+ */
+export function getAllGameMetadata(): GameMetadata[] {
+  return Array.from(adapters.values()).map((a) => a.getMetadata());
+}
+
+/**
  * Backward-compatible GAME_DEFINITIONS record.
  * Prefer getGameAdapter() / getGameDefinition() in new code.
  */
@@ -102,6 +109,8 @@ export async function runPostInstall(
 export type {
   GameAdapter,
   GameDefinition,
+  GameMetadata,
+  StartupDetector,
   RconConfig,
   PlayerFileConfig,
   PlayerListResult,
@@ -110,6 +119,6 @@ export type {
   LogPaths,
 } from "./types.js";
 export { BaseGameAdapter } from "./base.js";
-export { DayZAdapter } from "./dayz.js";
-export { ArkAdapter } from "./ark.js";
-export { SevenDaysAdapter } from "./7dtd.js";
+export { DayZAdapter } from "./dayz/index.js";
+export { ArkAdapter } from "./ark/index.js";
+export { SevenDaysAdapter } from "./7dtd/index.js";

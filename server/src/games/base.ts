@@ -12,6 +12,8 @@ import type { ServerMod } from "../types/index.js";
 import type {
   GameAdapter,
   GameDefinition,
+  GameMetadata,
+  StartupDetector,
   RconConfig,
   PlayerFileConfig,
   PlayerListResult,
@@ -108,6 +110,40 @@ export abstract class BaseGameAdapter implements GameAdapter {
     serverModParam: string;
   } {
     return { modParam: "", serverModParam: "" };
+  }
+
+  /**
+   * Default mod uninstall: finds @ModName folders matching the workshop ID via meta.cpp.
+   * Games with different mod structures override this.
+   */
+  async uninstallMod(
+    mod: ServerMod,
+    serverInstallPath: string,
+  ): Promise<ModCopyResult> {
+    try {
+      const entries = fs.readdirSync(serverInstallPath);
+      for (const entry of entries) {
+        if (!entry.startsWith("@")) continue;
+        const modFolder = path.join(serverInstallPath, entry);
+        const stat = fs.statSync(modFolder);
+        if (!stat.isDirectory()) continue;
+
+        const metaPath = path.join(modFolder, "meta.cpp");
+        if (fs.existsSync(metaPath)) {
+          const metaContent = fs.readFileSync(metaPath, "utf-8");
+          if (metaContent.includes(mod.workshopId)) {
+            fs.rmSync(modFolder, { recursive: true, force: true });
+            return { success: true, message: "Mod uninstalled successfully" };
+          }
+        }
+      }
+      return { success: false, message: "Mod folder not found on server" };
+    } catch (error) {
+      return {
+        success: false,
+        message: `Failed to uninstall mod: ${(error as Error).message}`,
+      };
+    }
   }
 
   // ── Player Management ────────────────────────────────────────────
@@ -264,6 +300,27 @@ export abstract class BaseGameAdapter implements GameAdapter {
    */
   getSpawnEnvironment(_server: GameServer): Record<string, string> {
     return {};
+  }
+
+  /**
+   * Default: no startup detection (uses fixed delay).
+   * Games override to provide pattern-based detection.
+   */
+  getStartupDetector(): StartupDetector | null {
+    return null;
+  }
+
+  /**
+   * Return game metadata for the frontend.
+   * Derived from the game definition.
+   */
+  getMetadata(): GameMetadata {
+    return {
+      id: this.definition.id,
+      name: this.definition.name,
+      logo: this.definition.logo,
+      description: this.definition.description,
+    };
   }
 }
 

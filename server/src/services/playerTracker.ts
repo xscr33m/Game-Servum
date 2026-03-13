@@ -22,7 +22,7 @@ import {
   getOnlinePlayers,
   lookupCharacterId,
 } from "../db/index.js";
-import { createRconClient, type RconClient } from "./rcon/index.js";
+import { createRconClient, type RconClient } from "../core/rcon/index.js";
 import { getGameAdapter } from "../games/index.js";
 import { getServerById as dbGetServerById } from "../db/index.js";
 
@@ -136,7 +136,7 @@ export function startPlayerTracking(
   // For freshly started servers with a startup pattern, wait for the log signal.
   // For restored servers (already running), always use the fixed delay.
   const hasStartupPattern =
-    !alreadyRunning && !!adapter?.definition.startupCompletePattern;
+    !alreadyRunning && adapter?.getStartupDetector() !== null;
   if (hasStartupPattern) {
     logger.info(
       `[PlayerTracker] Waiting for startup-complete signal before connecting RCON for server ${serverId}`,

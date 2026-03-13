@@ -11,10 +11,10 @@
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { logger } from "../index.js";
-import { recordPlayerConnect, recordPlayerDisconnect } from "../db/index.js";
-import { BaseGameAdapter } from "./base.js";
-import { readGameFile } from "./encoding.js";
+import { logger } from "../../index.js";
+import { recordPlayerConnect, recordPlayerDisconnect } from "../../db/index.js";
+import { BaseGameAdapter } from "../base.js";
+import { readGameFile } from "../encoding.js";
 import type {
   GameDefinition,
   RconConfig,
@@ -23,9 +23,9 @@ import type {
   ModCopyResult,
   LogPaths,
   StartupDetector,
-} from "./types.js";
-import type { GameServer } from "../types/index.js";
-import type { ServerMod } from "../types/index.js";
+} from "../types.js";
+import type { GameServer } from "../../types/index.js";
+import type { ServerMod } from "../../types/index.js";
 
 // ── Helpers ────────────────────────────────────────────────────────
 

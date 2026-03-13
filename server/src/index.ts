@@ -22,7 +22,7 @@ import {
 } from "./services/agentUpdater.js";
 import { getAllServers } from "./db/index.js";
 import { getGameAdapter } from "./games/index.js";
-import type { ArkAdapter } from "./games/ark.js";
+import type { ArkAdapter } from "./games/ark/adapter.js";
 import {
   startMetricsCollection,
   stopMetricsCollection,

@@ -10,15 +10,21 @@
 import type {
   GameCapabilities,
   FirewallRuleDefinition,
+  GameMetadata,
+  StartupDetector,
 } from "@game-servum/shared";
 import type { GameServer } from "../types/index.js";
 import type { ServerMod } from "../types/index.js";
+
+export type { GameMetadata, StartupDetector };
 
 // ── Game Definition (static metadata) ────────────────────────────────
 
 export interface GameDefinition {
   id: string;
   name: string;
+  /** Logo filename relative to game-logos/ (e.g. "dayz.png") */
+  logo: string;
   appId: number;
   workshopAppId?: number;
   executable: string;
@@ -143,6 +149,16 @@ export interface GameAdapter {
   ): Promise<ModCopyResult>;
 
   /**
+   * Remove a mod from the server directory.
+   * Default: removes @ModName folder matching mod's workshop ID via meta.cpp.
+   * Games with different mod structures (ARK Content/Mods/) override this.
+   */
+  uninstallMod(
+    mod: ServerMod,
+    serverInstallPath: string,
+  ): Promise<ModCopyResult>;
+
+  /**
    * Generate launch parameter strings for active mods.
    * Returns { modParam, serverModParam } for appending to launch command.
    */
@@ -234,6 +250,17 @@ export interface GameAdapter {
    * Example: 7DTD needs SteamAppId=251570 for Steam networking.
    */
   getSpawnEnvironment(server: GameServer): Record<string, string>;
+
+  /**
+   * Return startup detection config, or null to use a fixed delay.
+   * Replaces the hardcoded startupCompletePattern/startupLogFile in GameDefinition.
+   */
+  getStartupDetector(): StartupDetector | null;
+
+  /**
+   * Return game metadata for the frontend (name, logo, description).
+   */
+  getMetadata(): GameMetadata;
 
   /**
    * Return additional launch parameters to append before spawning.

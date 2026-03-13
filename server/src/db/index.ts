@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import { getConfig } from "../services/config.js";
 import { logger } from "../index.js";
+import { runMigrations } from "./migrations.js";
 import type {
   GameServer,
   SteamConfig,
@@ -42,126 +43,11 @@ export async function initDatabase(): Promise<SqlJsDatabase> {
   // Enable foreign key enforcement (required for ON DELETE CASCADE)
   db.run("PRAGMA foreign_keys = ON");
 
-  // Create tables
-  db.run(`
-    CREATE TABLE IF NOT EXISTS steam_config (
-      id INTEGER PRIMARY KEY DEFAULT 1,
-      username TEXT,
-      is_logged_in INTEGER DEFAULT 0,
-      last_login TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS game_servers (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      game_id TEXT NOT NULL,
-      name TEXT NOT NULL,
-      app_id INTEGER NOT NULL,
-      install_path TEXT NOT NULL,
-      executable TEXT NOT NULL,
-      launch_params TEXT,
-      port INTEGER DEFAULT 2302,
-      query_port INTEGER,
-      profiles_path TEXT DEFAULT 'profiles',
-      auto_restart INTEGER DEFAULT 0,
-      status TEXT DEFAULT 'stopped',
-      pid INTEGER,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS server_mods (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      server_id INTEGER NOT NULL,
-      workshop_id TEXT NOT NULL,
-      name TEXT NOT NULL,
-      enabled INTEGER DEFAULT 1,
-      is_server_mod INTEGER DEFAULT 0,
-      load_order INTEGER DEFAULT 0,
-      status TEXT DEFAULT 'pending',
-      installed_at TEXT,
-      workshop_updated_at TEXT,
-      FOREIGN KEY (server_id) REFERENCES game_servers(id) ON DELETE CASCADE,
-      UNIQUE(server_id, workshop_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS player_sessions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      server_id INTEGER NOT NULL,
-      steam_id TEXT NOT NULL,
-      player_name TEXT NOT NULL,
-      character_id TEXT,
-      connected_at TEXT NOT NULL,
-      disconnected_at TEXT,
-      is_online INTEGER DEFAULT 1,
-      FOREIGN KEY (server_id) REFERENCES game_servers(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS log_settings (
-      server_id INTEGER PRIMARY KEY,
-      archive_on_start INTEGER DEFAULT 1,
-      retention_days INTEGER DEFAULT 30,
-      FOREIGN KEY (server_id) REFERENCES game_servers(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS server_schedules (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      server_id INTEGER NOT NULL UNIQUE,
-      interval_hours INTEGER NOT NULL DEFAULT 4,
-      warning_minutes TEXT NOT NULL DEFAULT '[15,5,1]',
-      warning_message TEXT NOT NULL DEFAULT 'Server restart in {MINUTES} minutes!',
-      enabled INTEGER DEFAULT 0,
-      last_restart TEXT,
-      next_restart TEXT,
-      FOREIGN KEY (server_id) REFERENCES game_servers(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS server_messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      server_id INTEGER NOT NULL,
-      message TEXT NOT NULL,
-      interval_minutes INTEGER NOT NULL DEFAULT 30,
-      enabled INTEGER DEFAULT 1,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (server_id) REFERENCES game_servers(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS server_variables (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      server_id INTEGER NOT NULL,
-      name TEXT NOT NULL,
-      value TEXT NOT NULL DEFAULT '',
-      FOREIGN KEY (server_id) REFERENCES game_servers(id) ON DELETE CASCADE,
-      UNIQUE(server_id, name)
-    );
-
-    CREATE TABLE IF NOT EXISTS update_restart_settings (
-      server_id INTEGER PRIMARY KEY,
-      enabled INTEGER DEFAULT 0,
-      delay_minutes INTEGER NOT NULL DEFAULT 5,
-      warning_minutes TEXT NOT NULL DEFAULT '[5,3,1]',
-      warning_message TEXT NOT NULL DEFAULT 'Mod update detected! Server restart in {MINUTES} minutes.',
-      check_interval_minutes INTEGER NOT NULL DEFAULT 10,
-      check_game_updates INTEGER NOT NULL DEFAULT 1,
-      FOREIGN KEY (server_id) REFERENCES game_servers(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS app_settings (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS api_keys (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      key_hash TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      name TEXT NOT NULL DEFAULT 'Default',
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      last_used_at TEXT,
-      is_active INTEGER DEFAULT 1
-    );
-  `);
-
-  // Run migrations for existing databases
-  runMigrations();
+  // Run all pending migrations (creates tables on fresh DB, upgrades existing)
+  const applied = runMigrations(db, (msg) => logger.info(msg));
+  if (applied > 0) {
+    logger.info(`[DB] ${applied} migration(s) applied`);
+  }
 
   // Insert default steam config if not exists
   const existing = db.exec("SELECT id FROM steam_config WHERE id = 1");
@@ -179,58 +65,6 @@ export function saveDatabase(): void {
     const data = db.export();
     const buffer = Buffer.from(data);
     fs.writeFileSync(dbPath, buffer);
-  }
-}
-
-/**
- * Run database migrations for existing databases
- */
-function runMigrations(): void {
-  // Migration: Add api_keys table if it doesn't exist (for existing DBs)
-  const tables = db.exec(
-    "SELECT name FROM sqlite_master WHERE type='table' AND name='api_keys'",
-  );
-  if (tables.length === 0 || tables[0].values.length === 0) {
-    db.run(`
-      CREATE TABLE IF NOT EXISTS api_keys (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        key_hash TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        name TEXT NOT NULL DEFAULT 'Default',
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        last_used_at TEXT,
-        is_active INTEGER DEFAULT 1
-      )
-    `);
-    logger.info("[DB] Migration: Created api_keys table");
-  }
-
-  // Migration: Add started_at column to game_servers
-  const gsColumns = db.exec(`PRAGMA table_info(game_servers)`);
-  if (gsColumns.length > 0) {
-    const hasStartedAt = gsColumns[0].values.some(
-      (row) => row[1] === "started_at",
-    );
-    if (!hasStartedAt) {
-      db.run(
-        `ALTER TABLE game_servers ADD COLUMN started_at TEXT DEFAULT NULL`,
-      );
-      logger.info("[DB] Migration: Added started_at column to game_servers");
-    }
-  }
-
-  // Migration: Fix ARK executable path (moved from root to ShooterGame/Binaries/Win64/)
-  const arkServers = db.exec(
-    "SELECT id FROM game_servers WHERE game_id = 'ark' AND executable = 'ShooterGameServer.exe'",
-  );
-  if (arkServers.length > 0 && arkServers[0].values.length > 0) {
-    db.run(
-      "UPDATE game_servers SET executable = 'ShooterGame/Binaries/Win64/ShooterGameServer.exe' WHERE game_id = 'ark' AND executable = 'ShooterGameServer.exe'",
-    );
-    saveDatabase();
-    logger.info(
-      `[DB] Migration: Updated ARK executable path for ${arkServers[0].values.length} server(s)`,
-    );
   }
 }
 

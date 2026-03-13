@@ -11,8 +11,8 @@
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { logger } from "../index.js";
-import { BaseGameAdapter } from "./base.js";
+import { logger } from "../../index.js";
+import { BaseGameAdapter } from "../base.js";
 import type {
   GameDefinition,
   RconConfig,
@@ -21,8 +21,8 @@ import type {
   EditableFileConfig,
   LogPaths,
   StartupDetector,
-} from "./types.js";
-import type { GameServer } from "../types/index.js";
+} from "../types.js";
+import type { GameServer } from "../../types/index.js";
 
 // ── Helpers ────────────────────────────────────────────────────────
 
