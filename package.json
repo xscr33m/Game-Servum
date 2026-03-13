@@ -1,6 +1,6 @@
 {
   "name": "game-servum",
-  "version": "0.9.5",
+  "version": "0.9.6",
   "description": "Web-based GameServer management with SteamCMD",
   "private": true,
   "workspaces": [

@@ -1,6 +1,6 @@
 {
   "name": "@game-servum/shared",
-  "version": "0.9.5",
+  "version": "0.9.6",
   "type": "module",
   "description": "Shared types and constants for Game-Servum",
   "main": "dist/index.js",
