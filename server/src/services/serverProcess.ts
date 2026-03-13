@@ -261,19 +261,29 @@ export function startServer(serverId: number): StartResult {
       rconConfig || undefined,
     );
 
-    // Capture stdout/stderr to a log file for the LogsTab
+    // Capture stdout/stderr to a log file for the LogsTab (created lazily on first write)
     let consoleLogStream: fs.WriteStream | null = null;
+    let consoleLogPath: string | null = null;
     if (logPaths && logPaths.directories.length > 0) {
       const consoleLogDir = logPaths.directories[0];
       if (!fs.existsSync(consoleLogDir)) {
         fs.mkdirSync(consoleLogDir, { recursive: true });
       }
-      const consoleLogPath = path.join(consoleLogDir, "console-output.log");
-      consoleLogStream = fs.createWriteStream(consoleLogPath, { flags: "w" });
-      consoleLogStream.on("error", (err) => {
-        logger.error(`[ServerProcess] Console log write error: ${err.message}`);
-        consoleLogStream = null;
-      });
+      consoleLogPath = path.join(consoleLogDir, "console-output.log");
+    }
+
+    function writeConsoleLog(data: string): void {
+      if (!consoleLogPath) return;
+      if (!consoleLogStream) {
+        consoleLogStream = fs.createWriteStream(consoleLogPath, { flags: "w" });
+        consoleLogStream.on("error", (err) => {
+          logger.error(
+            `[ServerProcess] Console log write error: ${err.message}`,
+          );
+          consoleLogStream = null;
+        });
+      }
+      consoleLogStream.write(data);
     }
 
     // Collect stderr output for error reporting
@@ -288,7 +298,7 @@ export function startServer(serverId: number): StartResult {
     child.stdout?.on("data", (data: Buffer) => {
       const output = data.toString();
       logger.debug(`[Server ${serverId}] ${output}`);
-      consoleLogStream?.write(output);
+      writeConsoleLog(output);
       broadcast("server:output", {
         serverId,
         type: "stdout",
@@ -385,7 +395,7 @@ export function startServer(serverId: number): StartResult {
       logger.error(`[Server ${serverId}] STDERR: ${output}`);
       // Keep last stderr output for crash reporting
       lastStderrOutput = output;
-      consoleLogStream?.write(output);
+      writeConsoleLog(output);
       broadcast("server:output", {
         serverId,
         type: "stderr",
