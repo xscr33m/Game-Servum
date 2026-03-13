@@ -27,7 +27,7 @@ import { Switch } from "@/components/ui/switch";
 import { useBackend } from "@/hooks/useBackend";
 import { useGameCapabilities } from "@/hooks/useGameCapabilities";
 import { toastSuccess } from "@/lib/toast";
-import { UpdateCheckDialog } from "@/components/server/UpdateCheckDialog";
+import { UpdateCheckDialog } from "@/components/server-details/UpdateCheckDialog";
 import { logger } from "@/lib/logger";
 import type {
   GameServer,

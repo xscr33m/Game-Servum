@@ -456,39 +456,25 @@ export async function uninstallMod(
     return { success: false, message: "Server not found" };
   }
 
-  // Find and remove mod folder
-  try {
-    const serverPath = server.installPath;
-    const entries = fs.readdirSync(serverPath);
-
-    // Look for mod folders starting with @
-    for (const entry of entries) {
-      if (entry.startsWith("@")) {
-        const modFolder = path.join(serverPath, entry);
-        const metaPath = path.join(modFolder, "meta.cpp");
-
-        // Check if this is our mod by looking at meta.cpp or mod folder name
-        if (fs.existsSync(metaPath)) {
-          const metaContent = fs.readFileSync(metaPath, "utf-8");
-          // Check for workshop ID in meta
-          if (metaContent.includes(mod.workshopId)) {
-            fs.rmSync(modFolder, { recursive: true, force: true });
-            deleteMod(modId);
-            return { success: true, message: "Mod uninstalled successfully" };
-          }
-        }
-      }
+  // Delegate to game adapter for game-specific uninstall logic
+  const adapter = getGameAdapter(server.gameId);
+  if (adapter) {
+    const result = await adapter.uninstallMod(mod, server.installPath);
+    if (result.success) {
+      deleteMod(modId);
+      return { success: true, message: "Mod uninstalled successfully" };
     }
-
-    // If we couldn't find the specific mod folder, just delete from DB
-    deleteMod(modId);
-    return { success: true, message: "Mod removed from database" };
-  } catch (error) {
-    return {
-      success: false,
-      message: `Failed to uninstall mod: ${(error as Error).message}`,
-    };
+    // If adapter couldn't find the mod files, still remove from DB
+    if (!result.success && result.message.includes("not found")) {
+      deleteMod(modId);
+      return { success: true, message: "Mod removed from database" };
+    }
+    return result;
   }
+
+  // Fallback: no adapter — just delete from DB
+  deleteMod(modId);
+  return { success: true, message: "Mod removed from database" };
 }
 
 /**

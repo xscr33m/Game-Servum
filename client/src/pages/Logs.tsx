@@ -43,7 +43,7 @@ import {
 import { useBackend } from "@/hooks/useBackend";
 import { publicAsset } from "@/lib/assets";
 import { AppHeader } from "@/components/AppHeader";
-import { AgentStatusBanner } from "@/components/AgentStatusBanner";
+import { AgentStatusBanner } from "@/components/agent/AgentStatusBanner";
 import { toastSuccess, toastError } from "@/lib/toast";
 import { logger } from "@/lib/logger";
 import { LogLevel } from "@game-servum/shared";

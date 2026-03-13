@@ -16,17 +16,17 @@ import {
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ServerCard } from "@/components/ServerCard";
+import { ServerCard } from "@/components/server-details/ServerCard";
 import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
 import {
   isOnboardingComplete,
   resetOnboarding,
 } from "@/components/onboarding/onboardingState";
-import { AddServerDialog } from "@/components/AddServerDialog";
-import { DeleteServerDialog } from "@/components/DeleteServerDialog";
-import { SteamAccountDialog } from "@/components/SteamAccountDialog";
-import { SystemMonitor } from "@/components/SystemMonitor";
-import { AgentStatusBanner } from "@/components/AgentStatusBanner";
+import { AddServerDialog } from "@/components/server-details/dialogs/AddServerDialog";
+import { DeleteServerDialog } from "@/components/server-details/dialogs/DeleteServerDialog";
+import { SteamAccountDialog } from "@/components/agent/SteamAccountDialog";
+import { SystemMonitor } from "@/components/agent/SystemMonitor";
+import { AgentStatusBanner } from "@/components/agent/AgentStatusBanner";
 import { useBackend } from "@/hooks/useBackend";
 import { logger } from "@/lib/logger";
 import { getElectronSettings } from "@/lib/electronSettings";

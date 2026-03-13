@@ -11,10 +11,10 @@
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { logger } from "../index.js";
-import { recordPlayerConnect, recordPlayerDisconnect } from "../db/index.js";
-import { BaseGameAdapter } from "./base.js";
-import { readGameFile } from "./encoding.js";
+import { logger } from "../../index.js";
+import { recordPlayerConnect, recordPlayerDisconnect } from "../../db/index.js";
+import { BaseGameAdapter } from "../base.js";
+import { readGameFile } from "../encoding.js";
 import type {
   GameDefinition,
   RconConfig,
@@ -22,9 +22,10 @@ import type {
   EditableFileConfig,
   ModCopyResult,
   LogPaths,
-} from "./types.js";
-import type { GameServer } from "../types/index.js";
-import type { ServerMod } from "../types/index.js";
+  StartupDetector,
+} from "../types.js";
+import type { GameServer } from "../../types/index.js";
+import type { ServerMod } from "../../types/index.js";
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -138,6 +139,7 @@ export class ArkAdapter extends BaseGameAdapter {
   readonly definition: GameDefinition = {
     id: "ark",
     name: "ARK: Survival Evolved",
+    logo: "ark.png",
     appId: 376030,
     workshopAppId: 346110, // ARK Workshop mods are under the game AppID (346110), not the server (376030)
     executable: "ShooterGame/Binaries/Win64/ShooterGameServer.exe",
@@ -193,6 +195,15 @@ export class ArkAdapter extends BaseGameAdapter {
   private playerNameCache = new Map<string, string>();
   private nameCacheLastRefresh = 0;
   private static readonly NAME_CACHE_TTL_MS = 60_000; // Re-read log at most once per minute
+
+  getStartupDetector(): StartupDetector | null {
+    return {
+      type: "logfile",
+      pattern: "Full Startup: .+ seconds",
+      logFile: "ShooterGame/Saved/Logs/ShooterGame.log",
+      timeoutMs: 300_000, // ARK can take 5 minutes to start
+    };
+  }
 
   // ── Lifecycle ────────────────────────────────────────────────────
 
@@ -376,7 +387,7 @@ export class ArkAdapter extends BaseGameAdapter {
 
   /**
    * Ensure RCON-critical keys exist in GameUserSettings.ini.
-   * Called before every server start and on agent startup (via ensureConfigSections).
+   * Called before every server start via validatePreStart().
    */
   private ensureRconConfig(server: GameServer): void {
     const gusPath = path.join(
@@ -439,186 +450,6 @@ export class ArkAdapter extends BaseGameAdapter {
         `[ARK] Failed to ensure RCON config for "${server.name}":`,
         err,
       );
-    }
-  }
-
-  /**
-   * Ensure all required INI sections/keys exist in config files.
-   * Called at startup for existing ARK servers that were installed before
-   * the enhanced postInstall — adds missing sections/keys with defaults.
-   */
-  ensureConfigSections(server: GameServer): void {
-    const savedConfigPath = path.join(
-      server.installPath,
-      "ShooterGame",
-      "Saved",
-      "Config",
-      "WindowsServer",
-    );
-
-    // ── GameUserSettings.ini ──
-    const gusPath = path.join(savedConfigPath, "GameUserSettings.ini");
-    if (fs.existsSync(gusPath)) {
-      try {
-        let gusContent = readGameFile(gusPath);
-        let modified = false;
-
-        // [ServerSettings] defaults — only add keys that are missing
-        const serverDefaults: Record<string, string> = {
-          ServerPassword: "",
-          RCONEnabled: "True",
-          AllowThirdPersonPlayer: "True",
-          ShowMapPlayerLocation: "True",
-          ServerCrosshair: "True",
-          AllowHitMarkers: "True",
-          EnablePvPGamma: "True",
-          AllowFlyerCarryPvE: "False",
-          DifficultyOffset: "1.000000",
-          OverrideOfficialDifficulty: "5.000000",
-          MaxTamedDinos: "5000.000000",
-          ItemStackSizeMultiplier: "1.000000",
-          TheMaxStructuresInRange: "10500.000000",
-          PerPlatformMaxStructuresMultiplier: "1.000000",
-          PlatformSaddleBuildAreaBoundsMultiplier: "1.000000",
-          StructurePickupTimeAfterPlacement: "30.000000",
-          StructurePickupHoldDuration: "0.500000",
-          StructurePreventResourceRadiusMultiplier: "1.000000",
-          AllowIntegratedSPlusStructures: "True",
-          DisableStructureDecayPvE: "False",
-          PvEDinoDecayPeriodMultiplier: "1.000000",
-          AutoSavePeriodMinutes: "15.000000",
-          KickIdlePlayersPeriod: "3600.000000",
-          TribeNameChangeCooldown: "15.000000",
-          AllowHideDamageSourceFromLogs: "True",
-          RCONServerGameLogBuffer: "600.000000",
-          RaidDinoCharacterFoodDrainMultiplier: "1.000000",
-          OxygenSwimSpeedStatMultiplier: "1.000000",
-          ListenServerTetherDistanceMultiplier: "1.000000",
-        };
-
-        for (const [key, value] of Object.entries(serverDefaults)) {
-          if (getIniProperty(gusContent, "ServerSettings", key) === null) {
-            gusContent = setIniProperty(
-              gusContent,
-              "ServerSettings",
-              key,
-              value,
-            );
-            modified = true;
-          }
-        }
-
-        // Ensure RCON config exists (delegates to shared helper)
-        this.ensureRconConfig(server);
-
-        // [SessionSettings] SessionName
-        if (
-          getIniProperty(gusContent, "SessionSettings", "SessionName") === null
-        ) {
-          gusContent = setIniProperty(
-            gusContent,
-            "SessionSettings",
-            "SessionName",
-            server.name,
-          );
-          modified = true;
-        }
-
-        // [/Script/Engine.GameSession] MaxPlayers
-        if (
-          getIniProperty(
-            gusContent,
-            "/Script/Engine.GameSession",
-            "MaxPlayers",
-          ) === null
-        ) {
-          gusContent = setIniProperty(
-            gusContent,
-            "/Script/Engine.GameSession",
-            "MaxPlayers",
-            "70",
-          );
-          modified = true;
-        }
-
-        if (modified) {
-          fs.writeFileSync(gusPath, gusContent, "utf-8");
-          logger.info(
-            `[ARK] Repaired missing sections/keys in GameUserSettings.ini for "${server.name}"`,
-          );
-        }
-      } catch (err) {
-        logger.error(
-          `[ARK] Failed to repair GameUserSettings.ini for "${server.name}":`,
-          err,
-        );
-      }
-    }
-
-    // ── Game.ini ──
-    const gamePath = path.join(savedConfigPath, "Game.ini");
-    if (fs.existsSync(gamePath)) {
-      try {
-        let gameContent = readGameFile(gamePath);
-        let modified = false;
-
-        const modeDefaults: Record<string, string> = {
-          XPMultiplier: "1.000000",
-          TamingSpeedMultiplier: "1.000000",
-          HarvestAmountMultiplier: "1.000000",
-          DayCycleSpeedScale: "1.000000",
-          NightTimeSpeedScale: "1.000000",
-          DinoDamageMultiplier: "1.000000",
-          PlayerDamageMultiplier: "1.000000",
-          StructureDamageMultiplier: "1.000000",
-          PlayerResistanceMultiplier: "1.000000",
-          DinoResistanceMultiplier: "1.000000",
-          StructureResistanceMultiplier: "1.000000",
-          DinoCountMultiplier: "1.000000",
-          ResourcesRespawnPeriodMultiplier: "1.000000",
-          EggHatchSpeedMultiplier: "1.000000",
-          BabyMatureSpeedMultiplier: "1.000000",
-          MatingIntervalMultiplier: "1.000000",
-          BabyFoodConsumptionSpeedMultiplier: "1.000000",
-          CropGrowthSpeedMultiplier: "1.000000",
-          FuelConsumptionIntervalMultiplier: "1.000000",
-          KillXPMultiplier: "1.000000",
-          HarvestXPMultiplier: "1.000000",
-          CraftXPMultiplier: "1.000000",
-          GenericXPMultiplier: "1.000000",
-          SpecialXPMultiplier: "1.000000",
-        };
-
-        for (const [key, value] of Object.entries(modeDefaults)) {
-          if (
-            getIniProperty(
-              gameContent,
-              "/Script/ShooterGame.ShooterGameMode",
-              key,
-            ) === null
-          ) {
-            gameContent = setIniProperty(
-              gameContent,
-              "/Script/ShooterGame.ShooterGameMode",
-              key,
-              value,
-            );
-            modified = true;
-          }
-        }
-
-        if (modified) {
-          fs.writeFileSync(gamePath, gameContent, "utf-8");
-          logger.info(
-            `[ARK] Repaired missing sections/keys in Game.ini for "${server.name}"`,
-          );
-        }
-      } catch (err) {
-        logger.error(
-          `[ARK] Failed to repair Game.ini for "${server.name}":`,
-          err,
-        );
-      }
     }
   }
 
@@ -758,6 +589,33 @@ export class ArkAdapter extends BaseGameAdapter {
       modParam: `-automanagedmods -mods=${modIds.join(",")}`,
       serverModParam: "",
     };
+  }
+
+  /**
+   * ARK mods live in ShooterGame/Content/Mods/{workshopId}
+   */
+  async uninstallMod(
+    mod: ServerMod,
+    serverInstallPath: string,
+  ): Promise<ModCopyResult> {
+    const modPath = path.join(
+      serverInstallPath,
+      "ShooterGame",
+      "Content",
+      "Mods",
+      mod.workshopId,
+    );
+    try {
+      if (fs.existsSync(modPath)) {
+        fs.rmSync(modPath, { recursive: true, force: true });
+      }
+      return { success: true, message: "Mod uninstalled successfully" };
+    } catch (error) {
+      return {
+        success: false,
+        message: `Failed to uninstall mod: ${(error as Error).message}`,
+      };
+    }
   }
 
   /**

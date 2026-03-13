@@ -107,6 +107,7 @@ router.get("/games", (_req: Request, res: Response) => {
   const games = getAllGameDefinitions().map((game) => ({
     id: game.id,
     name: game.name,
+    logo: game.logo,
     appId: game.appId,
     workshopAppId: game.workshopAppId,
     defaultPort: game.defaultPort,

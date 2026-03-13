@@ -13,10 +13,10 @@
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { logger } from "../index.js";
-import { updateCharacterIds } from "../db/index.js";
-import { recordPlayerConnect, recordPlayerDisconnect } from "../db/index.js";
-import { BaseGameAdapter } from "./base.js";
+import { logger } from "../../index.js";
+import { updateCharacterIds } from "../../db/index.js";
+import { recordPlayerConnect, recordPlayerDisconnect } from "../../db/index.js";
+import { BaseGameAdapter } from "../base.js";
 import type {
   GameDefinition,
   RconConfig,
@@ -24,9 +24,10 @@ import type {
   EditableFileConfig,
   ModCopyResult,
   LogPaths,
-} from "./types.js";
-import type { GameServer } from "../types/index.js";
-import type { ServerMod } from "../types/index.js";
+  StartupDetector,
+} from "../types.js";
+import type { GameServer } from "../../types/index.js";
+import type { ServerMod } from "../../types/index.js";
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -59,6 +60,7 @@ export class DayZAdapter extends BaseGameAdapter {
   readonly definition: GameDefinition = {
     id: "dayz",
     name: "DayZ",
+    logo: "dayz.png",
     appId: 223350,
     workshopAppId: 221100,
     executable: "DayZServer_x64.exe",
@@ -351,6 +353,11 @@ export class DayZAdapter extends BaseGameAdapter {
 
   getLogFileExtensions(): string[] {
     return [".ADM", ".RPT", ".log"];
+  }
+
+  getStartupDetector(): StartupDetector | null {
+    // DayZ does not have a reliable startup pattern — uses fixed delay
+    return null;
   }
 
   getLogPaths(server: GameServer): LogPaths {

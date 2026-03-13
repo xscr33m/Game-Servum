@@ -19,23 +19,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useBackend } from "@/hooks/useBackend";
 import { toastSuccess } from "@/lib/toast";
-import { DayZConfigEditor } from "@/components/server/config-editors/DayZConfigEditor";
-import { SevenDaysConfigEditor } from "@/components/server/config-editors/SevenDaysConfigEditor";
-import { ArkConfigEditor } from "@/components/server/config-editors/ArkConfigEditor";
+import { getConfigEditor } from "@/components/server-details/games/registry";
 import type { GameServer } from "@/types";
-
-interface ConfigEditorProps {
-  rawContent: string;
-  originalContent: string;
-  onContentChange: (content: string) => void;
-  fileName?: string;
-}
-
-const CONFIG_EDITORS: Record<string, React.ComponentType<ConfigEditorProps>> = {
-  dayz: DayZConfigEditor,
-  "7dtd": SevenDaysConfigEditor,
-  ark: ArkConfigEditor,
-};
 
 interface FileState {
   rawContent: string;
@@ -244,7 +229,7 @@ export function ConfigTab({ server }: ConfigTabProps) {
 
           <TabsContent value="form" className="space-y-4">
             {(() => {
-              const Editor = CONFIG_EDITORS[server.gameId];
+              const Editor = getConfigEditor(server.gameId);
               return Editor ? (
                 <Editor
                   rawContent={currentState.rawContent}

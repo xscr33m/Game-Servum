@@ -308,9 +308,8 @@ export function startServer(serverId: number): StartResult {
 
     // Handle stdout
     let startupDetected = false;
-    const startupPattern = gameDef?.startupCompletePattern
-      ? new RegExp(gameDef.startupCompletePattern)
-      : null;
+    const detector = adapter?.getStartupDetector() ?? null;
+    const startupPattern = detector ? new RegExp(detector.pattern) : null;
 
     child.stdout?.on("data", (data: Buffer) => {
       const output = data.toString();
@@ -322,11 +321,11 @@ export function startServer(serverId: number): StartResult {
         message: output,
       });
 
-      // Detect startup completion from stdout (fallback for games without startupLogFile)
+      // Detect startup completion from stdout (for games without logfile-based detection)
       if (
         !startupDetected &&
         startupPattern &&
-        !gameDef?.startupLogFile &&
+        detector?.type === "stdout" &&
         startupPattern.test(output)
       ) {
         startupDetected = true;
@@ -334,7 +333,7 @@ export function startServer(serverId: number): StartResult {
       }
     });
 
-    // Detect startup completion from game log file (ARK writes to file, not stdout)
+    // Detect startup completion from game log file
     let logWatchInterval: ReturnType<typeof setInterval> | null = null;
     let lastLogSize = 0;
 
@@ -349,7 +348,7 @@ export function startServer(serverId: number): StartResult {
         logWatchInterval = null;
       }
 
-      // Re-apply RCON config to INI after start (ARK may have overwritten it)
+      // Re-validate adapter config after start (game may have overwritten config files)
       if (adapter) {
         const freshServer = getServerById(serverId);
         if (freshServer) {
@@ -360,8 +359,8 @@ export function startServer(serverId: number): StartResult {
       notifyServerReady(serverId);
     }
 
-    if (startupPattern && gameDef?.startupLogFile) {
-      const logFilePath = path.join(server.installPath, gameDef.startupLogFile);
+    if (startupPattern && detector?.type === "logfile" && detector.logFile) {
+      const logFilePath = path.join(server.installPath, detector.logFile);
 
       // Initialize to current file size so we only read NEW content after spawn
       try {
@@ -381,7 +380,7 @@ export function startServer(serverId: number): StartResult {
         try {
           if (!fs.existsSync(logFilePath)) return;
           const stat = fs.statSync(logFilePath);
-          // If file was truncated/recreated (ARK creates fresh log on start), reset position
+          // If file was truncated/recreated, reset position
           if (stat.size < lastLogSize) {
             lastLogSize = 0;
           }
@@ -404,6 +403,19 @@ export function startServer(serverId: number): StartResult {
           // File may not exist yet or be locked — retry next interval
         }
       }, 3000);
+
+      // Timeout: give up on startup detection after configured timeout
+      if (detector.timeoutMs) {
+        setTimeout(() => {
+          if (!startupDetected) {
+            logger.warn(
+              `[ServerProcess] Startup detection timed out after ${detector.timeoutMs}ms for server ${serverId}, proceeding with RCON connect`,
+            );
+            startupDetected = true;
+            onStartupComplete();
+          }
+        }, detector.timeoutMs);
+      }
     }
 
     // Handle stderr

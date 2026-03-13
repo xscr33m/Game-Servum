@@ -67,6 +67,7 @@ export interface ArchiveSession {
 export interface GameDefinition {
   id: string;
   name: string;
+  logo: string;
   appId: number;
   workshopAppId?: number;
   defaultPort: number;

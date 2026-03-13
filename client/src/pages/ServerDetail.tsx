@@ -17,18 +17,18 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { OverviewTab } from "@/components/server/OverviewTab";
-import { ConfigTab } from "@/components/server/ConfigTab";
-import { ModsTab } from "@/components/server/ModsTab";
+import { OverviewTab } from "@/components/server-details/OverviewTab";
+import { ConfigTab } from "@/components/server-details/ConfigTab";
+import { ModsTab } from "@/components/server-details/ModsTab";
 import { publicAsset } from "@/lib/assets";
-import { PlayersTab } from "@/components/server/PlayersTab";
-import { LogsTab } from "@/components/server/LogsTab";
-import { SettingsTab } from "@/components/server/SettingsTab";
+import { PlayersTab } from "@/components/server-details/PlayersTab";
+import { LogsTab } from "@/components/server-details/LogsTab";
+import { SettingsTab } from "@/components/server-details/SettingsTab";
 import { useBackend } from "@/hooks/useBackend";
 import { useGameCapabilities } from "@/hooks/useGameCapabilities";
 import { AgentControlPanel } from "@/components/agent/AgentControlPanel";
 import { AppHeader } from "@/components/AppHeader";
-import { AgentStatusBanner } from "@/components/AgentStatusBanner";
+import { AgentStatusBanner } from "@/components/agent/AgentStatusBanner";
 import {
   toastSuccess,
   toastError,

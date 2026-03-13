@@ -11,8 +11,8 @@
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { logger } from "../index.js";
-import { BaseGameAdapter } from "./base.js";
+import { logger } from "../../index.js";
+import { BaseGameAdapter } from "../base.js";
 import type {
   GameDefinition,
   RconConfig,
@@ -20,8 +20,9 @@ import type {
   PlayerListResult,
   EditableFileConfig,
   LogPaths,
-} from "./types.js";
-import type { GameServer } from "../types/index.js";
+  StartupDetector,
+} from "../types.js";
+import type { GameServer } from "../../types/index.js";
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -53,6 +54,7 @@ export class SevenDaysAdapter extends BaseGameAdapter {
   readonly definition: GameDefinition = {
     id: "7dtd",
     name: "7 Days to Die",
+    logo: "7daystodie.png",
     appId: 294420,
     executable: "7DaysToDieServer.exe",
     defaultPort: 26900,
@@ -361,6 +363,11 @@ export class SevenDaysAdapter extends BaseGameAdapter {
     // 7DTD requires the CLIENT app ID set for Steam networking to work.
     // This matches the official startdedicated.bat: set SteamAppId=251570
     return { SteamAppId: "251570" };
+  }
+
+  getStartupDetector(): StartupDetector | null {
+    // 7DTD does not have a reliable startup pattern — uses fixed delay
+    return null;
   }
 
   getEditableFiles(server: GameServer): EditableFileConfig[] {

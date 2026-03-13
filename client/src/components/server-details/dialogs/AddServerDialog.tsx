@@ -21,9 +21,9 @@ import {
   FaCheck,
 } from "react-icons/fa6";
 import { useBackend } from "@/hooks/useBackend";
-import { SteamAccountDialog } from "@/components/SteamAccountDialog";
+import { SteamAccountDialog } from "@/components/agent/SteamAccountDialog";
 import { publicAsset } from "@/lib/assets";
-import { getGameLogo } from "@/lib/gameMetadata";
+import { getGameLogo } from "@/components/server-details/games/registry";
 import { toastSuccess } from "@/lib/toast";
 import type { GameDefinition, GameServer, SteamCMDStatus } from "@/types";
 

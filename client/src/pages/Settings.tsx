@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { useBackend } from "@/hooks/useBackend";
 import { publicAsset } from "@/lib/assets";
 import { AppHeader } from "@/components/AppHeader";
-import { AgentStatusBanner } from "@/components/AgentStatusBanner";
+import { AgentStatusBanner } from "@/components/agent/AgentStatusBanner";
 import { getElectronSettings } from "@/lib/electronSettings";
 import { logger } from "@/lib/logger";
 import { toastSuccess, toastError, toastInfo } from "@/lib/toast";
