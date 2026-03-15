@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Card,
   CardContent,
@@ -7,6 +8,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -14,6 +16,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useBackend } from "@/hooks/useBackend";
+import { toastSuccess, toastError } from "@/lib/toast";
+import { FaFloppyDisk } from "react-icons/fa6";
 
 // ── Section-aware INI helpers ──────────────────────────────────────
 /** Strip UTF-8 BOM that Unreal Engine prepends to INI files. */
@@ -220,6 +225,13 @@ const GUS_SECTIONS: SectionDef[] = [
         label: "Flyer Carry (PvE)",
         type: "boolean",
       },
+      {
+        key: "ShowAnniversaryContent",
+        section: "ServerSettings",
+        label: "Anniversary Content",
+        type: "boolean",
+        description: "Show anniversary event content",
+      },
     ],
   },
   {
@@ -259,6 +271,15 @@ const GUS_SECTIONS: SectionDef[] = [
         type: "float",
         min: 0.1,
         step: 0.1,
+      },
+      {
+        key: "GreaterRiftActivationMultiplier",
+        section: "ServerSettings",
+        label: "Greater Rift Activation Multiplier",
+        type: "float",
+        min: 0,
+        step: 0.1,
+        description: "Multiplier for Greater Rift activation (Fjordur)",
       },
     ],
   },
@@ -851,6 +872,111 @@ interface ArkConfigEditorProps {
   originalContent: string;
   onContentChange: (content: string) => void;
   fileName?: string;
+  initialMode?: boolean;
+  serverId?: number;
+}
+
+/** Initial settings form shown before ARK generates its config files */
+function ArkInitialSettings({ serverId }: { serverId: number }) {
+  const { api } = useBackend();
+  const [saving, setSaving] = useState(false);
+  const [sessionName, setSessionName] = useState("ARK Server");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [serverPassword, setServerPassword] = useState("");
+  const [maxPlayers, setMaxPlayers] = useState(70);
+
+  async function handleSave() {
+    if (!adminPassword) {
+      toastError("Admin password is required");
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.servers.saveInitialSettings(serverId, {
+        sessionName,
+        adminPassword,
+        serverPassword: serverPassword || undefined,
+        maxPlayers,
+      });
+      toastSuccess("Initial settings saved. Start the server to apply them.");
+    } catch (err) {
+      toastError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Initial Server Settings</CardTitle>
+        <CardDescription>
+          Configure the basic server settings before the first start. ARK will
+          generate its full configuration files during the first launch.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="sessionName">Session Name</Label>
+          <Input
+            id="sessionName"
+            value={sessionName}
+            onChange={(e) => setSessionName(e.target.value)}
+            placeholder="My ARK Server"
+          />
+          <p className="text-xs text-muted-foreground">
+            The name displayed in the server browser
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="adminPassword">Admin Password *</Label>
+          <Input
+            id="adminPassword"
+            type="password"
+            value={adminPassword}
+            onChange={(e) => setAdminPassword(e.target.value)}
+            placeholder="Required"
+          />
+          <p className="text-xs text-muted-foreground">
+            Password for in-game admin access (required)
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="serverPassword">Server Password</Label>
+          <Input
+            id="serverPassword"
+            type="password"
+            value={serverPassword}
+            onChange={(e) => setServerPassword(e.target.value)}
+            placeholder="Optional"
+          />
+          <p className="text-xs text-muted-foreground">
+            Password required to join the server (leave empty for public)
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="maxPlayers">Max Players</Label>
+          <Input
+            id="maxPlayers"
+            type="number"
+            min={1}
+            max={500}
+            value={maxPlayers}
+            onChange={(e) => setMaxPlayers(Number(e.target.value))}
+          />
+          <p className="text-xs text-muted-foreground">
+            Maximum number of concurrent players (default: 70)
+          </p>
+        </div>
+        <div className="md:col-span-2 flex justify-end">
+          <Button onClick={handleSave} disabled={saving}>
+            <FaFloppyDisk className="h-4 w-4 mr-2" />
+            {saving ? "Saving..." : "Save Initial Settings"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export function ArkConfigEditor({
@@ -858,7 +984,13 @@ export function ArkConfigEditor({
   originalContent,
   onContentChange,
   fileName,
+  initialMode,
+  serverId,
 }: ArkConfigEditorProps) {
+  // Initial mode: show simplified form before first start
+  if (initialMode && serverId) {
+    return <ArkInitialSettings serverId={serverId} />;
+  }
   // Choose sections based on which config file is being edited
   const isGameIni = fileName?.toLowerCase() === "game.ini";
   const sections = isGameIni ? GAME_INI_SECTIONS : GUS_SECTIONS;

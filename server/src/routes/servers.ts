@@ -1091,6 +1091,100 @@ router.get("/:id/disk-usage", async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/servers/:id/config-status - Check if game config files have been generated
+router.get("/:id/config-status", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  const gameDef = getGameDefinition(server.gameId);
+  const configFiles = gameDef?.configFiles || [];
+  const adapter = getGameAdapter(server.gameId);
+
+  // Check if adapter supports isConfigGenerated (e.g. ARK)
+  const configGenerated = adapter?.isConfigGenerated
+    ? adapter.isConfigGenerated(server)
+    : true; // Non-ARK games always have config generated after install
+
+  // Check which config files actually exist
+  const existingFiles = configFiles
+    .map((f) => path.basename(f))
+    .filter((basename) => {
+      const fullPath = configFiles.find((f) => path.basename(f) === basename);
+      return fullPath && fs.existsSync(path.join(server.installPath, fullPath));
+    });
+
+  res.json({
+    configGenerated,
+    configFiles: configFiles.map((f) => path.basename(f)),
+    existingFiles,
+  });
+});
+
+// PUT /api/servers/:id/initial-settings - Save initial config settings as launch params
+router.put("/:id/initial-settings", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  if (server.status === "running") {
+    return res.status(400).json({
+      error: "Cannot modify settings while server is running.",
+    });
+  }
+
+  const { sessionName, adminPassword, serverPassword, maxPlayers } =
+    req.body as {
+      sessionName?: string;
+      adminPassword?: string;
+      serverPassword?: string;
+      maxPlayers?: number;
+    };
+
+  // Get current launch params (base template)
+  const gameDef = getGameDefinition(server.gameId);
+  let launchParams = server.launchParams || gameDef?.defaultLaunchParams || "";
+
+  // Helper: set or replace a ?Key=Value in the launch params
+  const setParam = (key: string, value: string): void => {
+    const regex = new RegExp(`([?])${key}=[^?\\s]*`, "i");
+    if (regex.test(launchParams)) {
+      launchParams = launchParams.replace(regex, `$1${key}=${value}`);
+    } else {
+      // Insert before first -flag argument (UE4 convention)
+      const dashIndex = launchParams.search(/\s+-/);
+      const param = `?${key}=${value}`;
+      if (dashIndex !== -1) {
+        launchParams =
+          launchParams.slice(0, dashIndex) +
+          param +
+          launchParams.slice(dashIndex);
+      } else {
+        launchParams += param;
+      }
+    }
+  };
+
+  if (sessionName !== undefined) setParam("SessionName", sessionName);
+  if (adminPassword !== undefined)
+    setParam("ServerAdminPassword", adminPassword);
+  if (serverPassword !== undefined) setParam("ServerPassword", serverPassword);
+  if (maxPlayers !== undefined) setParam("MaxPlayers", String(maxPlayers));
+
+  updateServerLaunchParams(id, launchParams);
+
+  res.json({
+    success: true,
+    message: "Initial settings saved to launch parameters",
+  });
+});
+
 // GET /api/servers/:id/config - Get server configuration file
 router.get("/:id/config", (req: Request, res: Response) => {
   const id = parseInt(req.params.id, 10);
@@ -1200,6 +1294,117 @@ router.put("/:id/config", (req: Request, res: Response) => {
     }
 
     fs.writeFileSync(configPath, content, "utf-8");
+
+    // ARK sync: when saving GameUserSettings.ini, sync critical values back to launch params
+    // so that getAdditionalLaunchParams() always reflects the latest config
+    if (
+      server.gameId === "ark" &&
+      path.basename(configFileName) === "GameUserSettings.ini"
+    ) {
+      try {
+        const adapter = getGameAdapter(server.gameId);
+        if (adapter) {
+          const savedContent = content;
+          let launchParams = server.launchParams || "";
+          const gameDef = getGameDefinition(server.gameId);
+          if (!launchParams && gameDef) {
+            launchParams = gameDef.defaultLaunchParams;
+          }
+
+          // Helper to extract INI values from the saved content
+          const getIniVal = (section: string, key: string): string | null => {
+            const lines = savedContent.split("\n");
+            const sectionHeader = `[${section}]`;
+            let inSection = false;
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (trimmed.toLowerCase() === sectionHeader.toLowerCase()) {
+                inSection = true;
+                continue;
+              }
+              if (trimmed.startsWith("[")) {
+                if (inSection) break;
+                continue;
+              }
+              if (inSection) {
+                const eqIdx = trimmed.indexOf("=");
+                if (eqIdx > 0) {
+                  const k = trimmed.substring(0, eqIdx).trim();
+                  if (k.toLowerCase() === key.toLowerCase()) {
+                    return trimmed.substring(eqIdx + 1).trim();
+                  }
+                }
+              }
+            }
+            return null;
+          };
+
+          // Sync critical values to launch params
+          const syncKeys = [
+            {
+              paramKey: "SessionName",
+              iniSection: "SessionSettings",
+              iniKey: "SessionName",
+            },
+            {
+              paramKey: "ServerAdminPassword",
+              iniSection: "ServerSettings",
+              iniKey: "ServerAdminPassword",
+            },
+            {
+              paramKey: "ServerPassword",
+              iniSection: "ServerSettings",
+              iniKey: "ServerPassword",
+            },
+            {
+              paramKey: "RCONPort",
+              iniSection: "ServerSettings",
+              iniKey: "RCONPort",
+            },
+            {
+              paramKey: "MaxPlayers",
+              iniSection: "/Script/Engine.GameSession",
+              iniKey: "MaxPlayers",
+            },
+          ];
+
+          for (const { paramKey, iniSection, iniKey } of syncKeys) {
+            const val = getIniVal(iniSection, iniKey);
+            if (val !== null) {
+              const regex = new RegExp(`([?])${paramKey}=[^?\\s]*`, "i");
+              if (regex.test(launchParams)) {
+                launchParams = launchParams.replace(
+                  regex,
+                  `$1${paramKey}=${val}`,
+                );
+              } else {
+                const dashIndex = launchParams.search(/\s+-/);
+                const param = `?${paramKey}=${val}`;
+                if (dashIndex !== -1) {
+                  launchParams =
+                    launchParams.slice(0, dashIndex) +
+                    param +
+                    launchParams.slice(dashIndex);
+                } else {
+                  launchParams += param;
+                }
+              }
+            }
+          }
+
+          updateServerLaunchParams(id, launchParams);
+          logger.info(
+            `[ARK] Synced config values to launch params for server ${id}`,
+          );
+        }
+      } catch (syncErr) {
+        logger.error(
+          `[ARK] Failed to sync config values to launch params:`,
+          syncErr,
+        );
+      }
+    }
+
     res.json({ success: true, message: "Configuration saved" });
   } catch (err) {
     res.status(500).json({

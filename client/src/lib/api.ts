@@ -203,6 +203,20 @@ export interface ServersApiClient {
     content: string;
     configFiles?: string[];
   }>;
+  getConfigStatus: (id: number) => Promise<{
+    configGenerated: boolean;
+    configFiles: string[];
+    existingFiles: string[];
+  }>;
+  saveInitialSettings: (
+    id: number,
+    settings: {
+      sessionName?: string;
+      adminPassword?: string;
+      serverPassword?: string;
+      maxPlayers?: number;
+    },
+  ) => Promise<{ success: boolean; message: string }>;
   saveConfig: (
     id: number,
     content: string,
@@ -702,6 +716,28 @@ function createServersApi(fetchApi: FetchApiFn): ServersApiClient {
         configFiles?: string[];
       }>(
         `/servers/${id}/config${file ? `?file=${encodeURIComponent(file)}` : ""}`,
+      ),
+    getConfigStatus: (id: number) =>
+      fetchApi<{
+        configGenerated: boolean;
+        configFiles: string[];
+        existingFiles: string[];
+      }>(`/servers/${id}/config-status`),
+    saveInitialSettings: (
+      id: number,
+      settings: {
+        sessionName?: string;
+        adminPassword?: string;
+        serverPassword?: string;
+        maxPlayers?: number;
+      },
+    ) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${id}/initial-settings`,
+        {
+          method: "PUT",
+          body: JSON.stringify(settings),
+        },
       ),
     saveConfig: (id: number, content: string, file?: string) =>
       fetchApi<{ success: boolean; message: string }>(

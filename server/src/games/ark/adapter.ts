@@ -210,11 +210,14 @@ export class ArkAdapter extends BaseGameAdapter {
   async postInstall(
     installPath: string,
     serverName: string,
-    port: number,
+    _port: number,
   ): Promise<void> {
     logger.info(`[ARK] Running post-install for ${serverName}...`);
 
-    // ARK needs ShooterGame/Saved directory structure
+    // ARK needs ShooterGame/Saved directory structure.
+    // Do NOT create config files — ARK generates them on first start.
+    // The user configures initial settings (name, password, etc.) via the
+    // Initial-Settings UI, which stores them as launch parameters.
     const savedConfigPath = path.join(
       installPath,
       "ShooterGame",
@@ -226,146 +229,15 @@ export class ArkAdapter extends BaseGameAdapter {
       fs.mkdirSync(savedConfigPath, { recursive: true });
     }
 
-    // Create minimal INI files from scratch.
-    // ARK overwrites configs copied from DefaultGameUserSettings.ini on first start,
-    // but respects pre-existing minimal files and merges its own defaults on top.
-    const gusTarget = path.join(savedConfigPath, "GameUserSettings.ini");
-    if (!fs.existsSync(gusTarget)) {
-      fs.writeFileSync(gusTarget, "", "utf-8");
-    }
-    const gameTarget = path.join(savedConfigPath, "Game.ini");
-    if (!fs.existsSync(gameTarget)) {
-      fs.writeFileSync(gameTarget, "", "utf-8");
-    }
-
     // Ensure Logs directory exists (ARK writes to ShooterGame/Saved/Logs/)
     const logsPath = path.join(installPath, "ShooterGame", "Saved", "Logs");
     if (!fs.existsSync(logsPath)) {
       fs.mkdirSync(logsPath, { recursive: true });
     }
 
-    // Configure GameUserSettings.ini with server-specific settings + all form editor defaults
-    const gusPath = path.join(savedConfigPath, "GameUserSettings.ini");
-    try {
-      let gusContent = readGameFile(gusPath);
-      const adminPassword = generatePassword(20);
-      const rconPort = port + (this.definition.rconPortOffset || 19243);
-      const queryPort = port + (this.definition.queryPortOffset || 19238);
-
-      // All [ServerSettings] keys the form editor expects
-      const serverSettings: Record<string, string> = {
-        SessionName: serverName,
-        ServerPassword: "",
-        ServerAdminPassword: adminPassword,
-        RCONEnabled: "True",
-        RCONPort: String(rconPort),
-        Port: String(port),
-        QueryPort: String(queryPort),
-        AllowThirdPersonPlayer: "True",
-        ShowMapPlayerLocation: "True",
-        ServerCrosshair: "True",
-        AllowHitMarkers: "True",
-        EnablePvPGamma: "True",
-        AllowFlyerCarryPvE: "False",
-        DifficultyOffset: "1.000000",
-        OverrideOfficialDifficulty: "5.000000",
-        MaxTamedDinos: "5000.000000",
-        ItemStackSizeMultiplier: "1.000000",
-        TheMaxStructuresInRange: "10500.000000",
-        PerPlatformMaxStructuresMultiplier: "1.000000",
-        PlatformSaddleBuildAreaBoundsMultiplier: "1.000000",
-        StructurePickupTimeAfterPlacement: "30.000000",
-        StructurePickupHoldDuration: "0.500000",
-        StructurePreventResourceRadiusMultiplier: "1.000000",
-        AllowIntegratedSPlusStructures: "True",
-        DisableStructureDecayPvE: "False",
-        PvEDinoDecayPeriodMultiplier: "1.000000",
-        AutoSavePeriodMinutes: "15.000000",
-        KickIdlePlayersPeriod: "3600.000000",
-        TribeNameChangeCooldown: "15.000000",
-        AllowHideDamageSourceFromLogs: "True",
-        RCONServerGameLogBuffer: "600.000000",
-        RaidDinoCharacterFoodDrainMultiplier: "1.000000",
-        OxygenSwimSpeedStatMultiplier: "1.000000",
-        ListenServerTetherDistanceMultiplier: "1.000000",
-      };
-
-      for (const [key, value] of Object.entries(serverSettings)) {
-        gusContent = setIniProperty(gusContent, "ServerSettings", key, value);
-      }
-
-      // [SessionSettings] SessionName
-      gusContent = setIniProperty(
-        gusContent,
-        "SessionSettings",
-        "SessionName",
-        serverName,
-      );
-
-      // [/Script/Engine.GameSession] MaxPlayers
-      gusContent = setIniProperty(
-        gusContent,
-        "/Script/Engine.GameSession",
-        "MaxPlayers",
-        "70",
-      );
-
-      fs.writeFileSync(gusPath, gusContent, "utf-8");
-      logger.info(
-        `[ARK] Configured GameUserSettings.ini: SessionName=${serverName}, Port=${port}, QueryPort=${queryPort}, RCONPort=${rconPort}, RCONEnabled=True`,
-      );
-    } catch (err) {
-      logger.error(`[ARK] Failed to configure GameUserSettings.ini:`, err);
-    }
-
-    // Configure Game.ini with default multiplier values
-    const gamePath = path.join(savedConfigPath, "Game.ini");
-    try {
-      let gameContent = readGameFile(gamePath);
-
-      const modeSettings: Record<string, string> = {
-        XPMultiplier: "1.000000",
-        TamingSpeedMultiplier: "1.000000",
-        HarvestAmountMultiplier: "1.000000",
-        DayCycleSpeedScale: "1.000000",
-        NightTimeSpeedScale: "1.000000",
-        DinoDamageMultiplier: "1.000000",
-        PlayerDamageMultiplier: "1.000000",
-        StructureDamageMultiplier: "1.000000",
-        PlayerResistanceMultiplier: "1.000000",
-        DinoResistanceMultiplier: "1.000000",
-        StructureResistanceMultiplier: "1.000000",
-        DinoCountMultiplier: "1.000000",
-        ResourcesRespawnPeriodMultiplier: "1.000000",
-        EggHatchSpeedMultiplier: "1.000000",
-        BabyMatureSpeedMultiplier: "1.000000",
-        MatingIntervalMultiplier: "1.000000",
-        BabyFoodConsumptionSpeedMultiplier: "1.000000",
-        CropGrowthSpeedMultiplier: "1.000000",
-        FuelConsumptionIntervalMultiplier: "1.000000",
-        KillXPMultiplier: "1.000000",
-        HarvestXPMultiplier: "1.000000",
-        CraftXPMultiplier: "1.000000",
-        GenericXPMultiplier: "1.000000",
-        SpecialXPMultiplier: "1.000000",
-      };
-
-      for (const [key, value] of Object.entries(modeSettings)) {
-        gameContent = setIniProperty(
-          gameContent,
-          "/Script/ShooterGame.ShooterGameMode",
-          key,
-          value,
-        );
-      }
-
-      fs.writeFileSync(gamePath, gameContent, "utf-8");
-      logger.info(`[ARK] Configured Game.ini with default multiplier values`);
-    } catch (err) {
-      logger.error(`[ARK] Failed to configure Game.ini:`, err);
-    }
-
-    logger.info(`[ARK] Post-install complete for ${serverName}`);
+    logger.info(
+      `[ARK] Post-install complete for ${serverName} (directories only, no config files)`,
+    );
   }
 
   validatePreStart(server: GameServer): string[] {
@@ -377,12 +249,159 @@ export class ArkAdapter extends BaseGameAdapter {
       errors.push(`Server executable not found: ${server.executable}`);
     }
 
-    // Ensure RCON config exists before every start.
-    // ARK may overwrite the INI on first launch, losing the RCON settings
-    // written by postInstall. This re-applies them if missing.
-    this.ensureRconConfig(server);
+    // If config already exists, ensure RCON settings are present.
+    // Before first start (no INI), RCON is injected via launch params instead.
+    if (this.isConfigGenerated(server)) {
+      this.ensureRconConfig(server);
+    }
 
     return errors;
+  }
+
+  // ── Config Lifecycle ─────────────────────────────────────────────
+
+  /**
+   * Check whether ARK has generated its config files (after first full start).
+   * Returns true if GameUserSettings.ini exists and is non-trivial (>100 bytes).
+   */
+  isConfigGenerated(server: GameServer): boolean {
+    const gusPath = path.join(
+      server.installPath,
+      "ShooterGame",
+      "Saved",
+      "Config",
+      "WindowsServer",
+      "GameUserSettings.ini",
+    );
+    try {
+      if (!fs.existsSync(gusPath)) return false;
+      const stat = fs.statSync(gusPath);
+      return stat.size > 100;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Write initial settings into ARK-generated config files.
+   * Called after the first full server start (World Save Complete),
+   * once ARK has created its own GameUserSettings.ini.
+   * Reads values from launch params and writes them into the INI.
+   */
+  writeInitialSettingsToConfig(server: GameServer): void {
+    const gusPath = path.join(
+      server.installPath,
+      "ShooterGame",
+      "Saved",
+      "Config",
+      "WindowsServer",
+      "GameUserSettings.ini",
+    );
+
+    if (!fs.existsSync(gusPath)) {
+      logger.warn(
+        `[ARK] Cannot write initial settings: GameUserSettings.ini not found`,
+      );
+      return;
+    }
+
+    try {
+      let content = readGameFile(gusPath);
+      const launchParams = server.launchParams || "";
+      const rconPort = server.port + (this.definition.rconPortOffset || 19243);
+      const queryPort =
+        server.queryPort ??
+        server.port + (this.definition.queryPortOffset || 19238);
+
+      // Extract values from launch params (set by Initial-Settings UI)
+      const sessionName =
+        this.extractLaunchParam(launchParams, "SessionName") || server.name;
+      const adminPassword =
+        this.extractLaunchParam(launchParams, "ServerAdminPassword") ||
+        generatePassword(20);
+      const serverPassword =
+        this.extractLaunchParam(launchParams, "ServerPassword") || "";
+      const maxPlayers =
+        this.extractLaunchParam(launchParams, "MaxPlayers") || "70";
+      const rconPortStr =
+        this.extractLaunchParam(launchParams, "RCONPort") || String(rconPort);
+
+      // Write into [ServerSettings]
+      content = setIniProperty(
+        content,
+        "ServerSettings",
+        "SessionName",
+        sessionName,
+      );
+      content = setIniProperty(
+        content,
+        "ServerSettings",
+        "ServerAdminPassword",
+        adminPassword,
+      );
+      content = setIniProperty(
+        content,
+        "ServerSettings",
+        "ServerPassword",
+        serverPassword,
+      );
+      content = setIniProperty(
+        content,
+        "ServerSettings",
+        "RCONEnabled",
+        "True",
+      );
+      content = setIniProperty(
+        content,
+        "ServerSettings",
+        "RCONPort",
+        rconPortStr,
+      );
+      content = setIniProperty(
+        content,
+        "ServerSettings",
+        "Port",
+        String(server.port),
+      );
+      content = setIniProperty(
+        content,
+        "ServerSettings",
+        "QueryPort",
+        String(queryPort),
+      );
+
+      // Write into [SessionSettings]
+      content = setIniProperty(
+        content,
+        "SessionSettings",
+        "SessionName",
+        sessionName,
+      );
+
+      // Write into [/Script/Engine.GameSession]
+      content = setIniProperty(
+        content,
+        "/Script/Engine.GameSession",
+        "MaxPlayers",
+        maxPlayers,
+      );
+
+      fs.writeFileSync(gusPath, content, "utf-8");
+      logger.info(
+        `[ARK] Wrote initial settings to GameUserSettings.ini: SessionName=${sessionName}, RCONPort=${rconPortStr}, MaxPlayers=${maxPlayers}`,
+      );
+    } catch (err) {
+      logger.error(`[ARK] Failed to write initial settings to config:`, err);
+    }
+  }
+
+  /**
+   * Extract a ?Key=Value parameter from an ARK-style launch param string.
+   */
+  private extractLaunchParam(launchParams: string, key: string): string | null {
+    const regex = new RegExp(`[?]${key}=([^?\\s]+)`, "i");
+    const match = launchParams.match(regex);
+    return match ? match[1] : null;
   }
 
   /**
@@ -508,23 +527,96 @@ export class ArkAdapter extends BaseGameAdapter {
   }
 
   /**
-   * Inject ServerAdminPassword and RCONPort into launch params.
-   * ARK overwrites GameUserSettings.ini on first start, losing RCON settings.
-   * Passing them as command-line args ensures RCON works from the very first boot.
+   * Inject critical settings into launch params.
+   * ARK overwrites GameUserSettings.ini on first start, so these values
+   * must ALWAYS be passed as command-line args to ensure they take effect.
+   *
+   * Source priority:
+   * 1. Existing launch params (user/initial-settings already set them)
+   * 2. GameUserSettings.ini (if config has been generated)
+   * 3. Defaults from server DB record (name, port)
    */
   getAdditionalLaunchParams(server: GameServer): string {
-    const rconConfig = this.readRconConfig(server);
-    if (!rconConfig) return "";
-
+    const existingParams = server.launchParams || "";
+    const configExists = this.isConfigGenerated(server);
     const params: string[] = [];
 
-    // Only append if not already in the user's launch params
-    const existingParams = server.launchParams || "";
-    if (!/ServerAdminPassword=/i.test(existingParams)) {
-      params.push(`?ServerAdminPassword=${rconConfig.password}`);
+    // Helper: read from INI if it exists
+    const readFromIni = (section: string, key: string): string | null => {
+      if (!configExists) return null;
+      const gusPath = path.join(
+        server.installPath,
+        "ShooterGame",
+        "Saved",
+        "Config",
+        "WindowsServer",
+        "GameUserSettings.ini",
+      );
+      try {
+        const content = readGameFile(gusPath);
+        return getIniProperty(content, section, key);
+      } catch {
+        return null;
+      }
+    };
+
+    // Helper: get value with priority: existing launch params → INI → default
+    const resolve = (
+      key: string,
+      iniSection: string,
+      iniKey: string,
+      defaultVal: string,
+    ): string | null => {
+      // If already in launch params, skip (no duplicate)
+      if (new RegExp(`[?]${key}=`, "i").test(existingParams)) return null;
+      // Try INI
+      const iniVal = readFromIni(iniSection, iniKey);
+      if (iniVal) return iniVal;
+      // Use default
+      return defaultVal;
+    };
+
+    const rconPort = server.port + (this.definition.rconPortOffset || 19243);
+    const queryPort =
+      server.queryPort ??
+      server.port + (this.definition.queryPortOffset || 19238);
+
+    // ServerAdminPassword — critical for RCON
+    const adminPass = resolve(
+      "ServerAdminPassword",
+      "ServerSettings",
+      "ServerAdminPassword",
+      "",
+    );
+    if (adminPass) {
+      params.push(`?ServerAdminPassword=${adminPass}`);
     }
-    if (!/RCONPort=/i.test(existingParams)) {
-      params.push(`?RCONPort=${rconConfig.port}`);
+
+    // RCONPort
+    const rconPortVal = resolve(
+      "RCONPort",
+      "ServerSettings",
+      "RCONPort",
+      String(rconPort),
+    );
+    if (rconPortVal) {
+      params.push(`?RCONPort=${rconPortVal}`);
+    }
+
+    // RCONEnabled — always ensure it's on
+    if (!/RCONEnabled=/i.test(existingParams)) {
+      params.push("?RCONEnabled=True");
+    }
+
+    // QueryPort
+    const queryPortVal = resolve(
+      "QueryPort",
+      "ServerSettings",
+      "QueryPort",
+      String(queryPort),
+    );
+    if (queryPortVal) {
+      params.push(`?QueryPort=${queryPortVal}`);
     }
 
     return params.join("");

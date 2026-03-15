@@ -309,4 +309,17 @@ export interface GameAdapter {
    * E.g. ARK writes ActiveMods= into GameUserSettings.ini.
    */
   updateActiveModsInConfig?(serverInstallPath: string, mods: ServerMod[]): void;
+
+  /**
+   * Check whether the game has generated its config files.
+   * Used by games like ARK where the server creates configs on first start.
+   * Returns true if config files exist and are non-trivial.
+   */
+  isConfigGenerated?(server: GameServer): boolean;
+
+  /**
+   * Write initial settings (from launch params) into game-generated config files.
+   * Called after the first successful server start once configs exist.
+   */
+  writeInitialSettingsToConfig?(server: GameServer): void;
 }

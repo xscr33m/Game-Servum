@@ -222,6 +222,9 @@ export function startServer(serverId: number): StartResult {
     }
   }
 
+  // Check whether config already exists BEFORE start (for first-start detection)
+  const configExistedBeforeStart = adapter?.isConfigGenerated?.(server) ?? true;
+
   // Parse arguments - same for all platforms
   const args = parseArguments(launchParams);
   logger.debug(`[ServerProcess] Parsed args: ${JSON.stringify(args)}`);
@@ -353,6 +356,26 @@ export function startServer(serverId: number): StartResult {
         const freshServer = getServerById(serverId);
         if (freshServer) {
           adapter.validatePreStart(freshServer);
+
+          // First-start config handling: if config didn't exist before start
+          // but the game has now generated it, write initial settings into the
+          // generated config and notify clients
+          if (
+            !configExistedBeforeStart &&
+            adapter.isConfigGenerated?.(freshServer)
+          ) {
+            logger.info(
+              `[ServerProcess] First-start config detected for server ${serverId}, writing initial settings`,
+            );
+            try {
+              adapter.writeInitialSettingsToConfig?.(freshServer);
+              broadcast("server:config-ready", { serverId });
+            } catch (err) {
+              logger.error(
+                `[ServerProcess] Failed to write initial settings: ${err}`,
+              );
+            }
+          }
         }
       }
 

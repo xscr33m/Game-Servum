@@ -14,6 +14,10 @@ export interface ConfigEditorProps {
   originalContent: string;
   onContentChange: (content: string) => void;
   fileName: string;
+  /** When true, show only initial setup fields (pre-first-start) */
+  initialMode?: boolean;
+  /** Server ID — needed for initial mode API calls */
+  serverId?: number;
 }
 
 /** Frontend game plugin — provides UI components for a specific game */

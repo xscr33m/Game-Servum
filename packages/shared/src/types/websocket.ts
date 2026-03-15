@@ -26,7 +26,8 @@ export type WSMessageType =
   | "update:restart"
   | "update:applied"
   | "update-check:complete"
-  | "firewall:updated";
+  | "firewall:updated"
+  | "server:config-ready";
 
 export interface WSMessage {
   type: WSMessageType;
