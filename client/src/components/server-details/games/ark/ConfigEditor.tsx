@@ -165,10 +165,8 @@ interface FieldDef {
   colSpan?: 2;
   /** Default value shown for Game.ini fields when not yet in the file */
   defaultValue?: string | number;
-  /** Regex pattern that the value must match (for text fields) */
-  validationPattern?: RegExp;
-  /** Error message shown when validationPattern doesn't match */
-  validationMessage?: string;
+  /** Regex matching characters to strip from input (applied on every change) */
+  sanitizePattern?: RegExp;
 }
 
 interface SectionDef {
@@ -189,10 +187,8 @@ const GUS_SECTIONS: SectionDef[] = [
         section: "SessionSettings",
         label: "Session Name",
         type: "text",
-        description: "Display name shown in the server browser",
-        validationPattern: /^[a-zA-Z0-9_-]*$/,
-        validationMessage:
-          "Only letters, digits, hyphens and underscores allowed",
+        description: "Only letters, digits, hyphens and underscores",
+        sanitizePattern: /[^a-zA-Z0-9_-]/g,
       },
       {
         key: "ServerPassword",
@@ -1198,33 +1194,28 @@ function renderField(
 
   switch (field.type) {
     case "text":
-    case "password": {
-      const strValue = String(value);
-      const hasValidationError =
-        field.validationPattern &&
-        strValue &&
-        !field.validationPattern.test(strValue);
+    case "password":
       return (
         <div className={colClass} key={field.key}>
           <Label htmlFor={field.key}>{field.label}</Label>
           <Input
             id={field.key}
             type={field.type}
-            value={strValue}
-            onChange={(e) => handleChange(field.key, e.target.value)}
+            value={String(value)}
+            onChange={(e) => {
+              let v = e.target.value;
+              if (field.sanitizePattern) {
+                v = v.replace(field.sanitizePattern, "");
+              }
+              handleChange(field.key, v);
+            }}
             placeholder={field.placeholder}
           />
-          {hasValidationError && (
-            <p className="text-xs text-destructive font-medium">
-              {field.validationMessage}
-            </p>
-          )}
           {field.description && (
             <p className="text-xs text-muted-foreground">{field.description}</p>
           )}
         </div>
       );
-    }
 
     case "number":
       return (
