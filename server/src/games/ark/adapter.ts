@@ -307,11 +307,19 @@ export class ArkAdapter extends BaseGameAdapter {
 
     try {
       let content = readGameFile(gusPath);
-      const launchParams = server.launchParams || "";
       const rconPort = server.port + (this.definition.rconPortOffset || 19243);
       const queryPort =
         server.queryPort ??
         server.port + (this.definition.queryPortOffset || 19238);
+
+      // Resolve placeholders in launch params so we extract real values,
+      // not template variables like {SERVER_NAME} or {PORT}
+      const launchParams = (server.launchParams || "")
+        .replace(/\{SERVER_NAME\}/g, server.name)
+        .replace(/\{PORT\}/g, String(server.port))
+        .replace(/\{QUERY_PORT\}/g, String(queryPort))
+        .replace(/\{INSTALL_PATH\}/g, server.installPath)
+        .replace(/\{PROFILES\}/g, server.profilesPath);
 
       // Extract values from launch params (set by Initial-Settings UI)
       const sessionName =
