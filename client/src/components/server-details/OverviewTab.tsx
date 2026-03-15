@@ -35,6 +35,9 @@ interface OverviewTabProps {
   onRefresh?: () => void;
 }
 
+// Module-level cache so disk usage survives tab switches
+const diskUsageCache = new Map<number, string>();
+
 export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
   const { api, isConnected } = useBackend();
   const { capabilities } = useGameCapabilities(server.gameId);
@@ -73,8 +76,10 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
   const [portsSaving, setPortsSaving] = useState(false);
   const [portsError, setPortsError] = useState<string | null>(null);
 
-  // Disk usage
-  const [diskUsage, setDiskUsage] = useState<string | null>(null);
+  // Disk usage — initialize from cache for instant display, refresh in background
+  const [diskUsage, setDiskUsage] = useState<string | null>(
+    () => diskUsageCache.get(server.id) ?? null,
+  );
 
   // Sync local state when server prop changes
   useEffect(() => {
@@ -160,13 +165,16 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
 
   const nameChanged = serverName !== server.name;
 
-  // Load disk usage
+  // Load disk usage in background — cache result for instant display on next visit
   useEffect(() => {
     if (!isConnected) return;
     api.servers
       .getDiskUsage(server.id)
-      .then((result) => setDiskUsage(result.sizeFormatted))
-      .catch(() => setDiskUsage(null));
+      .then((result) => {
+        diskUsageCache.set(server.id, result.sizeFormatted);
+        setDiskUsage(result.sizeFormatted);
+      })
+      .catch(() => {});
   }, [server.id, api.servers, isConnected]);
 
   const handleSaveProfilesPath = useCallback(async () => {
