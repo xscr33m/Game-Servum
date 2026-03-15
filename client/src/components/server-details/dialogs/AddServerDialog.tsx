@@ -269,12 +269,13 @@ export function AddServerDialog({
     }
   }
 
-  const hasSpaces = selectedGame?.id === "ark" && /\s/.test(serverName);
+  const hasInvalidChars =
+    selectedGame?.id === "ark" && /[^a-zA-Z0-9_-]/.test(serverName);
   const canCreate =
     selectedGame &&
     serverName.trim() &&
     !portConflict &&
-    !hasSpaces &&
+    !hasInvalidChars &&
     (!selectedGame.requiresLogin || isLoggedIn);
 
   const stepTitles: Record<WizardStep, { title: string; description: string }> =
@@ -501,11 +502,12 @@ export function AddServerDialog({
                     onChange={(e) => setServerName(e.target.value)}
                     disabled={loading}
                   />
-                  {selectedGame?.id === "ark" && /\s/.test(serverName) && (
-                    <p className="text-xs text-destructive font-medium">
-                      ARK server names must not contain spaces
-                    </p>
-                  )}
+                  {selectedGame?.id === "ark" &&
+                    /[^a-zA-Z0-9_-]/.test(serverName) && (
+                      <p className="text-xs text-destructive font-medium">
+                        Only letters, digits, hyphens and underscores allowed
+                      </p>
+                    )}
                   <p className="text-xs text-muted-foreground">
                     This will also be used as the installation folder name
                     {selectedGame?.id === "ark"

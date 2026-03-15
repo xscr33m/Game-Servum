@@ -139,8 +139,8 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
       setNameError("Name cannot be empty");
       return;
     }
-    if (server.gameId === "ark" && /\s/.test(serverName.trim())) {
-      setNameError("ARK server names must not contain spaces");
+    if (server.gameId === "ark" && /[^a-zA-Z0-9_-]/.test(serverName.trim())) {
+      setNameError("Only letters, digits, hyphens and underscores allowed");
       return;
     }
     setNameSaving(true);

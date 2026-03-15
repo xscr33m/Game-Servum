@@ -1337,9 +1337,12 @@ function ArkInitialSettings({
   // Pre-populate from existing launch params (if the user saved before)
   // Fall back to server name so they stay in sync from the start
   const lp = launchParams || "";
-  const [sessionName, setSessionName] = useState(
-    () => getLaunchParam(lp, "SessionName") || serverName || "ARK-Server",
-  );
+  const [sessionName, setSessionName] = useState(() => {
+    const raw = getLaunchParam(lp, "SessionName");
+    // Resolve {SERVER_NAME} placeholder to actual server name
+    if (!raw || raw === "{SERVER_NAME}") return serverName || "ARK-Server";
+    return raw;
+  });
   const [adminPassword, setAdminPassword] = useState(
     () => getLaunchParam(lp, "ServerAdminPassword") || "",
   );
@@ -1361,8 +1364,10 @@ function ArkInitialSettings({
       toastError("Admin password is required");
       return;
     }
-    if (/\s/.test(sessionName)) {
-      toastError("Session name must not contain spaces");
+    if (/[^a-zA-Z0-9_-]/.test(sessionName)) {
+      toastError(
+        "Session name may only contain letters, digits, hyphens and underscores",
+      );
       return;
     }
     setSaving(true);
@@ -1440,13 +1445,13 @@ function ArkInitialSettings({
             onChange={(e) => setSessionName(e.target.value)}
             placeholder="ARK-Server-1"
           />
-          {/\s/.test(sessionName) && (
+          {/[^a-zA-Z0-9_-]/.test(sessionName) && (
             <p className="text-xs text-destructive font-medium">
-              Session name must not contain spaces
+              Only letters, digits, hyphens and underscores allowed
             </p>
           )}
           <p className="text-xs text-muted-foreground">
-            The name displayed in the server browser (no spaces allowed)
+            The name displayed in the server browser
           </p>
         </div>
         <div className="space-y-2">

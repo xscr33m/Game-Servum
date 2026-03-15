@@ -218,11 +218,11 @@ router.post("/", async (req: Request, res: Response) => {
     return res.status(400).json({ error: `Unknown game: ${body.gameId}` });
   }
 
-  // ARK: server name must not contain spaces (used as SessionName in launch params)
-  if (body.gameId === "ark" && /\s/.test(body.name.trim())) {
+  // ARK: server name may only contain letters, digits, hyphens, underscores
+  if (body.gameId === "ark" && /[^a-zA-Z0-9_-]/.test(body.name.trim())) {
     return res.status(400).json({
       error:
-        "ARK server names must not contain spaces (the name is used as SessionName in launch parameters).",
+        "ARK server names may only contain letters, digits, hyphens and underscores (the name is used as SessionName in launch parameters).",
     });
   }
 
@@ -625,11 +625,11 @@ router.put("/:id/name", (req: Request, res: Response) => {
       .json({ error: "Name must be 100 characters or less" });
   }
 
-  // ARK: server name must not contain spaces (used as SessionName in launch params)
-  if (server.gameId === "ark" && /\s/.test(name.trim())) {
+  // ARK: server name may only contain letters, digits, hyphens, underscores
+  if (server.gameId === "ark" && /[^a-zA-Z0-9_-]/.test(name.trim())) {
     return res.status(400).json({
       error:
-        "ARK server names must not contain spaces (the name is used as SessionName in launch parameters).",
+        "ARK server names may only contain letters, digits, hyphens and underscores (the name is used as SessionName in launch parameters).",
     });
   }
 
@@ -1231,8 +1231,8 @@ router.put("/:id/initial-settings", (req: Request, res: Response) => {
   }
 
   if (sessionName !== undefined) {
-    // ARK: SessionName must not contain spaces (UE4 launch param delimiter)
-    const sanitizedSessionName = sessionName.replace(/\s+/g, "_");
+    // ARK: SessionName may only contain letters, digits, hyphens, underscores
+    const sanitizedSessionName = sessionName.replace(/[^a-zA-Z0-9_-]/g, "_");
     setParam("SessionName", sanitizedSessionName);
   }
   if (adminPassword !== undefined)
@@ -1242,13 +1242,12 @@ router.put("/:id/initial-settings", (req: Request, res: Response) => {
 
   updateServerLaunchParams(id, launchParams);
 
-  // Keep server name in sync with SessionName
-  if (
-    sessionName !== undefined &&
-    sessionName.trim() &&
-    sessionName.trim() !== server.name
-  ) {
-    updateServerName(id, sessionName.trim());
+  // Keep server name in sync with SessionName (use sanitized version)
+  if (sessionName !== undefined) {
+    const sanitizedName = sessionName.replace(/[^a-zA-Z0-9_-]/g, "_").trim();
+    if (sanitizedName && sanitizedName !== server.name) {
+      updateServerName(id, sanitizedName);
+    }
   }
 
   res.json({
@@ -1487,7 +1486,9 @@ router.put("/:id/config", (req: Request, res: Response) => {
           // Keep server name in sync with SessionName from INI
           const newSessionName = getIniVal("SessionSettings", "SessionName");
           if (newSessionName) {
-            const sanitized = newSessionName.replace(/\s+/g, "_").trim();
+            const sanitized = newSessionName
+              .replace(/[^a-zA-Z0-9_-]/g, "_")
+              .trim();
             if (sanitized && sanitized !== server.name) {
               updateServerName(id, sanitized);
             }
