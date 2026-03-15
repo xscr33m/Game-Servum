@@ -139,6 +139,10 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
       setNameError("Name cannot be empty");
       return;
     }
+    if (server.gameId === "ark" && /\s/.test(serverName.trim())) {
+      setNameError("ARK server names must not contain spaces");
+      return;
+    }
     setNameSaving(true);
     setNameError(null);
     try {
@@ -151,7 +155,7 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
     } finally {
       setNameSaving(false);
     }
-  }, [server.id, serverName, onRefresh, api.servers]);
+  }, [server.id, server.gameId, serverName, onRefresh, api.servers]);
 
   function handleRevertName() {
     setServerName(server.name);

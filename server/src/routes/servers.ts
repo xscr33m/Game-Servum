@@ -218,6 +218,14 @@ router.post("/", async (req: Request, res: Response) => {
     return res.status(400).json({ error: `Unknown game: ${body.gameId}` });
   }
 
+  // ARK: server name must not contain spaces (used as SessionName in launch params)
+  if (body.gameId === "ark" && /\s/.test(body.name.trim())) {
+    return res.status(400).json({
+      error:
+        "ARK server names must not contain spaces (the name is used as SessionName in launch parameters).",
+    });
+  }
+
   // Check if login is required
   const steamConfig = getSteamConfig();
   if (gameDef.requiresLogin && !steamConfig?.isLoggedIn) {
@@ -615,6 +623,14 @@ router.put("/:id/name", (req: Request, res: Response) => {
     return res
       .status(400)
       .json({ error: "Name must be 100 characters or less" });
+  }
+
+  // ARK: server name must not contain spaces (used as SessionName in launch params)
+  if (server.gameId === "ark" && /\s/.test(name.trim())) {
+    return res.status(400).json({
+      error:
+        "ARK server names must not contain spaces (the name is used as SessionName in launch parameters).",
+    });
   }
 
   updateServerName(id, name.trim());
@@ -1214,7 +1230,11 @@ router.put("/:id/initial-settings", (req: Request, res: Response) => {
     }
   }
 
-  if (sessionName !== undefined) setParam("SessionName", sessionName);
+  if (sessionName !== undefined) {
+    // ARK: SessionName must not contain spaces (UE4 launch param delimiter)
+    const sanitizedSessionName = sessionName.replace(/\s+/g, "_");
+    setParam("SessionName", sanitizedSessionName);
+  }
   if (adminPassword !== undefined)
     setParam("ServerAdminPassword", adminPassword);
   if (serverPassword !== undefined) setParam("ServerPassword", serverPassword);
@@ -1451,12 +1471,11 @@ router.put("/:id/config", (req: Request, res: Response) => {
 
           // Keep server name in sync with SessionName from INI
           const newSessionName = getIniVal("SessionSettings", "SessionName");
-          if (
-            newSessionName &&
-            newSessionName.trim() &&
-            newSessionName.trim() !== server.name
-          ) {
-            updateServerName(id, newSessionName.trim());
+          if (newSessionName) {
+            const sanitized = newSessionName.replace(/\s+/g, "_").trim();
+            if (sanitized && sanitized !== server.name) {
+              updateServerName(id, sanitized);
+            }
           }
         }
       } catch (syncErr) {

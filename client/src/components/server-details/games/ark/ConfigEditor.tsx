@@ -930,7 +930,7 @@ function ArkInitialSettings({
   // Fall back to server name so they stay in sync from the start
   const lp = launchParams || "";
   const [sessionName, setSessionName] = useState(
-    () => getLaunchParam(lp, "SessionName") || serverName || "ARK Server",
+    () => getLaunchParam(lp, "SessionName") || serverName || "ARK-Server",
   );
   const [adminPassword, setAdminPassword] = useState(
     () => getLaunchParam(lp, "ServerAdminPassword") || "",
@@ -951,6 +951,10 @@ function ArkInitialSettings({
   async function handleSave() {
     if (!adminPassword) {
       toastError("Admin password is required");
+      return;
+    }
+    if (/\s/.test(sessionName)) {
+      toastError("Session name must not contain spaces");
       return;
     }
     setSaving(true);
@@ -1026,10 +1030,15 @@ function ArkInitialSettings({
             id="sessionName"
             value={sessionName}
             onChange={(e) => setSessionName(e.target.value)}
-            placeholder="My ARK Server"
+            placeholder="ARK-Server-1"
           />
+          {/\s/.test(sessionName) && (
+            <p className="text-xs text-destructive font-medium">
+              Session name must not contain spaces
+            </p>
+          )}
           <p className="text-xs text-muted-foreground">
-            The name displayed in the server browser
+            The name displayed in the server browser (no spaces allowed)
           </p>
         </div>
         <div className="space-y-2">

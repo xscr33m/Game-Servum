@@ -119,15 +119,17 @@ export function AddServerDialog({
   }, [open, loadGames, loadUsedPorts, loadExistingServers]);
 
   function generateServerName(game: GameDefinition): string {
-    const baseName = `${game.name} Server`;
+    // ARK: no spaces allowed (name is used as SessionName in UE4 launch params)
+    const baseName = game.id === "ark" ? "ARK-Server" : `${game.name} Server`;
     const existingNames = new Set(
       existingServers.map((s) => s.name.toLowerCase()),
     );
     let num = 1;
-    while (existingNames.has(`${baseName} #${num}`.toLowerCase())) {
+    const separator = game.id === "ark" ? "-" : " #";
+    while (existingNames.has(`${baseName}${separator}${num}`.toLowerCase())) {
       num++;
     }
-    return `${baseName} #${num}`;
+    return `${baseName}${separator}${num}`;
   }
 
   function buildOccupiedPorts(): Set<number> {
@@ -267,10 +269,12 @@ export function AddServerDialog({
     }
   }
 
+  const hasSpaces = selectedGame?.id === "ark" && /\s/.test(serverName);
   const canCreate =
     selectedGame &&
     serverName.trim() &&
     !portConflict &&
+    !hasSpaces &&
     (!selectedGame.requiresLogin || isLoggedIn);
 
   const stepTitles: Record<WizardStep, { title: string; description: string }> =
@@ -488,13 +492,25 @@ export function AddServerDialog({
                   <Label htmlFor="name">Server Name</Label>
                   <Input
                     id="name"
-                    placeholder="My DayZ Server"
+                    placeholder={
+                      selectedGame?.id === "ark"
+                        ? "ARK-Server-1"
+                        : "My DayZ Server"
+                    }
                     value={serverName}
                     onChange={(e) => setServerName(e.target.value)}
                     disabled={loading}
                   />
+                  {selectedGame?.id === "ark" && /\s/.test(serverName) && (
+                    <p className="text-xs text-destructive font-medium">
+                      ARK server names must not contain spaces
+                    </p>
+                  )}
                   <p className="text-xs text-muted-foreground">
                     This will also be used as the installation folder name
+                    {selectedGame?.id === "ark"
+                      ? " and as the SessionName"
+                      : ""}
                   </p>
                 </div>
 
