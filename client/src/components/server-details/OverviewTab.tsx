@@ -80,6 +80,9 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
   const [diskUsage, setDiskUsage] = useState<string | null>(
     () => diskUsageCache.get(server.id) ?? null,
   );
+  const [diskLoading, setDiskLoading] = useState(
+    !diskUsageCache.has(server.id),
+  );
 
   // Sync local state when server prop changes
   useEffect(() => {
@@ -168,13 +171,15 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
   // Load disk usage in background — cache result for instant display on next visit
   useEffect(() => {
     if (!isConnected) return;
+    setDiskLoading(true);
     api.servers
       .getDiskUsage(server.id)
       .then((result) => {
         diskUsageCache.set(server.id, result.sizeFormatted);
         setDiskUsage(result.sizeFormatted);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setDiskLoading(false));
   }, [server.id, api.servers, isConnected]);
 
   const handleSaveProfilesPath = useCallback(async () => {
@@ -304,10 +309,14 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
             <div className="h-4 w-px bg-border" />
 
             <div className="flex items-center gap-2">
-              <FaHardDrive className="h-3.5 w-3.5 text-muted-foreground" />
+              <FaHardDrive
+                className={`h-3.5 w-3.5 text-muted-foreground${diskLoading && !diskUsage ? " animate-pulse" : ""}`}
+              />
               <span className="text-sm text-muted-foreground">Disk</span>
-              <span className="text-sm font-semibold">
-                {diskUsage ?? "..."}
+              <span
+                className={`text-sm font-semibold${diskLoading && !diskUsage ? " animate-pulse text-muted-foreground" : ""}`}
+              >
+                {diskUsage ?? "Calculating..."}
               </span>
             </div>
 
