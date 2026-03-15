@@ -84,12 +84,14 @@ export function ServerDetail() {
     [id, api],
   );
 
-  // Load server data (wait for connection)
+  // Load server data (wait for connection) — also refresh on tab switch
+  // so that changes made in one tab (e.g. Config → launch params) are
+  // reflected when navigating to another tab (e.g. Overview).
   useEffect(() => {
     if (id && isConnected) {
       loadServer();
     }
-  }, [id, loadServer, isConnected]);
+  }, [id, tab, loadServer, isConnected]);
 
   // Reload data when connection is (re-)established
   const prevConnected = useRef(isConnected);
