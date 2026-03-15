@@ -215,6 +215,7 @@ export interface ServersApiClient {
       adminPassword?: string;
       serverPassword?: string;
       maxPlayers?: number;
+      map?: string;
     },
   ) => Promise<{ success: boolean; message: string }>;
   saveConfig: (
@@ -730,6 +731,7 @@ function createServersApi(fetchApi: FetchApiFn): ServersApiClient {
         adminPassword?: string;
         serverPassword?: string;
         maxPlayers?: number;
+        map?: string;
       },
     ) =>
       fetchApi<{ success: boolean; message: string }>(

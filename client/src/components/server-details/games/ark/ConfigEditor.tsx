@@ -20,6 +20,31 @@ import { useBackend } from "@/hooks/useBackend";
 import { toastSuccess, toastError } from "@/lib/toast";
 import { FaFloppyDisk } from "react-icons/fa6";
 
+// ── ARK Maps ───────────────────────────────────────────────────────
+
+const ARK_MAPS = [
+  { value: "TheIsland", label: "The Island" },
+  { value: "TheCenter", label: "The Center" },
+  { value: "ScorchedEarth_P", label: "Scorched Earth" },
+  { value: "Ragnarok", label: "Ragnarok" },
+  { value: "Aberration_P", label: "Aberration" },
+  { value: "Extinction", label: "Extinction" },
+  { value: "Valguero_P", label: "Valguero" },
+  { value: "Genesis", label: "Genesis: Part 1" },
+  { value: "Gen2", label: "Genesis: Part 2" },
+  { value: "CrystalIsles", label: "Crystal Isles" },
+  { value: "LostIsland", label: "Lost Island" },
+  { value: "Fjordur", label: "Fjordur" },
+] as const;
+
+/** Extract the map name (first token before '?') from launch params */
+function getMapFromLaunchParams(launchParams: string): string {
+  const firstQ = launchParams.indexOf("?");
+  return firstQ !== -1
+    ? launchParams.slice(0, firstQ)
+    : launchParams.split(/\s/)[0] || "TheIsland";
+}
+
 // ── Section-aware INI helpers ──────────────────────────────────────
 /** Strip UTF-8 BOM that Unreal Engine prepends to INI files. */
 function stripBom(content: string): string {
@@ -874,6 +899,8 @@ interface ArkConfigEditorProps {
   fileName?: string;
   initialMode?: boolean;
   serverId?: number;
+  launchParams?: string;
+  onLaunchParamsChange?: () => void;
 }
 
 /** Initial settings form shown before ARK generates its config files */
@@ -884,6 +911,11 @@ function ArkInitialSettings({ serverId }: { serverId: number }) {
   const [adminPassword, setAdminPassword] = useState("");
   const [serverPassword, setServerPassword] = useState("");
   const [maxPlayers, setMaxPlayers] = useState(70);
+  const [map, setMap] = useState("TheIsland");
+  const [customMap, setCustomMap] = useState("");
+
+  const isCustomMap = !ARK_MAPS.some((m) => m.value === map);
+  const effectiveMap = map === "__custom" ? customMap : map;
 
   async function handleSave() {
     if (!adminPassword) {
@@ -897,6 +929,7 @@ function ArkInitialSettings({ serverId }: { serverId: number }) {
         adminPassword,
         serverPassword: serverPassword || undefined,
         maxPlayers,
+        map: effectiveMap || undefined,
       });
       toastSuccess("Initial settings saved. Start the server to apply them.");
     } catch (err) {
@@ -916,6 +949,45 @@ function ArkInitialSettings({ serverId }: { serverId: number }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="map">Map</Label>
+          <Select
+            value={isCustomMap ? "__custom" : map}
+            onValueChange={(v) => {
+              setMap(v);
+              if (v !== "__custom") setCustomMap("");
+            }}
+          >
+            <SelectTrigger id="map">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ARK_MAPS.map((m) => (
+                <SelectItem key={m.value} value={m.value}>
+                  {m.label}
+                </SelectItem>
+              ))}
+              <SelectItem value="__custom">Custom Map...</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            The map the server runs on
+          </p>
+        </div>
+        {(map === "__custom" || isCustomMap) && (
+          <div className="space-y-2">
+            <Label htmlFor="customMap">Custom Map Name</Label>
+            <Input
+              id="customMap"
+              value={customMap}
+              onChange={(e) => setCustomMap(e.target.value)}
+              placeholder="e.g. Mod_MapName"
+            />
+            <p className="text-xs text-muted-foreground">
+              Enter the exact map name (e.g. from a mod)
+            </p>
+          </div>
+        )}
         <div className="space-y-2">
           <Label htmlFor="sessionName">Session Name</Label>
           <Input
@@ -979,6 +1051,99 @@ function ArkInitialSettings({ serverId }: { serverId: number }) {
   );
 }
 
+/** Map selector for the full config editor (reads/writes launch params) */
+function ArkMapSelector({
+  serverId,
+  launchParams,
+  onLaunchParamsChange,
+}: {
+  serverId: number;
+  launchParams: string;
+  onLaunchParamsChange?: () => void;
+}) {
+  const { api } = useBackend();
+  const currentMap = getMapFromLaunchParams(launchParams);
+  const isKnownMap = ARK_MAPS.some((m) => m.value === currentMap);
+  const [selectedMap, setSelectedMap] = useState(
+    isKnownMap ? currentMap : "__custom",
+  );
+  const [customMap, setCustomMap] = useState(isKnownMap ? "" : currentMap);
+  const [saving, setSaving] = useState(false);
+
+  const effectiveMap = selectedMap === "__custom" ? customMap : selectedMap;
+  const hasChanged = effectiveMap !== currentMap;
+
+  async function handleSave() {
+    if (!effectiveMap.trim()) return;
+    setSaving(true);
+    try {
+      await api.servers.saveInitialSettings(serverId, { map: effectiveMap });
+      toastSuccess(`Map changed to ${effectiveMap}`);
+      onLaunchParamsChange?.();
+    } catch (err) {
+      toastError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Server Map</CardTitle>
+        <CardDescription>
+          Select the map for this server. Changes require a server restart.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="mapSelect">Map</Label>
+          <Select
+            value={selectedMap}
+            onValueChange={(v) => {
+              setSelectedMap(v);
+              if (v !== "__custom") setCustomMap("");
+            }}
+          >
+            <SelectTrigger id="mapSelect">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ARK_MAPS.map((m) => (
+                <SelectItem key={m.value} value={m.value}>
+                  {m.label}
+                </SelectItem>
+              ))}
+              <SelectItem value="__custom">Custom Map...</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {selectedMap === "__custom" && (
+          <div className="space-y-2">
+            <Label htmlFor="customMapFull">Custom Map Name</Label>
+            <Input
+              id="customMapFull"
+              value={customMap}
+              onChange={(e) => setCustomMap(e.target.value)}
+              placeholder="e.g. Mod_MapName"
+            />
+          </div>
+        )}
+        <div className="md:col-span-2 flex justify-end">
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={saving || !hasChanged || !effectiveMap.trim()}
+          >
+            <FaFloppyDisk className="h-4 w-4 mr-2" />
+            {saving ? "Saving..." : "Save Map"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function ArkConfigEditor({
   rawContent,
   originalContent,
@@ -986,6 +1151,8 @@ export function ArkConfigEditor({
   fileName,
   initialMode,
   serverId,
+  launchParams,
+  onLaunchParamsChange,
 }: ArkConfigEditorProps) {
   // Initial mode: show simplified form before first start
   if (initialMode && serverId) {
@@ -993,6 +1160,7 @@ export function ArkConfigEditor({
   }
   // Choose sections based on which config file is being edited
   const isGameIni = fileName?.toLowerCase() === "game.ini";
+  const isGus = fileName?.toLowerCase() === "gameusersettings.ini" || !fileName;
   const sections = isGameIni ? GAME_INI_SECTIONS : GUS_SECTIONS;
 
   const config = parseConfig(rawContent, sections);
@@ -1010,6 +1178,14 @@ export function ArkConfigEditor({
 
   return (
     <>
+      {/* Map selector — only shown on GameUserSettings.ini tab */}
+      {isGus && serverId && launchParams && (
+        <ArkMapSelector
+          serverId={serverId}
+          launchParams={launchParams}
+          onLaunchParamsChange={onLaunchParamsChange}
+        />
+      )}
       {visibleSections.length === 0 && (
         <Card>
           <CardContent className="py-6 text-center text-muted-foreground">

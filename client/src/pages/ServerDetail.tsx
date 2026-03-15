@@ -455,7 +455,7 @@ export function ServerDetail() {
               </TabsContent>
 
               <TabsContent value="config">
-                <ConfigTab server={server} />
+                <ConfigTab server={server} onRefresh={loadServer} />
               </TabsContent>
 
               <TabsContent value="mods">

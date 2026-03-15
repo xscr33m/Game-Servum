@@ -1139,12 +1139,13 @@ router.put("/:id/initial-settings", (req: Request, res: Response) => {
     });
   }
 
-  const { sessionName, adminPassword, serverPassword, maxPlayers } =
+  const { sessionName, adminPassword, serverPassword, maxPlayers, map } =
     req.body as {
       sessionName?: string;
       adminPassword?: string;
       serverPassword?: string;
       maxPlayers?: number;
+      map?: string;
     };
 
   // Get current launch params (base template)
@@ -1170,6 +1171,16 @@ router.put("/:id/initial-settings", (req: Request, res: Response) => {
       }
     }
   };
+
+  // Replace map name (first token before the first '?' in launch params)
+  if (map !== undefined && map.trim()) {
+    const firstQ = launchParams.indexOf("?");
+    if (firstQ !== -1) {
+      launchParams = map.trim() + launchParams.slice(firstQ);
+    } else {
+      launchParams = map.trim();
+    }
+  }
 
   if (sessionName !== undefined) setParam("SessionName", sessionName);
   if (adminPassword !== undefined)

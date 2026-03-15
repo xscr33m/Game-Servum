@@ -33,9 +33,10 @@ interface FileState {
 
 interface ConfigTabProps {
   server: GameServer;
+  onRefresh?: () => void;
 }
 
-export function ConfigTab({ server }: ConfigTabProps) {
+export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
   const { api, isConnected } = useBackend();
   const { subscribe } = useWebSocket();
   const [loading, setLoading] = useState(true);
@@ -314,6 +315,9 @@ export function ConfigTab({ server }: ConfigTabProps) {
                   originalContent={currentState.originalContent}
                   onContentChange={handleContentChange}
                   fileName={activeFile}
+                  serverId={server.id}
+                  launchParams={server.launchParams ?? undefined}
+                  onLaunchParamsChange={onRefresh}
                 />
               ) : (
                 <Card>
