@@ -1292,10 +1292,25 @@ router.get("/:id/config", (req: Request, res: Response) => {
   const configPath = path.join(server.installPath, configFileName);
 
   if (!fs.existsSync(configPath)) {
-    return res.status(404).json({
-      error: "Config file not found",
-      path: configPath,
-    });
+    // For ARK's Game.ini: auto-create with section header since ARK doesn't
+    // generate this file on first start (it's purely for user overrides)
+    if (
+      server.gameId === "ark" &&
+      path.basename(configFileName) === "Game.ini"
+    ) {
+      const dir = path.dirname(configPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      const initialContent = "[/Script/ShooterGame.ShooterGameMode]\n";
+      fs.writeFileSync(configPath, initialContent, "utf-8");
+      console.log(`[ARK] Created initial Game.ini at ${configPath}`);
+    } else {
+      return res.status(404).json({
+        error: "Config file not found",
+        path: configPath,
+      });
+    }
   }
 
   try {

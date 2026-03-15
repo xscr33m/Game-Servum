@@ -163,6 +163,8 @@ interface FieldDef {
   step?: number;
   options?: { value: string; label: string }[];
   colSpan?: 2;
+  /** Default value shown for Game.ini fields when not yet in the file */
+  defaultValue?: string | number;
 }
 
 interface SectionDef {
@@ -493,6 +495,7 @@ const GAME_INI_SECTIONS: SectionDef[] = [
         type: "float",
         min: 0.1,
         step: 0.1,
+        defaultValue: 1.0,
       },
       {
         key: "KillXPMultiplier",
@@ -501,6 +504,7 @@ const GAME_INI_SECTIONS: SectionDef[] = [
         type: "float",
         min: 0.1,
         step: 0.1,
+        defaultValue: 1.0,
       },
       {
         key: "HarvestXPMultiplier",
@@ -509,6 +513,7 @@ const GAME_INI_SECTIONS: SectionDef[] = [
         type: "float",
         min: 0.1,
         step: 0.1,
+        defaultValue: 1.0,
       },
       {
         key: "CraftXPMultiplier",
@@ -517,6 +522,7 @@ const GAME_INI_SECTIONS: SectionDef[] = [
         type: "float",
         min: 0.1,
         step: 0.1,
+        defaultValue: 1.0,
       },
       {
         key: "GenericXPMultiplier",
@@ -525,6 +531,7 @@ const GAME_INI_SECTIONS: SectionDef[] = [
         type: "float",
         min: 0.1,
         step: 0.1,
+        defaultValue: 1.0,
       },
       {
         key: "SpecialXPMultiplier",
@@ -533,6 +540,7 @@ const GAME_INI_SECTIONS: SectionDef[] = [
         type: "float",
         min: 0.1,
         step: 0.1,
+        defaultValue: 1.0,
       },
     ],
   },
@@ -547,6 +555,7 @@ const GAME_INI_SECTIONS: SectionDef[] = [
         type: "float",
         min: 0.1,
         step: 0.1,
+        defaultValue: 1.0,
       },
       {
         key: "EggHatchSpeedMultiplier",
@@ -555,6 +564,7 @@ const GAME_INI_SECTIONS: SectionDef[] = [
         type: "float",
         min: 0.1,
         step: 0.1,
+        defaultValue: 1.0,
       },
       {
         key: "BabyMatureSpeedMultiplier",
@@ -563,6 +573,7 @@ const GAME_INI_SECTIONS: SectionDef[] = [
         type: "float",
         min: 0.1,
         step: 0.1,
+        defaultValue: 1.0,
       },
       {
         key: "MatingIntervalMultiplier",
@@ -572,6 +583,17 @@ const GAME_INI_SECTIONS: SectionDef[] = [
         min: 0.1,
         step: 0.1,
         description: "Lower = more frequent mating",
+        defaultValue: 1.0,
+      },
+      {
+        key: "MatingSpeedMultiplier",
+        section: GAME_MODE,
+        label: "Mating Speed Multiplier",
+        type: "float",
+        min: 0.1,
+        step: 0.1,
+        description: "Higher = faster mating process",
+        defaultValue: 1.0,
       },
       {
         key: "BabyFoodConsumptionSpeedMultiplier",
@@ -580,6 +602,73 @@ const GAME_INI_SECTIONS: SectionDef[] = [
         type: "float",
         min: 0.1,
         step: 0.1,
+        defaultValue: 1.0,
+      },
+      {
+        key: "LayEggIntervalMultiplier",
+        section: GAME_MODE,
+        label: "Lay Egg Interval Multiplier",
+        type: "float",
+        min: 0.1,
+        step: 0.1,
+        description: "Lower = more frequent egg laying",
+        defaultValue: 1.0,
+      },
+    ],
+  },
+  {
+    title: "Imprinting",
+    description: "Baby imprinting and cuddle settings",
+    fields: [
+      {
+        key: "BabyImprintingStatScaleMultiplier",
+        section: GAME_MODE,
+        label: "Imprint Stat Scale Multiplier",
+        type: "float",
+        min: 0,
+        step: 0.1,
+        description: "Bonus stats per imprint %",
+        defaultValue: 1.0,
+      },
+      {
+        key: "BabyImprintAmountMultiplier",
+        section: GAME_MODE,
+        label: "Imprint Amount Multiplier",
+        type: "float",
+        min: 0,
+        step: 0.1,
+        description: "Imprint % gained per cuddle",
+        defaultValue: 1.0,
+      },
+      {
+        key: "BabyCuddleIntervalMultiplier",
+        section: GAME_MODE,
+        label: "Cuddle Interval Multiplier",
+        type: "float",
+        min: 0.01,
+        step: 0.1,
+        description: "Lower = more frequent cuddle requests",
+        defaultValue: 1.0,
+      },
+      {
+        key: "BabyCuddleGracePeriodMultiplier",
+        section: GAME_MODE,
+        label: "Cuddle Grace Period Multiplier",
+        type: "float",
+        min: 0,
+        step: 0.1,
+        description: "Time window to complete cuddle",
+        defaultValue: 1.0,
+      },
+      {
+        key: "BabyCuddleLoseImprintQualitySpeedMultiplier",
+        section: GAME_MODE,
+        label: "Lose Imprint Quality Speed",
+        type: "float",
+        min: 0,
+        step: 0.1,
+        description: "Rate of imprint loss on missed cuddles (0 = no loss)",
+        defaultValue: 1.0,
       },
     ],
   },
@@ -594,6 +683,17 @@ const GAME_INI_SECTIONS: SectionDef[] = [
         type: "float",
         min: 0.1,
         step: 0.1,
+        defaultValue: 1.0,
+      },
+      {
+        key: "HarvestHealthMultiplier",
+        section: GAME_MODE,
+        label: "Harvest Health Multiplier",
+        type: "float",
+        min: 0.1,
+        step: 0.1,
+        description: "HP of harvestable resources",
+        defaultValue: 1.0,
       },
       {
         key: "ResourcesRespawnPeriodMultiplier",
@@ -603,6 +703,7 @@ const GAME_INI_SECTIONS: SectionDef[] = [
         min: 0.1,
         step: 0.1,
         description: "Lower = faster respawn",
+        defaultValue: 1.0,
       },
       {
         key: "CropGrowthSpeedMultiplier",
@@ -611,6 +712,7 @@ const GAME_INI_SECTIONS: SectionDef[] = [
         type: "float",
         min: 0.1,
         step: 0.1,
+        defaultValue: 1.0,
       },
       {
         key: "FuelConsumptionIntervalMultiplier",
@@ -620,6 +722,83 @@ const GAME_INI_SECTIONS: SectionDef[] = [
         min: 0.1,
         step: 0.1,
         description: "Higher = fuel lasts longer",
+        defaultValue: 1.0,
+      },
+      {
+        key: "CustomRecipeEffectivenessMultiplier",
+        section: GAME_MODE,
+        label: "Custom Recipe Effectiveness",
+        type: "float",
+        min: 0.1,
+        step: 0.1,
+        description: "Effectiveness of custom consumables",
+        defaultValue: 1.0,
+      },
+      {
+        key: "CustomRecipeSkillMultiplier",
+        section: GAME_MODE,
+        label: "Custom Recipe Skill Multiplier",
+        type: "float",
+        min: 0.1,
+        step: 0.1,
+        description: "Crafting skill effect on custom recipes",
+        defaultValue: 1.0,
+      },
+    ],
+  },
+  {
+    title: "Spoilage & Decomposition",
+    description: "Item spoilage and corpse decomposition rates",
+    fields: [
+      {
+        key: "GlobalSpoilingTimeMultiplier",
+        section: GAME_MODE,
+        label: "Global Spoiling Time Multiplier",
+        type: "float",
+        min: 0.1,
+        step: 0.1,
+        description: "Higher = items spoil slower",
+        defaultValue: 1.0,
+      },
+      {
+        key: "GlobalItemDecompositionTimeMultiplier",
+        section: GAME_MODE,
+        label: "Item Decomposition Multiplier",
+        type: "float",
+        min: 0.1,
+        step: 0.1,
+        description: "Higher = dropped items last longer",
+        defaultValue: 1.0,
+      },
+      {
+        key: "GlobalCorpseDecompositionTimeMultiplier",
+        section: GAME_MODE,
+        label: "Corpse Decomposition Multiplier",
+        type: "float",
+        min: 0.1,
+        step: 0.1,
+        description: "Higher = corpses last longer",
+        defaultValue: 1.0,
+      },
+      {
+        key: "CropDecaySpeedMultiplier",
+        section: GAME_MODE,
+        label: "Crop Decay Speed Multiplier",
+        type: "float",
+        min: 0.1,
+        step: 0.1,
+        description: "Lower = crops decay slower",
+        defaultValue: 1.0,
+      },
+      {
+        key: "PoopIntervalMultiplier",
+        section: GAME_MODE,
+        label: "Poop Interval Multiplier",
+        type: "float",
+        min: 0.1,
+        step: 0.1,
+        description: "Lower = more frequent (more fertilizer)",
+        defaultValue: 1.0,
       },
     ],
   },
@@ -635,6 +814,7 @@ const GAME_INI_SECTIONS: SectionDef[] = [
         min: 0.1,
         step: 0.1,
         description: "1.0 = default, higher = faster days",
+        defaultValue: 1.0,
       },
       {
         key: "NightTimeSpeedScale",
@@ -644,6 +824,17 @@ const GAME_INI_SECTIONS: SectionDef[] = [
         min: 0.1,
         step: 0.1,
         description: "1.0 = default, higher = shorter nights",
+        defaultValue: 1.0,
+      },
+      {
+        key: "DayTimeSpeedScale",
+        section: GAME_MODE,
+        label: "Day Time Speed",
+        type: "float",
+        min: 0.1,
+        step: 0.1,
+        description: "Speed scale during the day portion",
+        defaultValue: 1.0,
       },
     ],
   },
@@ -658,6 +849,7 @@ const GAME_INI_SECTIONS: SectionDef[] = [
         type: "float",
         min: 0.1,
         step: 0.1,
+        defaultValue: 1.0,
       },
       {
         key: "DinoDamageMultiplier",
@@ -666,6 +858,7 @@ const GAME_INI_SECTIONS: SectionDef[] = [
         type: "float",
         min: 0.1,
         step: 0.1,
+        defaultValue: 1.0,
       },
       {
         key: "StructureDamageMultiplier",
@@ -674,6 +867,7 @@ const GAME_INI_SECTIONS: SectionDef[] = [
         type: "float",
         min: 0.1,
         step: 0.1,
+        defaultValue: 1.0,
       },
       {
         key: "PlayerResistanceMultiplier",
@@ -683,6 +877,7 @@ const GAME_INI_SECTIONS: SectionDef[] = [
         min: 0.1,
         step: 0.1,
         description: "Lower = more resistant",
+        defaultValue: 1.0,
       },
       {
         key: "DinoResistanceMultiplier",
@@ -692,6 +887,7 @@ const GAME_INI_SECTIONS: SectionDef[] = [
         min: 0.1,
         step: 0.1,
         description: "Lower = more resistant",
+        defaultValue: 1.0,
       },
       {
         key: "StructureResistanceMultiplier",
@@ -701,6 +897,102 @@ const GAME_INI_SECTIONS: SectionDef[] = [
         min: 0.1,
         step: 0.1,
         description: "Lower = more resistant",
+        defaultValue: 1.0,
+      },
+      {
+        key: "TamedDinoDamageMultiplier",
+        section: GAME_MODE,
+        label: "Tamed Dino Damage Multiplier",
+        type: "float",
+        min: 0.1,
+        step: 0.1,
+        defaultValue: 1.0,
+      },
+      {
+        key: "TamedDinoResistanceMultiplier",
+        section: GAME_MODE,
+        label: "Tamed Dino Resistance Multiplier",
+        type: "float",
+        min: 0.1,
+        step: 0.1,
+        description: "Lower = more resistant",
+        defaultValue: 1.0,
+      },
+    ],
+  },
+  {
+    title: "Player Stats",
+    description: "Player food, water, stamina, and stat drain rates",
+    fields: [
+      {
+        key: "PlayerCharacterFoodDrainMultiplier",
+        section: GAME_MODE,
+        label: "Food Drain Multiplier",
+        type: "float",
+        min: 0.1,
+        step: 0.1,
+        description: "Lower = less food consumed",
+        defaultValue: 1.0,
+      },
+      {
+        key: "PlayerCharacterWaterDrainMultiplier",
+        section: GAME_MODE,
+        label: "Water Drain Multiplier",
+        type: "float",
+        min: 0.1,
+        step: 0.1,
+        description: "Lower = less water consumed",
+        defaultValue: 1.0,
+      },
+      {
+        key: "PlayerCharacterStaminaDrainMultiplier",
+        section: GAME_MODE,
+        label: "Stamina Drain Multiplier",
+        type: "float",
+        min: 0.1,
+        step: 0.1,
+        description: "Lower = less stamina consumed",
+        defaultValue: 1.0,
+      },
+      {
+        key: "PlayerCharacterHealthRecoveryMultiplier",
+        section: GAME_MODE,
+        label: "Health Recovery Multiplier",
+        type: "float",
+        min: 0.1,
+        step: 0.1,
+        description: "Higher = faster health regen",
+        defaultValue: 1.0,
+      },
+      {
+        key: "DinoCharacterFoodDrainMultiplier",
+        section: GAME_MODE,
+        label: "Dino Food Drain Multiplier",
+        type: "float",
+        min: 0.1,
+        step: 0.1,
+        description: "Lower = tamed dinos eat less",
+        defaultValue: 1.0,
+      },
+      {
+        key: "DinoCharacterStaminaDrainMultiplier",
+        section: GAME_MODE,
+        label: "Dino Stamina Drain Multiplier",
+        type: "float",
+        min: 0.1,
+        step: 0.1,
+        description: "Lower = dinos use less stamina",
+        defaultValue: 1.0,
+      },
+      {
+        key: "DinoCharacterHealthRecoveryMultiplier",
+        section: GAME_MODE,
+        label: "Dino Health Recovery Multiplier",
+        type: "float",
+        min: 0.1,
+        step: 0.1,
+        description: "Higher = faster dino health regen",
+        defaultValue: 1.0,
       },
     ],
   },
@@ -716,6 +1008,101 @@ const GAME_INI_SECTIONS: SectionDef[] = [
         min: 0.1,
         step: 0.1,
         description: "Wild dino spawn density",
+        defaultValue: 1.0,
+      },
+    ],
+  },
+  {
+    title: "Tribe Settings",
+    description: "Tribe and alliance limits",
+    fields: [
+      {
+        key: "MaxNumberOfPlayersInTribe",
+        section: GAME_MODE,
+        label: "Max Players in Tribe",
+        type: "number",
+        min: 0,
+        description: "0 = unlimited",
+        defaultValue: 0,
+      },
+      {
+        key: "MaxAlliancesPerTribe",
+        section: GAME_MODE,
+        label: "Max Alliances per Tribe",
+        type: "number",
+        min: 0,
+        defaultValue: 10,
+      },
+      {
+        key: "MaxTribesPerAlliance",
+        section: GAME_MODE,
+        label: "Max Tribes per Alliance",
+        type: "number",
+        min: 0,
+        defaultValue: 10,
+      },
+      {
+        key: "MaxTribeLogs",
+        section: GAME_MODE,
+        label: "Max Tribe Log Entries",
+        type: "number",
+        min: 0,
+        defaultValue: 100,
+      },
+    ],
+  },
+  {
+    title: "PvP / PvE Settings",
+    description: "PvP and PvE specific gameplay options",
+    fields: [
+      {
+        key: "bPvPDinoDecay",
+        section: GAME_MODE,
+        label: "PvP Dino Decay",
+        type: "boolean",
+        description: "Unclaimed dinos auto-decay in PvP",
+        defaultValue: "True",
+      },
+      {
+        key: "bPvPStructureDecay",
+        section: GAME_MODE,
+        label: "PvP Structure Decay",
+        type: "boolean",
+        description: "Structures auto-decay in PvP",
+        defaultValue: "True",
+      },
+      {
+        key: "bDisableFriendlyFire",
+        section: GAME_MODE,
+        label: "Disable Friendly Fire",
+        type: "boolean",
+        defaultValue: "False",
+      },
+      {
+        key: "bAllowFlyerCarryPvE",
+        section: GAME_MODE,
+        label: "Allow Flyer Carry (PvE)",
+        type: "boolean",
+        description: "Flyers can carry wild dinos in PvE",
+        defaultValue: "False",
+      },
+      {
+        key: "bIncreasePvPRespawnInterval",
+        section: GAME_MODE,
+        label: "Increase PvP Respawn Interval",
+        type: "boolean",
+        description: "Progressively longer respawn in PvP",
+        defaultValue: "False",
+      },
+      {
+        key: "IncreasePvPRespawnIntervalBaseAmount",
+        section: GAME_MODE,
+        label: "PvP Respawn Interval Base (seconds)",
+        type: "float",
+        min: 0,
+        step: 5,
+        description: "Base respawn time penalty per death",
+        defaultValue: 60,
       },
     ],
   },
@@ -725,22 +1112,28 @@ const GAME_INI_SECTIONS: SectionDef[] = [
 
 type ArkConfig = Record<string, string | number>;
 
-function parseConfig(content: string, sections: SectionDef[]): ArkConfig {
+function parseConfig(
+  content: string,
+  sections: SectionDef[],
+  showDefaults?: boolean,
+): ArkConfig {
   const config: ArkConfig = {};
   for (const section of sections) {
     for (const field of section.fields) {
       const raw = getIniValue(content, field.section, field.key);
-      if (raw === null) continue;
-
-      switch (field.type) {
-        case "number":
-          config[field.key] = parseInt(raw, 10) || 0;
-          break;
-        case "float":
-          config[field.key] = parseFloat(raw) || 0;
-          break;
-        default:
-          config[field.key] = raw;
+      if (raw !== null) {
+        switch (field.type) {
+          case "number":
+            config[field.key] = parseInt(raw, 10) || 0;
+            break;
+          case "float":
+            config[field.key] = parseFloat(raw) || 0;
+            break;
+          default:
+            config[field.key] = raw;
+        }
+      } else if (showDefaults && field.defaultValue !== undefined) {
+        config[field.key] = field.defaultValue;
       }
     }
   }
@@ -755,14 +1148,29 @@ function generateConfig(
   let content = originalContent;
   for (const section of sections) {
     for (const field of section.fields) {
-      if (field.key in config) {
-        content = setIniValue(
-          content,
+      if (!(field.key in config)) continue;
+      // For fields with defaults: only write if the field already exists in
+      // the original content OR the value has been changed from the default.
+      // This prevents flooding the file with default values.
+      if (field.defaultValue !== undefined) {
+        const existsInOriginal = hasIniKey(
+          originalContent,
           field.section,
           field.key,
-          String(config[field.key]),
         );
+        if (
+          !existsInOriginal &&
+          String(config[field.key]) === String(field.defaultValue)
+        ) {
+          continue;
+        }
       }
+      content = setIniValue(
+        content,
+        field.section,
+        field.key,
+        String(config[field.key]),
+      );
     }
   }
   return content;
@@ -1212,18 +1620,23 @@ export function ArkConfigEditor({
   const isGus = fileName?.toLowerCase() === "gameusersettings.ini" || !fileName;
   const sections = isGameIni ? GAME_INI_SECTIONS : GUS_SECTIONS;
 
-  const config = parseConfig(rawContent, sections);
+  // For Game.ini: show all fields with defaults since the file is purely additive
+  const config = parseConfig(rawContent, sections, isGameIni);
 
   function handleChange(key: string, value: string | number) {
     const newConfig = { ...config, [key]: value };
     onContentChange(generateConfig(newConfig, originalContent, sections));
   }
 
-  const visibleSections = sections.filter((section) =>
-    section.fields.some((field) =>
-      hasIniKey(rawContent, field.section, field.key),
-    ),
-  );
+  // For GUS: only show sections that have at least one existing key
+  // For Game.ini: show all sections (fields use defaults when not in file)
+  const visibleSections = isGameIni
+    ? sections
+    : sections.filter((section) =>
+        section.fields.some((field) =>
+          hasIniKey(rawContent, field.section, field.key),
+        ),
+      );
 
   return (
     <>
