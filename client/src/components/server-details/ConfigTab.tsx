@@ -215,6 +215,7 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
             serverId={server.id}
             launchParams={server.launchParams || ""}
             onLaunchParamsChange={onRefresh}
+            serverName={server.name}
           />
         ) : (
           <Card>

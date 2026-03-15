@@ -901,6 +901,7 @@ interface ArkConfigEditorProps {
   serverId?: number;
   launchParams?: string;
   onLaunchParamsChange?: () => void;
+  serverName?: string;
 }
 
 /** Extract a ?Key=Value from UE4-style launch params */
@@ -915,18 +916,21 @@ function ArkInitialSettings({
   serverId,
   launchParams,
   onLaunchParamsChange,
+  serverName,
 }: {
   serverId: number;
   launchParams?: string;
   onLaunchParamsChange?: () => void;
+  serverName?: string;
 }) {
   const { api } = useBackend();
   const [saving, setSaving] = useState(false);
 
   // Pre-populate from existing launch params (if the user saved before)
+  // Fall back to server name so they stay in sync from the start
   const lp = launchParams || "";
   const [sessionName, setSessionName] = useState(
-    () => getLaunchParam(lp, "SessionName") || "ARK Server",
+    () => getLaunchParam(lp, "SessionName") || serverName || "ARK Server",
   );
   const [adminPassword, setAdminPassword] = useState(
     () => getLaunchParam(lp, "ServerAdminPassword") || "",
@@ -1181,6 +1185,7 @@ export function ArkConfigEditor({
   serverId,
   launchParams,
   onLaunchParamsChange,
+  serverName,
 }: ArkConfigEditorProps) {
   // Initial mode: show simplified form before first start
   if (initialMode && serverId) {
@@ -1189,6 +1194,7 @@ export function ArkConfigEditor({
         serverId={serverId}
         launchParams={launchParams}
         onLaunchParamsChange={onLaunchParamsChange}
+        serverName={serverName}
       />
     );
   }

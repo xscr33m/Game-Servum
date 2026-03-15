@@ -22,6 +22,8 @@ export interface ConfigEditorProps {
   launchParams?: string;
   /** Callback when launch params change (e.g. map selection) */
   onLaunchParamsChange?: () => void;
+  /** Server name — used as default for SessionName in initial mode */
+  serverName?: string;
 }
 
 /** Frontend game plugin — provides UI components for a specific game */

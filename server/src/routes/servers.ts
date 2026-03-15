@@ -619,6 +619,33 @@ router.put("/:id/name", (req: Request, res: Response) => {
 
   updateServerName(id, name.trim());
 
+  // ARK: keep SessionName in launch params in sync with server name
+  if (server.gameId === "ark") {
+    let launchParams =
+      server.launchParams ||
+      getGameDefinition(server.gameId)?.defaultLaunchParams ||
+      "";
+    const regex = /([?])SessionName=[^?\s]*/i;
+    if (regex.test(launchParams)) {
+      launchParams = launchParams.replace(
+        regex,
+        `$1SessionName=${name.trim()}`,
+      );
+    } else {
+      const dashIndex = launchParams.search(/\s+-/);
+      const param = `?SessionName=${name.trim()}`;
+      if (dashIndex !== -1) {
+        launchParams =
+          launchParams.slice(0, dashIndex) +
+          param +
+          launchParams.slice(dashIndex);
+      } else {
+        launchParams += param;
+      }
+    }
+    updateServerLaunchParams(id, launchParams);
+  }
+
   // Update firewall rules with new name in background
   updateFirewallRules(
     {
@@ -1195,6 +1222,15 @@ router.put("/:id/initial-settings", (req: Request, res: Response) => {
 
   updateServerLaunchParams(id, launchParams);
 
+  // Keep server name in sync with SessionName
+  if (
+    sessionName !== undefined &&
+    sessionName.trim() &&
+    sessionName.trim() !== server.name
+  ) {
+    updateServerName(id, sessionName.trim());
+  }
+
   res.json({
     success: true,
     message: "Initial settings saved to launch parameters",
@@ -1412,6 +1448,16 @@ router.put("/:id/config", (req: Request, res: Response) => {
           logger.info(
             `[ARK] Synced config values to launch params for server ${id}`,
           );
+
+          // Keep server name in sync with SessionName from INI
+          const newSessionName = getIniVal("SessionSettings", "SessionName");
+          if (
+            newSessionName &&
+            newSessionName.trim() &&
+            newSessionName.trim() !== server.name
+          ) {
+            updateServerName(id, newSessionName.trim());
+          }
         }
       } catch (syncErr) {
         logger.error(
