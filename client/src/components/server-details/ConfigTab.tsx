@@ -90,7 +90,9 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
   useEffect(() => {
     if (!isConnected) return;
 
-    // Check config status first — determines whether to show initial mode
+    // Check config status first — determines whether to show initial mode.
+    // Re-runs when server status changes so that after the first start
+    // completes (starting → running) we pick up the newly generated configs.
     async function checkStatus() {
       setCheckingConfigStatus(true);
       try {
@@ -104,11 +106,12 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
       } catch {
         // If endpoint fails (e.g. older agent), fall through to normal load
       }
+      setInitialMode(false);
       setCheckingConfigStatus(false);
       loadFile();
     }
     checkStatus();
-  }, [isConnected]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isConnected, server.id, server.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Listen for config-ready WebSocket event (after first start generates configs)
   useEffect(() => {
@@ -210,6 +213,8 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
             fileName=""
             initialMode
             serverId={server.id}
+            launchParams={server.launchParams || ""}
+            onLaunchParamsChange={onRefresh}
           />
         ) : (
           <Card>

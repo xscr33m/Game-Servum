@@ -59,6 +59,7 @@ import {
   stopServer,
   isServerRunning,
   checkServerRequirements,
+  isFirstStartInProgress,
 } from "../services/serverProcess.js";
 import { startSchedule, clearSchedule } from "../services/scheduler.js";
 import { reloadMessageBroadcaster } from "../services/messageBroadcaster.js";
@@ -1105,9 +1106,13 @@ router.get("/:id/config-status", (req: Request, res: Response) => {
   const adapter = getGameAdapter(server.gameId);
 
   // Check if adapter supports isConfigGenerated (e.g. ARK)
-  const configGenerated = adapter?.isConfigGenerated
-    ? adapter.isConfigGenerated(server)
-    : true; // Non-ARK games always have config generated after install
+  // If the server is currently in its first start, config files may exist but
+  // are still incomplete — report as not generated until startup is done.
+  const configGenerated = isFirstStartInProgress(id)
+    ? false
+    : adapter?.isConfigGenerated
+      ? adapter.isConfigGenerated(server)
+      : true; // Non-ARK games always have config generated after install
 
   // Check which config files actually exist
   const existingFiles = configFiles

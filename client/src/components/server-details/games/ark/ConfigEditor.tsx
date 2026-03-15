@@ -903,18 +903,45 @@ interface ArkConfigEditorProps {
   onLaunchParamsChange?: () => void;
 }
 
+/** Extract a ?Key=Value from UE4-style launch params */
+function getLaunchParam(params: string, key: string): string | null {
+  const regex = new RegExp(`[?]${key}=([^?\\s]*)`, "i");
+  const m = params.match(regex);
+  return m ? m[1] : null;
+}
+
 /** Initial settings form shown before ARK generates its config files */
-function ArkInitialSettings({ serverId }: { serverId: number }) {
+function ArkInitialSettings({
+  serverId,
+  launchParams,
+  onLaunchParamsChange,
+}: {
+  serverId: number;
+  launchParams?: string;
+  onLaunchParamsChange?: () => void;
+}) {
   const { api } = useBackend();
   const [saving, setSaving] = useState(false);
-  const [sessionName, setSessionName] = useState("ARK Server");
-  const [adminPassword, setAdminPassword] = useState("");
-  const [serverPassword, setServerPassword] = useState("");
-  const [maxPlayers, setMaxPlayers] = useState(70);
-  const [map, setMap] = useState("TheIsland");
-  const [customMap, setCustomMap] = useState("");
 
-  const isCustomMap = !ARK_MAPS.some((m) => m.value === map);
+  // Pre-populate from existing launch params (if the user saved before)
+  const lp = launchParams || "";
+  const [sessionName, setSessionName] = useState(
+    () => getLaunchParam(lp, "SessionName") || "ARK Server",
+  );
+  const [adminPassword, setAdminPassword] = useState(
+    () => getLaunchParam(lp, "ServerAdminPassword") || "",
+  );
+  const [serverPassword, setServerPassword] = useState(
+    () => getLaunchParam(lp, "ServerPassword") || "",
+  );
+  const [maxPlayers, setMaxPlayers] = useState(
+    () => Number(getLaunchParam(lp, "MaxPlayers")) || 70,
+  );
+  const savedMap = lp ? getMapFromLaunchParams(lp) : "TheIsland";
+  const savedIsKnown = ARK_MAPS.some((m) => m.value === savedMap);
+  const [map, setMap] = useState(savedIsKnown ? savedMap : "__custom");
+  const [customMap, setCustomMap] = useState(savedIsKnown ? "" : savedMap);
+
   const effectiveMap = map === "__custom" ? customMap : map;
 
   async function handleSave() {
@@ -932,6 +959,7 @@ function ArkInitialSettings({ serverId }: { serverId: number }) {
         map: effectiveMap || undefined,
       });
       toastSuccess("Initial settings saved. Start the server to apply them.");
+      onLaunchParamsChange?.();
     } catch (err) {
       toastError((err as Error).message);
     } finally {
@@ -952,7 +980,7 @@ function ArkInitialSettings({ serverId }: { serverId: number }) {
         <div className="space-y-2">
           <Label htmlFor="map">Map</Label>
           <Select
-            value={isCustomMap ? "__custom" : map}
+            value={map}
             onValueChange={(v) => {
               setMap(v);
               if (v !== "__custom") setCustomMap("");
@@ -974,7 +1002,7 @@ function ArkInitialSettings({ serverId }: { serverId: number }) {
             The map the server runs on
           </p>
         </div>
-        {(map === "__custom" || isCustomMap) && (
+        {map === "__custom" && (
           <div className="space-y-2">
             <Label htmlFor="customMap">Custom Map Name</Label>
             <Input
@@ -1156,7 +1184,13 @@ export function ArkConfigEditor({
 }: ArkConfigEditorProps) {
   // Initial mode: show simplified form before first start
   if (initialMode && serverId) {
-    return <ArkInitialSettings serverId={serverId} />;
+    return (
+      <ArkInitialSettings
+        serverId={serverId}
+        launchParams={launchParams}
+        onLaunchParamsChange={onLaunchParamsChange}
+      />
+    );
   }
   // Choose sections based on which config file is being edited
   const isGameIni = fileName?.toLowerCase() === "game.ini";

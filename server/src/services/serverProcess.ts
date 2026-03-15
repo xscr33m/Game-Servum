@@ -45,6 +45,14 @@ import type { GameServer } from "../types/index.js";
 // Track running server processes
 const runningProcesses: Map<number, ChildProcess> = new Map();
 
+// Track servers currently performing their first start (config not yet generated)
+const firstStartServers = new Set<number>();
+
+/** Check whether a server is currently doing its first start (config generation in progress). */
+export function isFirstStartInProgress(serverId: number): boolean {
+  return firstStartServers.has(serverId);
+}
+
 // Track crash timestamps for auto-restart protection (max 3 crashes in 10 minutes)
 const crashHistory: Map<number, number[]> = new Map();
 const MAX_CRASHES = 3;
@@ -225,6 +233,12 @@ export function startServer(serverId: number): StartResult {
   // Check whether config already exists BEFORE start (for first-start detection)
   const configExistedBeforeStart = adapter?.isConfigGenerated?.(server) ?? true;
 
+  // Track first-start servers so the config-status endpoint can suppress premature
+  // configGenerated responses while the game is still initialising.
+  if (!configExistedBeforeStart) {
+    firstStartServers.add(serverId);
+  }
+
   // Parse arguments - same for all platforms
   const args = parseArguments(launchParams);
   logger.debug(`[ServerProcess] Parsed args: ${JSON.stringify(args)}`);
@@ -345,6 +359,9 @@ export function startServer(serverId: number): StartResult {
         `[ServerProcess] Startup complete detected for server ${serverId}`,
       );
 
+      // First start is complete — remove from tracking
+      firstStartServers.delete(serverId);
+
       // Stop log file watcher
       if (logWatchInterval) {
         clearInterval(logWatchInterval);
@@ -460,6 +477,9 @@ export function startServer(serverId: number): StartResult {
       // Close console log stream
       consoleLogStream?.end();
       consoleLogStream = null;
+
+      // Clean up first-start tracking
+      firstStartServers.delete(serverId);
 
       // Stop log file watcher if still active
       if (logWatchInterval) {
