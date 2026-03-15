@@ -1330,7 +1330,7 @@ router.get("/:id/config", (req: Request, res: Response) => {
 // PUT /api/servers/:id/config - Update server configuration file
 router.put("/:id/config", (req: Request, res: Response) => {
   const id = parseInt(req.params.id, 10);
-  const { content } = req.body as { content: string };
+  let { content } = req.body as { content: string };
   const server = getServerById(id);
 
   if (!server) {
@@ -1377,6 +1377,23 @@ router.put("/:id/config", (req: Request, res: Response) => {
     if (fs.existsSync(configPath)) {
       const backupPath = `${configPath}.backup`;
       fs.copyFileSync(configPath, backupPath);
+    }
+
+    // ARK: sanitize SessionName in the INI content before writing
+    if (
+      server.gameId === "ark" &&
+      path.basename(configFileName) === "GameUserSettings.ini"
+    ) {
+      const sessionNameMatch = content.match(/^(SessionName\s*=\s*)(.+)$/im);
+      if (sessionNameMatch) {
+        const sanitized = sessionNameMatch[2].replace(/[^a-zA-Z0-9_-]/g, "_");
+        if (sanitized !== sessionNameMatch[2]) {
+          content = content.replace(
+            sessionNameMatch[0],
+            `${sessionNameMatch[1]}${sanitized}`,
+          );
+        }
+      }
     }
 
     fs.writeFileSync(configPath, content, "utf-8");
