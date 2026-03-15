@@ -139,10 +139,6 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
       setNameError("Name cannot be empty");
       return;
     }
-    if (server.gameId === "ark" && /[^a-zA-Z0-9_-]/.test(serverName.trim())) {
-      setNameError("Only letters, digits, hyphens and underscores allowed");
-      return;
-    }
     setNameSaving(true);
     setNameError(null);
     try {
@@ -155,7 +151,7 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
     } finally {
       setNameSaving(false);
     }
-  }, [server.id, server.gameId, serverName, onRefresh, api.servers]);
+  }, [server.id, serverName, onRefresh, api.servers]);
 
   function handleRevertName() {
     setServerName(server.name);

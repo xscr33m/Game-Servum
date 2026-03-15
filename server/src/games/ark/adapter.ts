@@ -323,7 +323,8 @@ export class ArkAdapter extends BaseGameAdapter {
 
       // Extract values from launch params (set by Initial-Settings UI)
       const sessionName =
-        this.extractLaunchParam(launchParams, "SessionName") || server.name;
+        this.extractLaunchParam(launchParams, "SessionName") ||
+        server.name.replace(/[^a-zA-Z0-9_-]/g, "_");
       const adminPassword =
         this.extractLaunchParam(launchParams, "ServerAdminPassword") ||
         generatePassword(20);

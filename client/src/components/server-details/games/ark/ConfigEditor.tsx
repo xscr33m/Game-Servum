@@ -1344,12 +1344,14 @@ function ArkInitialSettings({
   const [saving, setSaving] = useState(false);
 
   // Pre-populate from existing launch params (if the user saved before)
-  // Fall back to server name so they stay in sync from the start
+  // Fall back to sanitized server name so the initial session name is valid
   const lp = launchParams || "";
   const [sessionName, setSessionName] = useState(() => {
     const raw = getLaunchParam(lp, "SessionName");
-    // Resolve {SERVER_NAME} placeholder to actual server name
-    if (!raw || raw === "{SERVER_NAME}") return serverName || "ARK-Server";
+    // Resolve {SERVER_NAME} placeholder or missing value to sanitized server name
+    if (!raw || raw === "{SERVER_NAME}") {
+      return (serverName || "ARK-Server").replace(/[^a-zA-Z0-9_-]/g, "_");
+    }
     return raw;
   });
   const [adminPassword, setAdminPassword] = useState(

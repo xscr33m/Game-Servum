@@ -218,14 +218,6 @@ router.post("/", async (req: Request, res: Response) => {
     return res.status(400).json({ error: `Unknown game: ${body.gameId}` });
   }
 
-  // ARK: server name may only contain letters, digits, hyphens, underscores
-  if (body.gameId === "ark" && /[^a-zA-Z0-9_-]/.test(body.name.trim())) {
-    return res.status(400).json({
-      error:
-        "ARK server names may only contain letters, digits, hyphens and underscores (the name is used as SessionName in launch parameters).",
-    });
-  }
-
   // Check if login is required
   const steamConfig = getSteamConfig();
   if (gameDef.requiresLogin && !steamConfig?.isLoggedIn) {
@@ -625,42 +617,7 @@ router.put("/:id/name", (req: Request, res: Response) => {
       .json({ error: "Name must be 100 characters or less" });
   }
 
-  // ARK: server name may only contain letters, digits, hyphens, underscores
-  if (server.gameId === "ark" && /[^a-zA-Z0-9_-]/.test(name.trim())) {
-    return res.status(400).json({
-      error:
-        "ARK server names may only contain letters, digits, hyphens and underscores (the name is used as SessionName in launch parameters).",
-    });
-  }
-
   updateServerName(id, name.trim());
-
-  // ARK: keep SessionName in launch params in sync with server name
-  if (server.gameId === "ark") {
-    let launchParams =
-      server.launchParams ||
-      getGameDefinition(server.gameId)?.defaultLaunchParams ||
-      "";
-    const regex = /([?])SessionName=[^?\s]*/i;
-    if (regex.test(launchParams)) {
-      launchParams = launchParams.replace(
-        regex,
-        `$1SessionName=${name.trim()}`,
-      );
-    } else {
-      const dashIndex = launchParams.search(/\s+-/);
-      const param = `?SessionName=${name.trim()}`;
-      if (dashIndex !== -1) {
-        launchParams =
-          launchParams.slice(0, dashIndex) +
-          param +
-          launchParams.slice(dashIndex);
-      } else {
-        launchParams += param;
-      }
-    }
-    updateServerLaunchParams(id, launchParams);
-  }
 
   // Update firewall rules with new name in background
   updateFirewallRules(
@@ -1242,14 +1199,6 @@ router.put("/:id/initial-settings", (req: Request, res: Response) => {
 
   updateServerLaunchParams(id, launchParams);
 
-  // Keep server name in sync with SessionName (use sanitized version)
-  if (sessionName !== undefined) {
-    const sanitizedName = sessionName.replace(/[^a-zA-Z0-9_-]/g, "_").trim();
-    if (sanitizedName && sanitizedName !== server.name) {
-      updateServerName(id, sanitizedName);
-    }
-  }
-
   res.json({
     success: true,
     message: "Initial settings saved to launch parameters",
@@ -1499,17 +1448,6 @@ router.put("/:id/config", (req: Request, res: Response) => {
           logger.info(
             `[ARK] Synced config values to launch params for server ${id}`,
           );
-
-          // Keep server name in sync with SessionName from INI
-          const newSessionName = getIniVal("SessionSettings", "SessionName");
-          if (newSessionName) {
-            const sanitized = newSessionName
-              .replace(/[^a-zA-Z0-9_-]/g, "_")
-              .trim();
-            if (sanitized && sanitized !== server.name) {
-              updateServerName(id, sanitized);
-            }
-          }
         }
       } catch (syncErr) {
         logger.error(
