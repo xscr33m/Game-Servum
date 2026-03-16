@@ -134,6 +134,7 @@ export async function installServer(
     });
 
     let lastPercent = 0;
+    let lastPhase = "";
 
     // ── Log-file polling (source of truth for output) ──
     const config = getConfig();
@@ -199,21 +200,41 @@ export async function installServer(
 
           // Parse progress: "Update state (0x61) downloading, progress: 45.23 (… / …)"
           const progressMatch = line.match(
-            /progress:\s*([\d.]+)\s*\((\d+)\s*\/\s*(\d+)\)/i,
+            /Update state\s+\(0x[0-9a-fA-F]+\)\s+(.+?),\s*progress:\s*([\d.]+)\s*\(/i,
           );
           if (progressMatch) {
-            const percent = Math.round(parseFloat(progressMatch[1]));
-            if (percent !== lastPercent) {
-              lastPercent = percent;
+            const phaseName = progressMatch[1].trim().toLowerCase();
+            const percent = Math.round(parseFloat(progressMatch[2]));
 
-              // Determine phase from update state
-              const isVerifying =
-                line.toLowerCase().includes("verifying") ||
-                line.includes("0x81");
-              const status = isVerifying ? "validating" : "downloading";
-              const label = isVerifying
-                ? `Verifying... ${percent}%`
-                : `Downloading... ${percent}%`;
+            // Map SteamCMD phase names to display labels and status keys
+            let status: string;
+            let phaseLabel: string;
+            if (phaseName.includes("preallocat")) {
+              status = "preallocating";
+              phaseLabel = "Preallocating";
+            } else if (phaseName.includes("reconfigur")) {
+              status = "reconfiguring";
+              phaseLabel = "Reconfiguring";
+            } else if (phaseName.includes("download")) {
+              status = "downloading";
+              phaseLabel = "Downloading";
+            } else if (phaseName.includes("verif")) {
+              status = "verifying";
+              phaseLabel = "Verifying";
+            } else if (phaseName.includes("commit")) {
+              status = "committing";
+              phaseLabel = "Committing";
+            } else {
+              status = "downloading";
+              phaseLabel =
+                phaseName.charAt(0).toUpperCase() + phaseName.slice(1);
+            }
+
+            // Broadcast when phase changes or percent changes
+            if (status !== lastPhase || percent !== lastPercent) {
+              lastPhase = status;
+              lastPercent = percent;
+              const label = `${phaseLabel}... ${percent}%`;
 
               // Update buffered progress state
               const progressEntry = activeInstallations.get(serverId);
