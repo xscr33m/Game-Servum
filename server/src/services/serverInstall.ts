@@ -8,7 +8,7 @@
  * - Post-install hooks for initial configuration
  */
 
-import { spawn, type ChildProcess } from "child_process";
+import { spawn, exec, type ChildProcess } from "child_process";
 import path from "path";
 import fs from "fs";
 import fsPromises from "fs/promises";
@@ -37,6 +37,10 @@ interface ActiveInstallation {
 }
 
 const activeInstallations: Map<number, ActiveInstallation> = new Map();
+
+// Server IDs whose installation was cancelled via cancelAndCleanupInstallation().
+// The proc.on("close") handler checks this to skip its normal logic.
+const cancelledServerIds: Set<number> = new Set();
 
 // Installation queue — ensures only one SteamCMD install runs at a time
 const installQueue: InstallOptions[] = [];
@@ -309,6 +313,17 @@ export async function installServer(
       readNewLogContent();
       cleanupPoll();
 
+      // If this installation was cancelled, skip all post-process logic —
+      // cancelAndCleanupInstallation() handles cleanup and DB deletion.
+      if (cancelledServerIds.has(serverId)) {
+        cancelledServerIds.delete(serverId);
+        resolve({
+          success: false,
+          message: "Installation cancelled",
+        });
+        return;
+      }
+
       if (code === 0) {
         // Installation successful, run post-install hook
         const postEntry = activeInstallations.get(serverId);
@@ -415,8 +430,9 @@ export function cancelInstallation(serverId: number): boolean {
 
 /**
  * Cancel an installation (or dequeue) and clean up all server data.
- * Kills the SteamCMD process, deletes downloaded files, removes the DB entry,
- * and broadcasts server:deleted so the UI removes the card.
+ * Kills the SteamCMD process, waits for it to exit (releasing file locks),
+ * deletes downloaded files, removes the DB entry, and broadcasts
+ * server:deleted so the UI removes the card.
  */
 export async function cancelAndCleanupInstallation(
   serverId: number,
@@ -424,24 +440,108 @@ export async function cancelAndCleanupInstallation(
   const server = getServerById(serverId);
   if (!server) return false;
 
-  const isActive = cancelInstallation(serverId);
-  const wasQueued = !isActive && removeFromQueue(serverId);
+  // Handle queued (not yet running) installations
+  if (isQueued(serverId)) {
+    removeFromQueue(serverId);
+    // Queued servers haven't downloaded anything yet, but the
+    // install directory may have been pre-created.
+    if (server.installPath && fs.existsSync(server.installPath)) {
+      try {
+        await fsPromises.rm(server.installPath, {
+          recursive: true,
+          force: true,
+        });
+        logger.info(
+          `[Install] Removed server directory after dequeue: ${server.installPath}`,
+        );
+      } catch (err) {
+        logger.error(
+          `[Install] Failed to remove server directory after dequeue: ${err}`,
+        );
+      }
+    }
+    deleteServer(serverId);
+    logger.info(
+      `[Install] Dequeued and cleaned up server ${server.name} (ID: ${serverId})`,
+    );
+    broadcast("server:deleted", { serverId });
+    return true;
+  }
 
-  if (!isActive && !wasQueued) return false;
+  // Handle active installations — need to kill process and wait for exit
+  const installation = activeInstallations.get(serverId);
+  if (!installation) return false;
 
-  // Delete partially downloaded server files
+  // Mark as cancelled so the proc.on("close") handler skips its logic
+  cancelledServerIds.add(serverId);
+
+  // Wait for the process to actually exit after killing it
+  const processExited = new Promise<void>((resolve) => {
+    installation.process.on("close", () => resolve());
+    installation.process.on("error", () => resolve());
+  });
+
+  // On Windows, use taskkill /T /F to kill the entire process tree.
+  // A bare process.kill() only kills the parent — SteamCMD child processes
+  // keep running and hold file locks on the download directory.
+  const pid = installation.process.pid;
+  if (process.platform === "win32" && pid) {
+    exec(`taskkill /PID ${pid} /T /F`, (err) => {
+      if (err) {
+        logger.warn(
+          `[Install] taskkill failed, falling back to process.kill: ${err.message}`,
+        );
+        installation.process.kill();
+      }
+    });
+  } else {
+    installation.process.kill();
+  }
+  activeInstallations.delete(serverId);
+
+  broadcast("install:progress", {
+    serverId,
+    gameId: installation.gameId,
+    status: "cancelled",
+    message: "Installation cancelled",
+    percent: 0,
+  });
+
+  // Wait for the process to fully exit so file locks are released
+  await processExited;
+
+  // Now safely delete the downloaded files.
+  // Retry a few times — on Windows, file locks may take a moment to release
+  // after the process tree is killed.
   if (server.installPath && fs.existsSync(server.installPath)) {
-    try {
-      await fsPromises.rm(server.installPath, {
-        recursive: true,
-        force: true,
-      });
-      logger.info(
-        `[Install] Removed server files after cancel: ${server.installPath}`,
-      );
-    } catch (err) {
-      logger.error(
-        `[Install] Failed to remove server files after cancel: ${err}`,
+    let deleted = false;
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      try {
+        await fsPromises.rm(server.installPath, {
+          recursive: true,
+          force: true,
+        });
+        logger.info(
+          `[Install] Removed server files after cancel: ${server.installPath}`,
+        );
+        deleted = true;
+        break;
+      } catch (err) {
+        if (attempt < 5) {
+          logger.warn(
+            `[Install] File removal attempt ${attempt}/5 failed, retrying in 1s...`,
+          );
+          await new Promise((r) => setTimeout(r, 1000));
+        } else {
+          logger.error(
+            `[Install] Failed to remove server files after cancel (${attempt} attempts): ${err}`,
+          );
+        }
+      }
+    }
+    if (!deleted) {
+      logger.warn(
+        `[Install] Could not remove ${server.installPath} — files may need manual cleanup`,
       );
     }
   }
