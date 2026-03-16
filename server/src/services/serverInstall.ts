@@ -495,6 +495,15 @@ export function cancelAndCleanupInstallation(serverId: number): boolean {
         logger.info(
           `[Install] SteamCMD exited for cancelled server ${server.name} (ID: ${serverId}), cleaning up...`,
         );
+
+        // Notify clients BEFORE cleanup — server:deleted (inside
+        // performBackgroundDeletion) may trigger navigation away from
+        // the page, so the toast must be sent first.
+        broadcast("install:cancelled", {
+          serverId,
+          serverName: server.name,
+        });
+
         return performBackgroundDeletion(
           serverId,
           server.name,
@@ -502,12 +511,6 @@ export function cancelAndCleanupInstallation(serverId: number): boolean {
           server.port,
           server.installPath,
         );
-      })
-      .then(() => {
-        broadcast("install:cancelled", {
-          serverId,
-          serverName: server.name,
-        });
       })
       .catch((err) => {
         logger.error(
@@ -517,24 +520,23 @@ export function cancelAndCleanupInstallation(serverId: number): boolean {
   } else {
     // Queued — no running process, just clean up directly in background
     removeFromQueue(serverId);
+
+    broadcast("install:cancelled", {
+      serverId,
+      serverName: server.name,
+    });
+
     performBackgroundDeletion(
       serverId,
       server.name,
       server.gameId,
       server.port,
       server.installPath,
-    )
-      .then(() => {
-        broadcast("install:cancelled", {
-          serverId,
-          serverName: server.name,
-        });
-      })
-      .catch((err) => {
-        logger.error(
-          `[Install] Cleanup failed for dequeued server ${serverId}: ${err}`,
-        );
-      });
+    ).catch((err) => {
+      logger.error(
+        `[Install] Cleanup failed for dequeued server ${serverId}: ${err}`,
+      );
+    });
   }
 
   logger.info(
