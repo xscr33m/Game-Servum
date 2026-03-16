@@ -673,7 +673,7 @@ export function AgentControlPanel() {
 
       {/* Restart Confirmation Dialog */}
       <Dialog open={confirmRestart} onOpenChange={setConfirmRestart}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Restart Agent?</DialogTitle>
             <DialogDescription>
@@ -683,15 +683,20 @@ export function AgentControlPanel() {
               comes back online.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button
               variant="outline"
               onClick={() => setConfirmRestart(false)}
               disabled={restartLoading}
+              className="w-full sm:w-auto"
             >
               Cancel
             </Button>
-            <Button onClick={handleConfirmRestart} disabled={restartLoading}>
+            <Button
+              onClick={handleConfirmRestart}
+              disabled={restartLoading}
+              className="w-full sm:w-auto"
+            >
               {restartLoading ? (
                 <>
                   <FaArrowsRotate className="h-4 w-4 mr-2 animate-spin" />

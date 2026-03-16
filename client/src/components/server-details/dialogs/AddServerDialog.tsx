@@ -293,7 +293,7 @@ export function AddServerDialog({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
-          className="sm:max-w-[600px]"
+          className="sm:max-w-xl"
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <DialogHeader>
@@ -536,9 +536,13 @@ export function AddServerDialog({
             )}
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0">
             {step === "select-game" ? (
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
+              <Button
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                className="w-full sm:w-auto"
+              >
                 Cancel
               </Button>
             ) : (
@@ -547,17 +551,24 @@ export function AddServerDialog({
                   variant="outline"
                   onClick={handleBack}
                   disabled={loading}
+                  className="w-full sm:w-auto"
                 >
                   <FaArrowLeft className="h-3.5 w-3.5 mr-1.5" />
                   Back
                 </Button>
                 {step === "steam-login" && isLoggedIn && (
-                  <Button onClick={() => setStep("configure")}>Continue</Button>
+                  <Button
+                    onClick={() => setStep("configure")}
+                    className="w-full sm:w-auto"
+                  >
+                    Continue
+                  </Button>
                 )}
                 {step === "configure" && (
                   <Button
                     onClick={handleCreate}
                     disabled={!canCreate || loading}
+                    className="w-full sm:w-auto"
                   >
                     {loading ? (
                       <>

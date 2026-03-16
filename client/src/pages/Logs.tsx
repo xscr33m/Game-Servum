@@ -1107,7 +1107,11 @@ export function Logs() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteTarget(null)}
+              className="w-full sm:w-auto"
+            >
               Cancel
             </Button>
             <Button
@@ -1118,6 +1122,7 @@ export function Logs() {
                   setDeleteTarget(null);
                 }
               }}
+              className="w-full sm:w-auto"
             >
               Delete
             </Button>

@@ -4,7 +4,9 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
+  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
@@ -48,18 +50,15 @@ export function CancelInstallDialog({
 
   return (
     <Dialog open={open} onOpenChange={isCancelling ? undefined : onOpenChange}>
-      <DialogContent className="sm:max-w-lg gap-0 p-0 overflow-hidden">
-        <DialogTitle className="sr-only">
-          Cancel Server Installation
-        </DialogTitle>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Cancel Installation?</DialogTitle>
+          <DialogDescription>
+            This will stop the download and remove the server.
+          </DialogDescription>
+        </DialogHeader>
 
-        {/* Title bar */}
-        <div className="px-6 pt-6">
-          <h2 className="text-lg font-semibold">Cancel Installation?</h2>
-        </div>
-
-        {/* Body */}
-        <div className="px-6 pt-4 pb-2 space-y-5">
+        <div className="space-y-4">
           {/* Warning */}
           <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
             <FaTriangleExclamation className="h-5 w-5 shrink-0 text-amber-400 mt-0.5" />
@@ -104,8 +103,7 @@ export function CancelInstallDialog({
           </div>
         </div>
 
-        {/* Footer */}
-        <DialogFooter className="px-6 py-4 mt-2 border-t border-border gap-2 sm:gap-2">
+        <DialogFooter className="gap-2 sm:gap-0">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}

@@ -10,7 +10,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
+  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -85,17 +87,15 @@ export function DeleteServerDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-lg gap-0 p-0 overflow-hidden">
-        {/* Accessible title (visually hidden, used by screen readers) */}
-        <DialogTitle className="sr-only">Confirm Server Deletion</DialogTitle>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Confirm Server Deletion</DialogTitle>
+          <DialogDescription>
+            This will permanently delete the server and all associated data.
+          </DialogDescription>
+        </DialogHeader>
 
-        {/* Title bar */}
-        <div className="px-6 pt-6">
-          <h2 className="text-lg font-semibold">Confirm Server Deletion?</h2>
-        </div>
-
-        {/* Body content */}
-        <div className="px-6 pt-4 pb-2 space-y-5">
+        <div className="space-y-4">
           {/* Running server warning */}
           {isRunning && (
             <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
@@ -219,8 +219,7 @@ export function DeleteServerDialog({
           </div>
         </div>
 
-        {/* Footer */}
-        <DialogFooter className="px-6 py-4 mt-2 border-t border-border gap-2 sm:gap-2">
+        <DialogFooter className="gap-2 sm:gap-0">
           <Button
             variant="outline"
             onClick={() => handleOpenChange(false)}

@@ -13,6 +13,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -240,19 +241,19 @@ export function SteamAccountDialog({
                   <Badge variant="success">Active</Badge>
                 </div>
 
-                <div className="flex gap-2">
+                <DialogFooter className="gap-2 sm:gap-0">
                   <Button
                     variant="outline"
-                    className="flex-1"
                     onClick={() => onOpenChange(false)}
+                    className="w-full sm:w-auto"
                   >
                     Close
                   </Button>
                   <Button
                     variant="destructive"
-                    className="flex-1"
                     onClick={handleLogout}
                     disabled={loading}
+                    className="w-full sm:w-auto"
                   >
                     {loading ? (
                       <FaSpinner className="h-4 w-4 mr-2 animate-spin" />
@@ -261,7 +262,7 @@ export function SteamAccountDialog({
                     )}
                     Logout
                   </Button>
-                </div>
+                </DialogFooter>
 
                 <p className="text-xs text-muted-foreground text-center">
                   Logging out switches to anonymous mode. You can always log in
@@ -349,7 +350,7 @@ export function SteamAccountDialog({
                 </div>
               )}
 
-              <div className="flex gap-2">
+              <DialogFooter className="gap-2 sm:gap-0">
                 <Button
                   variant="outline"
                   onClick={() => {
@@ -360,13 +361,14 @@ export function SteamAccountDialog({
                     setTerminalOutput([]);
                   }}
                   disabled={loading}
+                  className="w-full sm:w-auto"
                 >
                   Back
                 </Button>
                 <Button
                   onClick={handleLogin}
                   disabled={loading}
-                  className="flex-1"
+                  className="w-full sm:w-auto"
                 >
                   {loading ? (
                     <>
@@ -380,7 +382,7 @@ export function SteamAccountDialog({
                     </>
                   )}
                 </Button>
-              </div>
+              </DialogFooter>
 
               {!needsPassword && (
                 <p className="text-xs text-muted-foreground">
@@ -440,7 +442,7 @@ export function SteamAccountDialog({
                 />
               </div>
 
-              <div className="flex gap-2">
+              <DialogFooter className="gap-2 sm:gap-0">
                 <Button
                   variant="outline"
                   onClick={() => {
@@ -449,13 +451,14 @@ export function SteamAccountDialog({
                     setGuardCode("");
                   }}
                   disabled={loading}
+                  className="w-full sm:w-auto"
                 >
                   Back
                 </Button>
                 <Button
                   onClick={handleGuardSubmit}
                   disabled={loading}
-                  className="flex-1"
+                  className="w-full sm:w-auto"
                 >
                   {loading ? (
                     <>
@@ -469,7 +472,7 @@ export function SteamAccountDialog({
                     </>
                   )}
                 </Button>
-              </div>
+              </DialogFooter>
             </div>
           </>
         )}

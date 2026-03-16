@@ -592,17 +592,24 @@ export function ModsTab({ server }: ModsTabProps) {
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter className="gap-2 sm:gap-0">
-                <Button variant="outline" onClick={() => setModToRemove(null)}>
+                <Button
+                  variant="outline"
+                  onClick={() => setModToRemove(null)}
+                  disabled={actionInProgress === modToRemove?.id}
+                  className="w-full sm:w-auto"
+                >
                   Cancel
                 </Button>
                 <Button
                   variant="destructive"
+                  disabled={actionInProgress === modToRemove?.id}
                   onClick={() => {
                     if (modToRemove) {
                       handleRemoveMod(modToRemove);
                       setModToRemove(null);
                     }
                   }}
+                  className="w-full sm:w-auto"
                 >
                   Remove
                 </Button>

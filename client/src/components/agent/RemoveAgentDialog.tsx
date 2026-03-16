@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -7,7 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { FaTriangleExclamation } from "react-icons/fa6";
+import { FaTriangleExclamation, FaSpinner } from "react-icons/fa6";
 import type { BackendConnection } from "@/lib/config";
 
 interface RemoveAgentDialogProps {
@@ -23,10 +24,32 @@ export function RemoveAgentDialog({
   agent,
   onConfirm,
 }: RemoveAgentDialogProps) {
+  const [isRemoving, setIsRemoving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   if (!agent) return null;
 
+  async function handleRemove() {
+    setIsRemoving(true);
+    setError(null);
+    try {
+      onConfirm(agent!.id);
+      onOpenChange(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove agent");
+    } finally {
+      setIsRemoving(false);
+    }
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) setError(null);
+        onOpenChange(o);
+      }}
+    >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -49,18 +72,31 @@ export function RemoveAgentDialog({
           </p>
         </div>
 
+        {error && <p className="text-sm text-destructive">{error}</p>}
+
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isRemoving}
+            className="w-full sm:w-auto"
+          >
             Cancel
           </Button>
           <Button
             variant="destructive"
-            onClick={() => {
-              onConfirm(agent.id);
-              onOpenChange(false);
-            }}
+            onClick={handleRemove}
+            disabled={isRemoving}
+            className="w-full sm:w-auto"
           >
-            Remove Agent
+            {isRemoving ? (
+              <>
+                <FaSpinner className="h-4 w-4 mr-2 animate-spin" />
+                Removing...
+              </>
+            ) : (
+              "Remove Agent"
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
