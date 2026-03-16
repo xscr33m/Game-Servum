@@ -340,7 +340,7 @@ export function ServerDetail() {
           right={<AgentControlPanel />}
         />
         <AgentStatusBanner />
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
           <div className="container mx-auto px-4 py-8">
             <div className="text-center text-destructive">
               {error || "Server not found"}
@@ -444,7 +444,7 @@ export function ServerDetail() {
       <AgentStatusBanner />
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
         <div className="container mx-auto px-4 py-6">
           {server.status === "queued" ? (
             /* ── Queued View ── */

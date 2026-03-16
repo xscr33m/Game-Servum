@@ -525,7 +525,7 @@ export function Dashboard() {
       <AgentStatusBanner />
 
       <div className="flex-1 flex overflow-hidden">
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
           <div className="container mx-auto px-4 py-4 space-y-8">
             {/* System Monitoring */}
             {monitoringEnabled && <SystemMonitor key={activeConnection?.id} />}
