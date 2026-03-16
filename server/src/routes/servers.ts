@@ -50,6 +50,7 @@ import {
   installServer,
   cancelInstallation,
   isInstalling,
+  getInstallationProgress,
   queueInstallation,
   isQueued,
   removeFromQueue,
@@ -468,6 +469,18 @@ router.post("/:id/stop", async (req: Request, res: Response) => {
   } else {
     res.status(400).json({ error: result.message });
   }
+});
+
+// GET /api/servers/:id/install-status - Get installation progress and buffered output
+router.get("/:id/install-status", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  res.json(getInstallationProgress(id));
 });
 
 // POST /api/servers/:id/cancel-install - Cancel installation

@@ -185,6 +185,13 @@ export interface ServersApiClient {
   ) => Promise<{ sizeBytes: number; sizeFormatted: string }>;
   openFolder: (id: number) => Promise<{ success: boolean; message: string }>;
   cancelInstall: (id: number) => Promise<{ success: boolean; message: string }>;
+  getInstallStatus: (id: number) => Promise<{
+    installing: boolean;
+    percent: number;
+    status: string;
+    message: string;
+    output: string[];
+  }>;
   getFirewallStatus: (id: number) => Promise<import("@/types").FirewallStatus>;
   addFirewallRules: (id: number) => Promise<import("@/types").FirewallResult>;
   removeFirewallRules: (
@@ -694,6 +701,14 @@ function createServersApi(fetchApi: FetchApiFn): ServersApiClient {
           method: "POST",
         },
       ),
+    getInstallStatus: (id: number) =>
+      fetchApi<{
+        installing: boolean;
+        percent: number;
+        status: string;
+        message: string;
+        output: string[];
+      }>(`/servers/${id}/install-status`),
     getFirewallStatus: (id: number) =>
       fetchApi<import("@/types").FirewallStatus>(`/servers/${id}/firewall`),
     addFirewallRules: (id: number) =>

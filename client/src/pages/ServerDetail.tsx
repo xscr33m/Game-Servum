@@ -66,6 +66,7 @@ export function ServerDetail() {
   const { capabilities } = useGameCapabilities(server?.gameId ?? "");
   const hasPlayers = capabilities?.playerTracking !== false;
   const terminalRef = useRef<HTMLDivElement>(null);
+  const hasFetchedInstallOutput = useRef(false);
 
   const { api, subscribe, isConnected, activeConnection } = useBackend();
 
@@ -109,6 +110,40 @@ export function ServerDetail() {
 
   // Redirect to dashboard when agent is switched on server detail page
   const initialAgentId = useRef(activeConnection?.id);
+
+  // Fetch buffered installation output when opening page during an active install
+  const serverStatus = server?.status;
+  const serverId = server?.id;
+  useEffect(() => {
+    if (
+      serverStatus === "installing" &&
+      serverId &&
+      !hasFetchedInstallOutput.current &&
+      isConnected
+    ) {
+      hasFetchedInstallOutput.current = true;
+      api.servers
+        .getInstallStatus(serverId)
+        .then((data) => {
+          if (data.installing) {
+            if (data.output.length > 0) {
+              setTerminalOutput(data.output);
+            }
+            if (data.message) {
+              setInstallProgress(data.message);
+            }
+          }
+        })
+        .catch(() => {
+          // Non-critical — live WS will still deliver updates
+        });
+    }
+    // Reset the flag when server stops installing so a future install can fetch again
+    if (serverStatus && serverStatus !== "installing") {
+      hasFetchedInstallOutput.current = false;
+    }
+  }, [serverStatus, serverId, isConnected, api.servers]);
+
   useEffect(() => {
     // Store initial agent ID on first mount
     if (initialAgentId.current === undefined && activeConnection?.id) {

@@ -20,11 +20,17 @@ import {
   runPostInstall,
 } from "../games/index.js";
 
-// Track active installations
-const activeInstallations: Map<
-  number,
-  { process: ChildProcess; gameId: string }
-> = new Map();
+// Track active installations with buffered output & progress
+interface ActiveInstallation {
+  process: ChildProcess;
+  gameId: string;
+  outputLines: string[];
+  percent: number;
+  progressMessage: string;
+  progressStatus: string;
+}
+
+const activeInstallations: Map<number, ActiveInstallation> = new Map();
 
 // Installation queue — ensures only one SteamCMD install runs at a time
 const installQueue: InstallOptions[] = [];
@@ -118,7 +124,14 @@ export async function installServer(
       stdio: ["pipe", "pipe", "pipe"],
     });
 
-    activeInstallations.set(serverId, { process: proc, gameId });
+    activeInstallations.set(serverId, {
+      process: proc,
+      gameId,
+      outputLines: [],
+      percent: 0,
+      progressMessage: `Starting installation of ${serverName}...`,
+      progressStatus: "starting",
+    });
 
     let lastPercent = 0;
 
@@ -178,6 +191,12 @@ export async function installServer(
           logger.debug(`[Install ${serverId}]:`, line);
           broadcast("steamcmd:output", { message: line, serverId });
 
+          // Buffer output line for REST endpoint
+          const entry = activeInstallations.get(serverId);
+          if (entry) {
+            entry.outputLines.push(line);
+          }
+
           // Parse progress: "Update state (0x61) downloading, progress: 45.23 (… / …)"
           const progressMatch = line.match(
             /progress:\s*([\d.]+)\s*\((\d+)\s*\/\s*(\d+)\)/i,
@@ -196,6 +215,14 @@ export async function installServer(
                 ? `Verifying... ${percent}%`
                 : `Downloading... ${percent}%`;
 
+              // Update buffered progress state
+              const progressEntry = activeInstallations.get(serverId);
+              if (progressEntry) {
+                progressEntry.percent = percent;
+                progressEntry.progressMessage = label;
+                progressEntry.progressStatus = status;
+              }
+
               broadcast("install:progress", {
                 serverId,
                 gameId,
@@ -208,6 +235,13 @@ export async function installServer(
 
           // Final success line
           if (line.toLowerCase().includes("success! app")) {
+            const successEntry = activeInstallations.get(serverId);
+            if (successEntry) {
+              successEntry.percent = 100;
+              successEntry.progressMessage = "Download complete!";
+              successEntry.progressStatus = "downloading";
+            }
+
             broadcast("install:progress", {
               serverId,
               gameId,
@@ -250,6 +284,13 @@ export async function installServer(
 
       if (code === 0) {
         // Installation successful, run post-install hook
+        const postEntry = activeInstallations.get(serverId);
+        if (postEntry) {
+          postEntry.percent = 100;
+          postEntry.progressMessage = "Running post-install configuration...";
+          postEntry.progressStatus = "post-install";
+        }
+
         broadcast("install:progress", {
           serverId,
           gameId,
@@ -364,6 +405,30 @@ export function getInstallationStatus(serverId: number): {
     return { installing: true, gameId: installation.gameId };
   }
   return { installing: false };
+}
+
+/**
+ * Get detailed installation progress for a server (for REST endpoint).
+ * Returns buffered output lines + current progress percentage/status.
+ */
+export function getInstallationProgress(serverId: number): {
+  installing: boolean;
+  percent: number;
+  status: string;
+  message: string;
+  output: string[];
+} {
+  const installation = activeInstallations.get(serverId);
+  if (installation) {
+    return {
+      installing: true,
+      percent: installation.percent,
+      status: installation.progressStatus,
+      message: installation.progressMessage,
+      output: installation.outputLines,
+    };
+  }
+  return { installing: false, percent: 0, status: "", message: "", output: [] };
 }
 
 /**

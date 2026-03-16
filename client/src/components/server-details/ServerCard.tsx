@@ -22,6 +22,7 @@ interface ServerCardProps {
   onStop: (id: number) => void;
   onDelete: (id: number) => void;
   disabled?: boolean;
+  installProgress?: { percent: number; message: string };
 }
 
 const statusConfig = {
@@ -42,6 +43,7 @@ export function ServerCard({
   onStop,
   onDelete,
   disabled = false,
+  installProgress,
 }: ServerCardProps) {
   const navigate = useNavigate();
   const status = statusConfig[server.status];
@@ -95,7 +97,13 @@ export function ServerCard({
           </span>
         )}
         <div className="absolute top-3 right-3">
-          <Badge variant={status.variant}>{status.label}</Badge>
+          <Badge variant={status.variant}>
+            {server.status === "installing" &&
+            installProgress &&
+            installProgress.percent > 0
+              ? `Installing · ${installProgress.percent}%`
+              : status.label}
+          </Badge>
         </div>
       </div>
 
@@ -145,20 +153,36 @@ export function ServerCard({
         onClick={(e) => e.stopPropagation()}
       >
         {isBusy ? (
-          <Button variant="outline" size="sm" className="flex-1" disabled>
-            <FaSpinner className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-            {server.status === "queued"
-              ? "Queued..."
-              : server.status === "installing"
-                ? "Installing..."
-                : server.status === "updating"
-                  ? "Updating..."
-                  : server.status === "starting"
-                    ? "Starting..."
-                    : server.status === "deleting"
-                      ? "Deleting..."
-                      : "Stopping..."}
-          </Button>
+          server.status === "installing" &&
+          installProgress &&
+          installProgress.percent > 0 ? (
+            <div className="flex-1 space-y-1.5">
+              <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-warning transition-all duration-500 ease-out"
+                  style={{ width: `${installProgress.percent}%` }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground truncate">
+                {installProgress.message}
+              </p>
+            </div>
+          ) : (
+            <Button variant="outline" size="sm" className="flex-1" disabled>
+              <FaSpinner className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              {server.status === "queued"
+                ? "Queued..."
+                : server.status === "installing"
+                  ? "Installing..."
+                  : server.status === "updating"
+                    ? "Updating..."
+                    : server.status === "starting"
+                      ? "Starting..."
+                      : server.status === "deleting"
+                        ? "Deleting..."
+                        : "Stopping..."}
+            </Button>
+          )
         ) : isRunning ? (
           <Button
             variant="destructive"

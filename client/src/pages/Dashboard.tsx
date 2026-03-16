@@ -62,6 +62,9 @@ export function Dashboard() {
     "connect" | undefined
   >(undefined);
   const [serverToDelete, setServerToDelete] = useState<GameServer | null>(null);
+  const [installProgress, setInstallProgress] = useState<
+    Map<number, { percent: number; message: string }>
+  >(new Map());
   const [monitoringEnabled, setMonitoringEnabled] = useState(() => {
     return (
       getElectronSettings().getItem("system_monitoring_enabled") === "true"
@@ -90,6 +93,27 @@ export function Dashboard() {
     // Update navigation cache
     _cachedServers = data;
     _cacheAgentId = activeConnection?.id ?? null;
+
+    // Seed install progress for any servers currently installing
+    for (const s of data) {
+      if (s.status === "installing") {
+        api.servers
+          .getInstallStatus(s.id)
+          .then((status) => {
+            if (status.installing && status.percent > 0) {
+              setInstallProgress((prev) => {
+                const next = new Map(prev);
+                next.set(s.id, {
+                  percent: status.percent,
+                  message: status.message,
+                });
+                return next;
+              });
+            }
+          })
+          .catch(() => {});
+      }
+    }
   }, [api, activeConnection?.id]);
 
   const loadSteamCMD = useCallback(async () => {
@@ -175,8 +199,32 @@ export function Dashboard() {
         if (payload.status === "error" && payload.message) {
           showDependencyError(payload.message);
         }
+        // Clear install progress when server leaves installing state
+        if (payload.status !== "installing") {
+          setInstallProgress((prev) => {
+            if (!prev.has(payload.serverId)) return prev;
+            const next = new Map(prev);
+            next.delete(payload.serverId);
+            return next;
+          });
+        }
         // Reload servers on status change
         loadServers();
+      }
+      if (message.type === "install:progress") {
+        const payload = message.payload as {
+          serverId: number;
+          percent: number;
+          message: string;
+        };
+        setInstallProgress((prev) => {
+          const next = new Map(prev);
+          next.set(payload.serverId, {
+            percent: payload.percent,
+            message: payload.message,
+          });
+          return next;
+        });
       }
       if (message.type === "install:complete") {
         const payload = message.payload as {
@@ -184,6 +232,14 @@ export function Dashboard() {
           serverName?: string;
         };
         toastSuccess(`${payload.serverName || "Server"} installation complete`);
+        if (payload.serverId) {
+          setInstallProgress((prev) => {
+            if (!prev.has(payload.serverId!)) return prev;
+            const next = new Map(prev);
+            next.delete(payload.serverId!);
+            return next;
+          });
+        }
         // Reload servers when installation completes
         loadServers();
       }
@@ -504,6 +560,7 @@ export function Dashboard() {
                       onStop={handleStopServer}
                       onDelete={handleDeleteServer}
                       disabled={!isConnected}
+                      installProgress={installProgress.get(server.id)}
                     />
                   ))}
                 </div>
