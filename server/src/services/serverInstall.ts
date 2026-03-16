@@ -503,6 +503,12 @@ export function cancelAndCleanupInstallation(serverId: number): boolean {
           server.installPath,
         );
       })
+      .then(() => {
+        broadcast("install:cancelled", {
+          serverId,
+          serverName: server.name,
+        });
+      })
       .catch((err) => {
         logger.error(
           `[Install] Cleanup failed for cancelled server ${serverId}: ${err}`,
@@ -517,11 +523,18 @@ export function cancelAndCleanupInstallation(serverId: number): boolean {
       server.gameId,
       server.port,
       server.installPath,
-    ).catch((err) => {
-      logger.error(
-        `[Install] Cleanup failed for dequeued server ${serverId}: ${err}`,
-      );
-    });
+    )
+      .then(() => {
+        broadcast("install:cancelled", {
+          serverId,
+          serverName: server.name,
+        });
+      })
+      .catch((err) => {
+        logger.error(
+          `[Install] Cleanup failed for dequeued server ${serverId}: ${err}`,
+        );
+      });
   }
 
   logger.info(

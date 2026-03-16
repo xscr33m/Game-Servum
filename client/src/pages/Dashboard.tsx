@@ -250,6 +250,12 @@ export function Dashboard() {
         // Remove the deleted server from the list without a full reload
         setServers((prev) => prev.filter((s) => s.id !== payload.serverId));
       }
+      if (message.type === "install:cancelled") {
+        const payload = message.payload as { serverName?: string };
+        toastSuccess(
+          `Installation of ${payload.serverName || "server"} cancelled`,
+        );
+      }
     });
     return unsubscribe;
   }, [subscribe, loadServers]);

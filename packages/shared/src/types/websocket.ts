@@ -13,6 +13,7 @@ export type WSMessageType =
   | "install:progress"
   | "install:complete"
   | "install:error"
+  | "install:cancelled"
   | "mod:progress"
   | "mod:installed"
   | "mod:error"
