@@ -101,7 +101,7 @@ export function ServerCard({
             {server.status === "installing" &&
             installProgress &&
             installProgress.percent > 0
-              ? `Installing · ${installProgress.percent}%`
+              ? `Installing`
               : status.label}
           </Badge>
         </div>
