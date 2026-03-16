@@ -303,25 +303,21 @@ export function AddServerDialog({
             </DialogDescription>
           </DialogHeader>
 
-          {/* Step indicator */}
+          {/* Step indicator — always 2 steps: Select Game → Configure */}
           <div className="flex items-center gap-2 px-1">
-            {(["select-game", "steam-login", "configure"] as const)
-              .filter((s) => s !== "steam-login" || selectedGame?.requiresLogin)
-              .map((s, i, arr) => {
-                const currentIndex = arr.indexOf(step);
-                const isActive = s === step;
-                const isDone = currentIndex >= 0 && i < currentIndex;
-                return (
-                  <div key={s} className="flex items-center gap-2 flex-1">
-                    <div
-                      className={`h-1.5 flex-1 rounded-full transition-colors ${
-                        isActive || isDone ? "bg-primary" : "bg-muted"
-                      }`}
-                    />
-                    {i < arr.length - 1 && <div className="w-1" />}
-                  </div>
-                );
-              })}
+            {[0, 1].map((i) => {
+              const isFilled = i === 0 || (i === 1 && step === "configure");
+              return (
+                <div key={i} className="flex items-center gap-2 flex-1">
+                  <div
+                    className={`h-1.5 flex-1 rounded-full transition-colors ${
+                      isFilled ? "bg-primary" : "bg-muted"
+                    }`}
+                  />
+                  {i < 1 && <div className="w-1" />}
+                </div>
+              );
+            })}
           </div>
 
           <div className="py-2">
@@ -349,9 +345,9 @@ export function AddServerDialog({
                           key={game.id}
                           type="button"
                           onClick={() => handleGameSelect(game)}
-                          className={`group relative rounded-xl border-2 p-4 text-left transition-all hover:border-primary/50 hover:shadow-md ${
+                          className={`group relative rounded-xl border-2 p-4 text-left transition-all hover:cursor-pointer hover:border-ring/50 hover:shadow-md ${
                             selectedGame?.id === game.id
-                              ? "border-primary bg-primary/5"
+                              ? "border-ring bg-ring/5"
                               : "border-border bg-card"
                           }`}
                         >
