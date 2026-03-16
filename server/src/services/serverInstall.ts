@@ -11,20 +11,19 @@
 import { spawn, exec, type ChildProcess } from "child_process";
 import path from "path";
 import fs from "fs";
-import fsPromises from "fs/promises";
 import { getConfig, getSteamCMDExecutable } from "./config.js";
 import { broadcast, logger } from "../index.js";
 import {
   updateServerStatus,
   getSteamConfig,
   getServerById,
-  deleteServer,
 } from "../db/index.js";
 import {
   getGameDefinition,
   getGameDefinitionByAppId,
   runPostInstall,
 } from "../games/index.js";
+import { performBackgroundDeletion } from "./serverDelete.js";
 
 // Track active installations with buffered output & progress
 interface ActiveInstallation {
@@ -429,10 +428,10 @@ export function cancelInstallation(serverId: number): boolean {
 }
 
 /**
- * Cancel an installation (or dequeue) and clean up all server data.
- * Kills the SteamCMD process, waits for it to exit (releasing file locks),
- * deletes downloaded files, removes the DB entry, and broadcasts
- * server:deleted so the UI removes the card.
+ * Cancel an installation (or dequeue) and fully clean up the server.
+ * Kills the SteamCMD process tree, waits for exit to release file locks,
+ * then delegates to performBackgroundDeletion() which handles everything:
+ * firewall rules, services, file deletion, DB cleanup, and WS broadcast.
  */
 export async function cancelAndCleanupInstallation(
   serverId: number,
@@ -440,120 +439,67 @@ export async function cancelAndCleanupInstallation(
   const server = getServerById(serverId);
   if (!server) return false;
 
-  // Handle queued (not yet running) installations
-  if (isQueued(serverId)) {
-    removeFromQueue(serverId);
-    // Queued servers haven't downloaded anything yet, but the
-    // install directory may have been pre-created.
-    if (server.installPath && fs.existsSync(server.installPath)) {
-      try {
-        await fsPromises.rm(server.installPath, {
-          recursive: true,
-          force: true,
-        });
-        logger.info(
-          `[Install] Removed server directory after dequeue: ${server.installPath}`,
-        );
-      } catch (err) {
-        logger.error(
-          `[Install] Failed to remove server directory after dequeue: ${err}`,
-        );
-      }
-    }
-    deleteServer(serverId);
-    logger.info(
-      `[Install] Dequeued and cleaned up server ${server.name} (ID: ${serverId})`,
-    );
-    broadcast("server:deleted", { serverId });
-    return true;
-  }
+  const isActive = activeInstallations.has(serverId);
+  const isInQueue = isQueued(serverId);
 
-  // Handle active installations — need to kill process and wait for exit
-  const installation = activeInstallations.get(serverId);
-  if (!installation) return false;
+  if (!isActive && !isInQueue) return false;
 
-  // Mark as cancelled so the proc.on("close") handler skips its logic
-  cancelledServerIds.add(serverId);
+  // For active installations, kill the SteamCMD process tree and wait for exit
+  if (isActive) {
+    const installation = activeInstallations.get(serverId)!;
 
-  // Wait for the process to actually exit after killing it
-  const processExited = new Promise<void>((resolve) => {
-    installation.process.on("close", () => resolve());
-    installation.process.on("error", () => resolve());
-  });
+    // Mark as cancelled so the proc.on("close") handler skips its logic
+    cancelledServerIds.add(serverId);
 
-  // On Windows, use taskkill /T /F to kill the entire process tree.
-  // A bare process.kill() only kills the parent — SteamCMD child processes
-  // keep running and hold file locks on the download directory.
-  const pid = installation.process.pid;
-  if (process.platform === "win32" && pid) {
-    exec(`taskkill /PID ${pid} /T /F`, (err) => {
-      if (err) {
-        logger.warn(
-          `[Install] taskkill failed, falling back to process.kill: ${err.message}`,
-        );
-        installation.process.kill();
-      }
+    // Wait for the process to actually exit after killing it
+    const processExited = new Promise<void>((resolve) => {
+      installation.process.on("close", () => resolve());
+      installation.process.on("error", () => resolve());
     });
-  } else {
-    installation.process.kill();
-  }
-  activeInstallations.delete(serverId);
 
-  broadcast("install:progress", {
-    serverId,
-    gameId: installation.gameId,
-    status: "cancelled",
-    message: "Installation cancelled",
-    percent: 0,
-  });
-
-  // Wait for the process to fully exit so file locks are released
-  await processExited;
-
-  // Now safely delete the downloaded files.
-  // Retry a few times — on Windows, file locks may take a moment to release
-  // after the process tree is killed.
-  if (server.installPath && fs.existsSync(server.installPath)) {
-    let deleted = false;
-    for (let attempt = 1; attempt <= 5; attempt++) {
-      try {
-        await fsPromises.rm(server.installPath, {
-          recursive: true,
-          force: true,
-        });
-        logger.info(
-          `[Install] Removed server files after cancel: ${server.installPath}`,
-        );
-        deleted = true;
-        break;
-      } catch (err) {
-        if (attempt < 5) {
+    // On Windows, use taskkill /T /F to kill the entire process tree.
+    // A bare process.kill() only kills the parent — SteamCMD child processes
+    // keep running and hold file locks on the download directory.
+    const pid = installation.process.pid;
+    if (process.platform === "win32" && pid) {
+      exec(`taskkill /PID ${pid} /T /F`, (err) => {
+        if (err) {
           logger.warn(
-            `[Install] File removal attempt ${attempt}/5 failed, retrying in 1s...`,
+            `[Install] taskkill failed, falling back to process.kill: ${err.message}`,
           );
-          await new Promise((r) => setTimeout(r, 1000));
-        } else {
-          logger.error(
-            `[Install] Failed to remove server files after cancel (${attempt} attempts): ${err}`,
-          );
+          installation.process.kill();
         }
-      }
+      });
+    } else {
+      installation.process.kill();
     }
-    if (!deleted) {
-      logger.warn(
-        `[Install] Could not remove ${server.installPath} — files may need manual cleanup`,
-      );
-    }
+    activeInstallations.delete(serverId);
+
+    broadcast("install:progress", {
+      serverId,
+      gameId: installation.gameId,
+      status: "cancelled",
+      message: "Installation cancelled",
+      percent: 0,
+    });
+
+    // Wait for the process to fully exit so file locks are released
+    await processExited;
   }
 
-  // Remove the database entry (cascades related records)
-  deleteServer(serverId);
   logger.info(
-    `[Install] Cancelled and cleaned up server ${server.name} (ID: ${serverId})`,
+    `[Install] Cleaning up cancelled server ${server.name} (ID: ${serverId})`,
   );
 
-  // Notify clients so the card is removed from the UI
-  broadcast("server:deleted", { serverId });
+  // Delegate all cleanup to the existing deletion logic:
+  // firewall rules, services, files, DB entry, WS broadcast
+  await performBackgroundDeletion(
+    serverId,
+    server.name,
+    server.gameId,
+    server.port,
+    server.installPath,
+  );
 
   return true;
 }
