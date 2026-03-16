@@ -45,7 +45,7 @@ const statusConfig = {
   running: { label: "Running", variant: "success" as const },
   stopping: { label: "Stopping", variant: "warning" as const },
   queued: { label: "Queued", variant: "secondary" as const },
-  installing: { label: "Installing", variant: "warning" as const },
+  installing: { label: "Installing", variant: "success" as const },
   updating: { label: "Updating", variant: "warning" as const },
   deleting: { label: "Deleting", variant: "destructive" as const },
   error: { label: "Error", variant: "destructive" as const },

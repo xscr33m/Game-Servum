@@ -31,7 +31,7 @@ const statusConfig = {
   running: { label: "Running", variant: "success" as const },
   stopping: { label: "Stopping", variant: "warning" as const },
   queued: { label: "Queued", variant: "secondary" as const },
-  installing: { label: "Installing", variant: "warning" as const },
+  installing: { label: "Installing", variant: "success" as const },
   updating: { label: "Updating", variant: "warning" as const },
   deleting: { label: "Deleting", variant: "destructive" as const },
   error: { label: "Error", variant: "destructive" as const },
@@ -159,7 +159,7 @@ export function ServerCard({
             <div className="flex-1 space-y-1.5">
               <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
                 <div
-                  className="h-full rounded-full bg-warning transition-all duration-500 ease-out"
+                  className="h-full rounded-full bg-success transition-all duration-500 ease-out"
                   style={{ width: `${installProgress.percent}%` }}
                 />
               </div>
