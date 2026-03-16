@@ -429,13 +429,15 @@ export function cancelInstallation(serverId: number): boolean {
 
 /**
  * Cancel an installation (or dequeue) and fully clean up the server.
- * Kills the SteamCMD process tree, waits for exit to release file locks,
- * then delegates to performBackgroundDeletion() which handles everything:
- * firewall rules, services, file deletion, DB cleanup, and WS broadcast.
+ *
+ * The SteamCMD process is killed synchronously so the download stops
+ * immediately.  The heavy cleanup (waiting for process exit, deleting
+ * files, firewall rules, DB entry) runs in the background so the
+ * caller (route handler / Express) is never blocked.
+ *
+ * Returns true if a cancellation was initiated, false if nothing to cancel.
  */
-export async function cancelAndCleanupInstallation(
-  serverId: number,
-): Promise<boolean> {
+export function cancelAndCleanupInstallation(serverId: number): boolean {
   const server = getServerById(serverId);
   if (!server) return false;
 
@@ -444,14 +446,18 @@ export async function cancelAndCleanupInstallation(
 
   if (!isActive && !isInQueue) return false;
 
-  // For active installations, kill the SteamCMD process tree and wait for exit
+  // Set status to "deleting" immediately — the card shows "Deleting..." while
+  // the background cleanup runs, identical to the normal delete flow.
+  updateServerStatus(serverId, "deleting", null);
+  broadcast("server:status", { serverId, status: "deleting" });
+
   if (isActive) {
     const installation = activeInstallations.get(serverId)!;
 
     // Mark as cancelled so the proc.on("close") handler skips its logic
     cancelledServerIds.add(serverId);
 
-    // Wait for the process to actually exit after killing it
+    // Prepare a promise that resolves when the process actually exits
     const processExited = new Promise<void>((resolve) => {
       installation.process.on("close", () => resolve());
       installation.process.on("error", () => resolve());
@@ -483,22 +489,43 @@ export async function cancelAndCleanupInstallation(
       percent: 0,
     });
 
-    // Wait for the process to fully exit so file locks are released
-    await processExited;
+    // Background: wait for process exit, then full cleanup
+    processExited
+      .then(() => {
+        logger.info(
+          `[Install] SteamCMD exited for cancelled server ${server.name} (ID: ${serverId}), cleaning up...`,
+        );
+        return performBackgroundDeletion(
+          serverId,
+          server.name,
+          server.gameId,
+          server.port,
+          server.installPath,
+        );
+      })
+      .catch((err) => {
+        logger.error(
+          `[Install] Cleanup failed for cancelled server ${serverId}: ${err}`,
+        );
+      });
+  } else {
+    // Queued — no running process, just clean up directly in background
+    removeFromQueue(serverId);
+    performBackgroundDeletion(
+      serverId,
+      server.name,
+      server.gameId,
+      server.port,
+      server.installPath,
+    ).catch((err) => {
+      logger.error(
+        `[Install] Cleanup failed for dequeued server ${serverId}: ${err}`,
+      );
+    });
   }
 
   logger.info(
-    `[Install] Cleaning up cancelled server ${server.name} (ID: ${serverId})`,
-  );
-
-  // Delegate all cleanup to the existing deletion logic:
-  // firewall rules, services, files, DB entry, WS broadcast
-  await performBackgroundDeletion(
-    serverId,
-    server.name,
-    server.gameId,
-    server.port,
-    server.installPath,
+    `[Install] Cancellation initiated for server ${server.name} (ID: ${serverId})`,
   );
 
   return true;

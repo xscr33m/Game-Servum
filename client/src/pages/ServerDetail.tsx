@@ -298,8 +298,10 @@ export function ServerDetail() {
   async function confirmCancelInstall(serverToCancel: GameServer) {
     try {
       await api.servers.cancelInstall(serverToCancel.id);
-      toastSuccess(`Installation of ${serverToCancel.name} cancelled`);
+      toastSuccess(`Cancelling installation of ${serverToCancel.name}...`);
+      // server:status WS event updates to "deleting",
       // server:deleted WS event will navigate to dashboard
+      await loadServer();
     } catch (err) {
       toastError((err as Error).message);
       throw err;

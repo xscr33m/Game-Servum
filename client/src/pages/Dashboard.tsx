@@ -309,7 +309,9 @@ export function Dashboard() {
   async function confirmCancelInstall(server: GameServer) {
     try {
       await api.servers.cancelInstall(server.id);
-      toastSuccess(`Installation of ${server.name} cancelled`);
+      toastSuccess(`Cancelling installation of ${server.name}...`);
+      // The server:status WS event will update the card to "Deleting"
+      // and server:deleted will remove it once cleanup is complete
       await loadServers();
     } catch (err) {
       toastError((err as Error).message);
