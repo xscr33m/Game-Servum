@@ -26,6 +26,15 @@ export const WS_PATH = "/ws";
 export const TOKEN_LIFETIME_SECONDS = 86400;
 
 /**
+ * Steam reserved port ranges that should not be used for game server query ports.
+ * These are used internally by Steam server browser / SteamNetworking.
+ * Each tuple is [startPort, endPort] (inclusive).
+ */
+export const STEAM_RESERVED_PORT_RANGES: ReadonlyArray<
+  readonly [number, number]
+> = [[27030, 27050]];
+
+/**
  * Compare two SemVer strings.
  * Returns: -1 if a < b, 0 if a === b, 1 if a > b
  */

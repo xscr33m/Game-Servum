@@ -58,9 +58,7 @@ export class SevenDaysAdapter extends BaseGameAdapter {
     appId: 294420,
     executable: "7DaysToDieServer.exe",
     defaultPort: 26900,
-    portCount: 4,
-    queryPort: 26901,
-    queryPortOffset: 1,
+    portStride: 1000,
     requiresLogin: false,
     defaultLaunchParams:
       '-configfile=serverconfig.xml -logfile "output_log.txt" -quit -batchmode -nographics -dedicated',
@@ -70,7 +68,7 @@ export class SevenDaysAdapter extends BaseGameAdapter {
     firewallRules: [
       {
         portOffset: 0,
-        portCount: 4,
+        portCount: 3,
         protocol: "TCP/UDP",
         description: "Game + Network",
       },
@@ -90,7 +88,6 @@ export class SevenDaysAdapter extends BaseGameAdapter {
     },
     broadcastCommand: 'say "{MESSAGE}"',
     playerListCommand: "listplayers",
-    rconPortOffset: undefined,
   };
 
   // ── Lifecycle ────────────────────────────────────────────────────

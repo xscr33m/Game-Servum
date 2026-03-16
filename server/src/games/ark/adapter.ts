@@ -13,7 +13,11 @@ import fs from "fs";
 import crypto from "crypto";
 import { logger } from "../../index.js";
 import { recordPlayerConnect, recordPlayerDisconnect } from "../../db/index.js";
-import { BaseGameAdapter } from "../base.js";
+import {
+  BaseGameAdapter,
+  getQueryPortOffset,
+  getRconPortOffset,
+} from "../base.js";
 import { readGameFile } from "../encoding.js";
 import type {
   GameDefinition,
@@ -144,9 +148,7 @@ export class ArkAdapter extends BaseGameAdapter {
     workshopAppId: 346110, // ARK Workshop mods are under the game AppID (346110), not the server (376030)
     executable: "ShooterGame/Binaries/Win64/ShooterGameServer.exe",
     defaultPort: 7777,
-    portCount: 2,
-    queryPort: 27015,
-    queryPortOffset: 19238,
+    portStride: 2,
     requiresLogin: false,
     defaultLaunchParams:
       "TheIsland?listen?SessionName={SERVER_NAME}?Port={PORT}?QueryPort={QUERY_PORT}?RCONEnabled=True -servergamelog -log -forcelogflush",
@@ -185,7 +187,6 @@ export class ArkAdapter extends BaseGameAdapter {
     },
     broadcastCommand: "ServerChat {MESSAGE}",
     playerListCommand: "ListPlayers",
-    rconPortOffset: 19243,
     startupCompletePattern: "Full Startup: .+ seconds",
     startupLogFile: "ShooterGame/Saved/Logs/ShooterGame.log",
   };
@@ -307,10 +308,11 @@ export class ArkAdapter extends BaseGameAdapter {
 
     try {
       let content = readGameFile(gusPath);
-      const rconPort = server.port + (this.definition.rconPortOffset || 19243);
+      const rconPort =
+        server.port + (getRconPortOffset(this.definition) || 19243);
       const queryPort =
         server.queryPort ??
-        server.port + (this.definition.queryPortOffset || 19238);
+        server.port + (getQueryPortOffset(this.definition) || 19238);
 
       // Resolve placeholders in launch params so we extract real values,
       // not template variables like {SERVER_NAME} or {PORT}
@@ -462,7 +464,7 @@ export class ArkAdapter extends BaseGameAdapter {
           content,
           "ServerSettings",
           "RCONPort",
-          String(server.port + (this.definition.rconPortOffset || 19243)),
+          String(server.port + (getRconPortOffset(this.definition) || 19243)),
         );
         modified = true;
       }
@@ -509,7 +511,7 @@ export class ArkAdapter extends BaseGameAdapter {
             password,
             port: rconPort
               ? parseInt(rconPort, 10)
-              : server.port + (this.definition.rconPortOffset || 0),
+              : server.port + (getRconPortOffset(this.definition) || 0),
           };
         }
       } catch (error) {
@@ -529,7 +531,7 @@ export class ArkAdapter extends BaseGameAdapter {
         password: passMatch[1],
         port: portMatch
           ? parseInt(portMatch[1], 10)
-          : server.port + (this.definition.rconPortOffset || 0),
+          : server.port + (getRconPortOffset(this.definition) || 0),
       };
     }
     return null;
@@ -585,10 +587,11 @@ export class ArkAdapter extends BaseGameAdapter {
       return defaultVal;
     };
 
-    const rconPort = server.port + (this.definition.rconPortOffset || 19243);
+    const rconPort =
+      server.port + (getRconPortOffset(this.definition) || 19243);
     const queryPort =
       server.queryPort ??
-      server.port + (this.definition.queryPortOffset || 19238);
+      server.port + (getQueryPortOffset(this.definition) || 19238);
 
     // ServerAdminPassword — critical for RCON
     const adminPass = resolve(

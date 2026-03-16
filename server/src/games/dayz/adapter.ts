@@ -65,10 +65,7 @@ export class DayZAdapter extends BaseGameAdapter {
     workshopAppId: 221100,
     executable: "DayZServer_x64.exe",
     defaultPort: 2302,
-    portCount: 5,
     portStride: 100,
-    queryPort: 27016,
-    queryPortOffset: 24714,
     requiresLogin: true,
     defaultLaunchParams:
       "-config=serverDZ.cfg -port={PORT} -profiles={PROFILES} -doLogs -adminLog -netLog -freezeCheck",
@@ -76,8 +73,13 @@ export class DayZAdapter extends BaseGameAdapter {
       "Post-apocalyptic survival game. Requires Steam login to download.",
     configFiles: ["serverDZ.cfg", "profiles/"],
     firewallRules: [
-      { portOffset: 0, portCount: 4, protocol: "UDP", description: "Game" },
-      { portOffset: 4, portCount: 1, protocol: "UDP", description: "RCON" },
+      { portOffset: 0, portCount: 3, protocol: "UDP", description: "Game" },
+      {
+        portOffset: 3,
+        portCount: 1,
+        protocol: "UDP",
+        description: "RCON (BattlEye)",
+      },
       {
         portOffset: 24714,
         portCount: 1,
@@ -100,7 +102,6 @@ export class DayZAdapter extends BaseGameAdapter {
     },
     broadcastCommand: "say -1 {MESSAGE}",
     playerListCommand: "players",
-    rconPortOffset: 4,
   };
 
   // ── Lifecycle ────────────────────────────────────────────────────
@@ -147,7 +148,7 @@ export class DayZAdapter extends BaseGameAdapter {
     const beServerCfgPath = path.join(battleEyePath, "BEServer_x64.cfg");
     if (!fs.existsSync(beServerCfgPath)) {
       const rconPassword = generatePassword(20);
-      const rconPort = port + 4;
+      const rconPort = port + 3;
       const beConfig = `RConPassword ${rconPassword}\nRConPort ${rconPort}\nRestrictRCon 0\n`;
       fs.writeFileSync(beServerCfgPath, beConfig, "utf-8");
       logger.info(`[DayZ] Created BattlEye config with secure RCon password`);
@@ -177,7 +178,7 @@ export class DayZAdapter extends BaseGameAdapter {
       // Create default BattlEye config
       const beConfigPath = path.join(battleEyePath, "BEServer_x64.cfg");
       if (!fs.existsSync(beConfigPath)) {
-        const rconPort = server.port + 4;
+        const rconPort = server.port + 3;
         fs.writeFileSync(
           beConfigPath,
           `RConPassword ${generatePassword(20)}\nRConPort ${rconPort}\nRestrictRCon 0\n`,
@@ -211,7 +212,7 @@ export class DayZAdapter extends BaseGameAdapter {
           if (passwordMatch) {
             return {
               password: passwordMatch[1].trim(),
-              port: portMatch ? parseInt(portMatch[1].trim(), 10) : 2306,
+              port: portMatch ? parseInt(portMatch[1].trim(), 10) : 2305,
             };
           }
         } catch (error) {

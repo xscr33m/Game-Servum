@@ -25,6 +25,7 @@ import { SteamAccountDialog } from "@/components/agent/SteamAccountDialog";
 import { publicAsset } from "@/lib/assets";
 import { getGameLogo } from "@/components/server-details/games/registry";
 import { toastSuccess } from "@/lib/toast";
+import { STEAM_RESERVED_PORT_RANGES } from "@game-servum/shared";
 import type { GameDefinition, GameServer, SteamCMDStatus } from "@/types";
 
 type WizardStep = "select-game" | "steam-login" | "configure";
@@ -135,11 +136,20 @@ export function AddServerDialog({
     for (const s of usedPorts) {
       const gameDef = games.find((g) => g.id === s.gameId);
       if (gameDef) {
-        for (let i = 0; i < gameDef.portCount; i++) {
-          occupied.add(s.port + i);
-        }
-        if (gameDef.queryPortOffset != null) {
-          occupied.add(s.port + gameDef.queryPortOffset);
+        // Use firewallRules as source of truth for port enumeration
+        if (gameDef.firewallRules && gameDef.firewallRules.length > 0) {
+          for (const rule of gameDef.firewallRules) {
+            for (let i = 0; i < rule.portCount; i++) {
+              occupied.add(s.port + rule.portOffset + i);
+            }
+          }
+        } else {
+          for (let i = 0; i < gameDef.portCount; i++) {
+            occupied.add(s.port + i);
+          }
+          if (gameDef.queryPortOffset != null) {
+            occupied.add(s.port + gameDef.queryPortOffset);
+          }
         }
       } else {
         occupied.add(s.port);
@@ -147,6 +157,26 @@ export function AddServerDialog({
       }
     }
     return occupied;
+  }
+
+  /** Compute all ports a server would use based on firewallRules */
+  function getPortsForGame(basePort: number, game: GameDefinition): number[] {
+    const ports = new Set<number>();
+    if (game.firewallRules && game.firewallRules.length > 0) {
+      for (const rule of game.firewallRules) {
+        for (let i = 0; i < rule.portCount; i++) {
+          ports.add(basePort + rule.portOffset + i);
+        }
+      }
+    } else {
+      for (let i = 0; i < game.portCount; i++) {
+        ports.add(basePort + i);
+      }
+      if (game.queryPortOffset != null) {
+        ports.add(basePort + game.queryPortOffset);
+      }
+    }
+    return Array.from(ports).sort((a, b) => a - b);
   }
 
   function calculatePorts(
@@ -159,14 +189,8 @@ export function AddServerDialog({
       return;
     }
 
-    const ports: number[] = [];
-    for (let i = 0; i < game.portCount; i++) {
-      ports.push(basePort + i);
-    }
-    if (game.queryPortOffset != null) {
-      ports.push(basePort + game.queryPortOffset);
-    }
-    setPortsUsed(ports.sort((a, b) => a - b));
+    const ports = getPortsForGame(basePort, game);
+    setPortsUsed(ports);
 
     const occupied = buildOccupiedPorts();
     const conflicts: string[] = [];
@@ -175,16 +199,17 @@ export function AddServerDialog({
         const conflictServer = usedPorts.find((s) => {
           const sd = games.find((g) => g.id === s.gameId);
           if (sd) {
-            for (let j = 0; j < sd.portCount; j++) {
-              if (s.port + j === p) return true;
-            }
-            if (sd.queryPortOffset != null && s.port + sd.queryPortOffset === p)
-              return true;
+            return getPortsForGame(s.port, sd).includes(p);
           }
           return s.port === p || s.queryPort === p;
         });
         conflicts.push(
           `Port ${p} is already used by "${conflictServer?.name || "unknown"}"`,
+        );
+      }
+      if (STEAM_RESERVED_PORT_RANGES.some(([lo, hi]) => p >= lo && p <= hi)) {
+        conflicts.push(
+          `Port ${p} conflicts with Steam internal ports (27030–27050)`,
         );
       }
     }
@@ -511,15 +536,35 @@ export function AddServerDialog({
                     }}
                     disabled={loading}
                   />
-                  {portsUsed.length > 0 && (
+                  {portsUsed.length > 0 && selectedGame && (
                     <p className="text-xs text-muted-foreground">
-                      Ports used:{" "}
-                      {portsUsed.map((p, i) => (
-                        <span key={p}>
-                          {i > 0 && ", "}
-                          <span className="font-mono">{p}</span>
-                        </span>
-                      ))}
+                      {selectedGame.firewallRules &&
+                      selectedGame.firewallRules.length > 0
+                        ? selectedGame.firewallRules.map((rule, i) => {
+                            const start =
+                              (port || selectedGame.defaultPort) +
+                              rule.portOffset;
+                            const end = start + rule.portCount - 1;
+                            const portRange =
+                              start === end ? String(start) : `${start}–${end}`;
+                            return (
+                              <span key={i}>
+                                {i > 0 && ", "}
+                                <span className="font-mono">
+                                  {portRange}
+                                </span>{" "}
+                                <span className="text-muted-foreground/70">
+                                  {rule.protocol} ({rule.description})
+                                </span>
+                              </span>
+                            );
+                          })
+                        : portsUsed.map((p, i) => (
+                            <span key={p}>
+                              {i > 0 && ", "}
+                              <span className="font-mono">{p}</span>
+                            </span>
+                          ))}
                     </p>
                   )}
                   {portConflict && (

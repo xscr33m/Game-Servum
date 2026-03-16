@@ -44,7 +44,11 @@ import {
   getAllGameDefinitions,
   getGameDefinition,
   getGameAdapter,
+  getAllPortsFromRules,
+  getQueryPortOffset,
+  getConsecutivePortCount,
 } from "../games/index.js";
+import { STEAM_RESERVED_PORT_RANGES } from "@game-servum/shared";
 import { readGameFile } from "../games/encoding.js";
 import {
   installServer,
@@ -115,9 +119,9 @@ router.get("/games", (_req: Request, res: Response) => {
     appId: game.appId,
     workshopAppId: game.workshopAppId,
     defaultPort: game.defaultPort,
-    portCount: game.portCount,
-    queryPort: game.queryPort,
-    queryPortOffset: game.queryPortOffset,
+    portCount: getConsecutivePortCount(game),
+    portStride: game.portStride,
+    queryPortOffset: getQueryPortOffset(game),
     requiresLogin: game.requiresLogin,
     description: game.description,
     defaultLaunchParams: game.defaultLaunchParams,
@@ -153,56 +157,63 @@ router.get("/suggest-ports", (req: Request, res: Response) => {
     return res.status(400).json({ error: `Unknown game: ${gameId}` });
   }
 
-  // Collect ALL ports in use across all servers (considering their port ranges)
+  // Collect ALL ports in use across all servers (using firewallRules as source of truth)
   const servers = getUsedPorts();
   const allUsedPorts = new Set<number>();
   for (const s of servers) {
-    const sDef = getGameDefinition(s.gameId);
-    if (sDef) {
-      for (let i = 0; i < sDef.portCount; i++) {
-        allUsedPorts.add(s.port + i);
-      }
-      if (sDef.queryPortOffset != null) {
-        allUsedPorts.add(s.port + sDef.queryPortOffset);
-      }
-    } else {
-      allUsedPorts.add(s.port);
-      if (s.queryPort) allUsedPorts.add(s.queryPort);
+    for (const p of getAllPortsFromRules(s.port, s.gameId)) {
+      allUsedPorts.add(p);
     }
   }
 
-  // Find next available base port (stride by portCount for clean ranges)
+  // Find next available base port (stride for clean aligned ranges)
   let candidate = gameDef.defaultPort;
   const maxPort = 65535;
 
   while (candidate < maxPort) {
-    const portsNeeded: number[] = [];
-    for (let i = 0; i < gameDef.portCount; i++) {
-      portsNeeded.push(candidate + i);
-    }
-    if (gameDef.queryPortOffset != null) {
-      portsNeeded.push(candidate + gameDef.queryPortOffset);
-    }
+    const portsNeeded = getAllPortsFromRules(candidate, gameId);
 
-    if (portsNeeded.every((p) => !allUsedPorts.has(p) && p <= maxPort)) {
+    // Check: all ports available, within range, and not in Steam reserved ranges
+    const isAvailable = portsNeeded.every(
+      (p) =>
+        !allUsedPorts.has(p) &&
+        p <= maxPort &&
+        !STEAM_RESERVED_PORT_RANGES.some(([lo, hi]) => p >= lo && p <= hi),
+    );
+
+    if (isAvailable) {
+      // Build port details from firewallRules for richer frontend display
+      const portDetails = (gameDef.firewallRules ?? []).map((rule) => {
+        const start = candidate + rule.portOffset;
+        const end = start + rule.portCount - 1;
+        return {
+          startPort: start,
+          endPort: end,
+          protocol: rule.protocol,
+          description: rule.description,
+        };
+      });
+
+      const qpOffset = getQueryPortOffset(gameDef);
       return res.json({
         port: candidate,
-        queryPort:
-          gameDef.queryPortOffset != null
-            ? candidate + gameDef.queryPortOffset
-            : null,
-        portsUsed: portsNeeded.sort((a, b) => a - b),
+        queryPort: qpOffset != null ? candidate + qpOffset : null,
+        portsUsed: portsNeeded,
+        portDetails,
       });
     }
 
-    candidate += gameDef.portStride || gameDef.portCount; // stride for clean aligned ranges
+    candidate += gameDef.portStride || getConsecutivePortCount(gameDef);
   }
 
   // Fallback: return defaults
+  const fallbackQpOffset = getQueryPortOffset(gameDef);
   res.json({
     port: gameDef.defaultPort,
-    queryPort: gameDef.queryPort || null,
+    queryPort:
+      fallbackQpOffset != null ? gameDef.defaultPort + fallbackQpOffset : null,
     portsUsed: [gameDef.defaultPort],
+    portDetails: [],
   });
 });
 
@@ -234,73 +245,40 @@ router.post("/", async (req: Request, res: Response) => {
     body.installPath ||
     path.join(config.serversPath, sanitizeDirName(body.name));
 
-  // Check for port conflicts with existing servers (using full port ranges)
+  // Check for port conflicts with existing servers (using firewallRules as source of truth)
   const requestedPort = body.port || gameDef.defaultPort;
+  const createQpOffset = getQueryPortOffset(gameDef);
   const requestedQueryPort =
     body.queryPort ||
-    (gameDef.queryPortOffset != null
-      ? requestedPort + gameDef.queryPortOffset
-      : null);
+    (createQpOffset != null ? requestedPort + createQpOffset : null);
 
   // Collect ALL ports in use across all servers
   const servers = getUsedPorts();
   const allUsedPorts = new Set<number>();
   for (const s of servers) {
-    const sDef = getGameDefinition(s.gameId);
-    if (sDef) {
-      for (let i = 0; i < sDef.portCount; i++) {
-        allUsedPorts.add(s.port + i);
-      }
-      if (sDef.queryPortOffset != null) {
-        allUsedPorts.add(s.port + sDef.queryPortOffset);
-      }
-    } else {
-      allUsedPorts.add(s.port);
-      if (s.queryPort) allUsedPorts.add(s.queryPort);
+    for (const p of getAllPortsFromRules(s.port, s.gameId)) {
+      allUsedPorts.add(p);
     }
   }
 
-  // Check all ports in the requested range
+  // Get all ports the new server would occupy
+  const requestedPorts = getAllPortsFromRules(requestedPort, body.gameId);
+
+  // Check for conflicts with existing servers and Steam reserved ranges
   const conflicts: string[] = [];
-  for (let i = 0; i < gameDef.portCount; i++) {
-    const p = requestedPort + i;
+  for (const p of requestedPorts) {
     if (allUsedPorts.has(p)) {
       const conflictServer = servers.find((s) => {
-        const sd = getGameDefinition(s.gameId);
-        if (sd) {
-          for (let j = 0; j < sd.portCount; j++) {
-            if (s.port + j === p) return true;
-          }
-          if (sd.queryPortOffset != null && s.port + sd.queryPortOffset === p)
-            return true;
-        }
-        return s.port === p || s.queryPort === p;
+        const sPorts = getAllPortsFromRules(s.port, s.gameId);
+        return sPorts.includes(p);
       });
       conflicts.push(
         `Port ${p} is already used by "${conflictServer?.name || "unknown"}"`,
       );
     }
-  }
-  if (requestedQueryPort && allUsedPorts.has(requestedQueryPort)) {
-    const conflictServer = servers.find((s) => {
-      const sd = getGameDefinition(s.gameId);
-      if (sd) {
-        for (let j = 0; j < sd.portCount; j++) {
-          if (s.port + j === requestedQueryPort) return true;
-        }
-        if (
-          sd.queryPortOffset != null &&
-          s.port + sd.queryPortOffset === requestedQueryPort
-        )
-          return true;
-      }
-      return (
-        s.port === requestedQueryPort || s.queryPort === requestedQueryPort
-      );
-    });
-    conflicts.push(
-      `Query port ${requestedQueryPort} is already used by "${conflictServer?.name || "unknown"}"`,
-    );
+    if (STEAM_RESERVED_PORT_RANGES.some(([lo, hi]) => p >= lo && p <= hi)) {
+      conflicts.push(`Port ${p} is in the Steam reserved range (27030-27050)`);
+    }
   }
 
   if (conflicts.length > 0) {
@@ -320,8 +298,8 @@ router.post("/", async (req: Request, res: Response) => {
     port: body.port || gameDef.defaultPort,
     queryPort:
       body.queryPort ||
-      (gameDef.queryPortOffset != null
-        ? (body.port || gameDef.defaultPort) + gameDef.queryPortOffset
+      (createQpOffset != null
+        ? (body.port || gameDef.defaultPort) + createQpOffset
         : null),
     profilesPath: "profiles",
   });
@@ -594,6 +572,37 @@ router.put("/:id/ports", (req: Request, res: Response) => {
     return res
       .status(400)
       .json({ error: "Invalid query port number (1-65535)" });
+  }
+
+  // Check for port conflicts with other servers (exclude self)
+  const otherServers = getUsedPorts().filter((s) => s.id !== id);
+  const allUsedPorts = new Set<number>();
+  for (const s of otherServers) {
+    for (const p of getAllPortsFromRules(s.port, s.gameId)) {
+      allUsedPorts.add(p);
+    }
+  }
+
+  const newPorts = getAllPortsFromRules(port, server.gameId);
+  const conflicts: string[] = [];
+  for (const p of newPorts) {
+    if (allUsedPorts.has(p)) {
+      const conflictServer = otherServers.find((s) =>
+        getAllPortsFromRules(s.port, s.gameId).includes(p),
+      );
+      conflicts.push(
+        `Port ${p} is already used by "${conflictServer?.name || "unknown"}"`,
+      );
+    }
+    if (STEAM_RESERVED_PORT_RANGES.some(([lo, hi]) => p >= lo && p <= hi)) {
+      conflicts.push(`Port ${p} is in the Steam reserved range (27030-27050)`);
+    }
+  }
+
+  if (conflicts.length > 0) {
+    return res.status(400).json({
+      error: `Port conflict: ${conflicts.join(". ")}`,
+    });
   }
 
   updateServerPorts(id, port, queryPort);

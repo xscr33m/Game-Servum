@@ -29,10 +29,7 @@ export interface GameDefinition {
   workshopAppId?: number;
   executable: string;
   defaultPort: number;
-  portCount: number;
   portStride?: number;
-  queryPort?: number;
-  queryPortOffset?: number;
   requiresLogin: boolean;
   defaultLaunchParams: string;
   description: string;
@@ -41,7 +38,6 @@ export interface GameDefinition {
   capabilities: GameCapabilities;
   broadcastCommand?: string;
   playerListCommand?: string;
-  rconPortOffset?: number;
   /** Regex pattern matched against server log output to detect startup completion.
    *  When matched, RCON connection is triggered. If not set, uses a fixed delay. */
   startupCompletePattern?: string;
