@@ -68,6 +68,7 @@ import {
   triggerUpdateCheck,
   startUpdateChecker,
 } from "../services/updateChecker.js";
+import { performBackgroundDeletion } from "../services/serverDelete.js";
 import {
   parseWorkshopId,
   getWorkshopModInfo,
@@ -422,6 +423,10 @@ router.post("/:id/start", async (req: Request, res: Response) => {
     return res.status(400).json({ error: "Server is queued for installation" });
   }
 
+  if (server.status === "deleting") {
+    return res.status(400).json({ error: "Server is being deleted" });
+  }
+
   const result = startServer(id);
 
   if (result.success) {
@@ -442,6 +447,10 @@ router.post("/:id/stop", async (req: Request, res: Response) => {
 
   if (server.status === "stopping") {
     return res.status(400).json({ error: "Server is already stopping" });
+  }
+
+  if (server.status === "deleting") {
+    return res.status(400).json({ error: "Server is being deleted" });
   }
 
   if (
@@ -1705,6 +1714,10 @@ router.delete("/:id", async (req: Request, res: Response) => {
       .json({ error: "Cannot delete running server. Stop it first." });
   }
 
+  if (server.status === "deleting") {
+    return res.status(400).json({ error: "Server is already being deleted." });
+  }
+
   // Require name confirmation for safety
   if (!confirmName || confirmName !== server.name) {
     return res.status(400).json({
@@ -1713,47 +1726,22 @@ router.delete("/:id", async (req: Request, res: Response) => {
     });
   }
 
-  if (isInstalling(id)) {
-    cancelInstallation(id);
-  }
+  // Mark as deleting immediately and respond — actual deletion happens in background
+  updateServerStatus(id, "deleting", null);
+  broadcast("server:status", { serverId: id, status: "deleting" });
 
-  if (isQueued(id)) {
-    removeFromQueue(id);
-  }
+  // Fire-and-forget background deletion
+  performBackgroundDeletion(
+    id,
+    server.name,
+    server.gameId,
+    server.port,
+    server.installPath,
+  );
 
-  // Remove firewall rules before deleting (non-blocking, don't fail deletion)
-  try {
-    await removeFirewallRules(server.name, server.gameId, server.port);
-    logger.info(`[Delete] Removed firewall rules for server: ${server.name}`);
-  } catch (err) {
-    logger.error(`[Delete] Failed to remove firewall rules: ${err}`);
-  }
-
-  // Delete server files
-  const installPath = server.installPath;
-  let filesDeleted = false;
-
-  if (installPath && fs.existsSync(installPath)) {
-    try {
-      fs.rmSync(installPath, { recursive: true, force: true });
-      filesDeleted = true;
-      logger.info(`[Delete] Removed server files: ${installPath}`);
-    } catch (err) {
-      logger.error(`[Delete] Failed to remove server files: ${err}`);
-      return res.status(500).json({
-        error: `Failed to delete server files: ${(err as Error).message}`,
-      });
-    }
-  }
-
-  // Delete database entry
-  deleteServer(id);
-
-  res.json({
+  res.status(202).json({
     success: true,
-    message: filesDeleted
-      ? "Server and all files deleted successfully"
-      : "Server entry deleted (no files found)",
+    message: "Server deletion started",
   });
 });
 

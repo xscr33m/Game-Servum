@@ -40,6 +40,7 @@ import {
   stopMessageBroadcaster,
 } from "./messageBroadcaster.js";
 import { startUpdateChecker, stopUpdateChecker } from "./updateChecker.js";
+import { performBackgroundDeletion } from "./serverDelete.js";
 import type { GameServer } from "../types/index.js";
 
 // Track running server processes
@@ -959,6 +960,21 @@ export function restoreServerStates(): void {
   const servers = getAllServers();
 
   for (const server of servers) {
+    // Resume interrupted deletions
+    if (server.status === "deleting") {
+      logger.info(
+        `[ServerProcess] Server ${server.id} (${server.name}) was in "deleting" state — resuming deletion`,
+      );
+      performBackgroundDeletion(
+        server.id,
+        server.name,
+        server.gameId,
+        server.port,
+        server.installPath,
+      );
+      continue;
+    }
+
     // Reset stale transitional states on startup
     if (
       server.status === "starting" ||

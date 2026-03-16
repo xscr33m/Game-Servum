@@ -7,6 +7,7 @@ export type ServerStatus =
   | "queued"
   | "installing"
   | "updating"
+  | "deleting"
   | "error";
 
 // RCON protocol types supported by game servers

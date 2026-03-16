@@ -13,6 +13,7 @@ import {
   FaWrench,
   FaSpinner,
   FaTerminal,
+  FaTrashCan,
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +30,7 @@ import { useGameCapabilities } from "@/hooks/useGameCapabilities";
 import { AgentControlPanel } from "@/components/agent/AgentControlPanel";
 import { AppHeader } from "@/components/AppHeader";
 import { AgentStatusBanner } from "@/components/agent/AgentStatusBanner";
+import { DeleteServerDialog } from "@/components/server-details/dialogs/DeleteServerDialog";
 import {
   toastSuccess,
   toastError,
@@ -45,6 +47,7 @@ const statusConfig = {
   queued: { label: "Queued", variant: "secondary" as const },
   installing: { label: "Installing", variant: "warning" as const },
   updating: { label: "Updating", variant: "warning" as const },
+  deleting: { label: "Deleting", variant: "destructive" as const },
   error: { label: "Error", variant: "destructive" as const },
 };
 
@@ -59,6 +62,7 @@ export function ServerDetail() {
   const [actionLoading, setActionLoading] = useState(false);
   const [installProgress, setInstallProgress] = useState<string>("");
   const [terminalOutput, setTerminalOutput] = useState<string[]>([]);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const { capabilities } = useGameCapabilities(server?.gameId ?? "");
   const hasPlayers = capabilities?.playerTracking !== false;
   const terminalRef = useRef<HTMLDivElement>(null);
@@ -202,9 +206,16 @@ export function ServerDetail() {
           loadServer();
         }
       }
+      if (message.type === "server:deleted") {
+        const payload = message.payload as { serverId: number };
+        if (payload.serverId === Number(id)) {
+          toastInfo("Server has been deleted");
+          navigate("/", { replace: true });
+        }
+      }
     });
     return unsubscribe;
-  }, [subscribe, id, loadServer]);
+  }, [subscribe, id, loadServer, navigate]);
 
   async function handleStart() {
     if (!server) return;
@@ -232,6 +243,17 @@ export function ServerDetail() {
       toastError((err as Error).message);
     } finally {
       setActionLoading(false);
+    }
+  }
+
+  async function confirmDeleteServer(serverToDelete: GameServer) {
+    try {
+      await api.servers.delete(serverToDelete.id, serverToDelete.name);
+      toastSuccess(`${serverToDelete.name} is being deleted...`);
+      await loadServer();
+    } catch (err) {
+      toastError((err as Error).message);
+      throw err;
     }
   }
 
@@ -285,7 +307,8 @@ export function ServerDetail() {
     server.status === "installing" ||
     server.status === "updating" ||
     server.status === "starting" ||
-    server.status === "stopping";
+    server.status === "stopping" ||
+    server.status === "deleting";
 
   return (
     <div className="h-screen flex flex-col bg-background">
@@ -339,6 +362,16 @@ export function ServerDetail() {
               disabled={actionLoading || !isConnected}
             >
               <FaArrowsRotate className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+              onClick={() => setShowDeleteDialog(true)}
+              disabled={isRunning || isBusy || !isConnected}
+              title="Delete Server"
+            >
+              <FaTrashCan className="h-4 w-4" />
             </Button>
           </>
         }
@@ -481,6 +514,13 @@ export function ServerDetail() {
           )}
         </div>
       </main>
+
+      <DeleteServerDialog
+        server={server}
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        onConfirm={confirmDeleteServer}
+      />
     </div>
   );
 }

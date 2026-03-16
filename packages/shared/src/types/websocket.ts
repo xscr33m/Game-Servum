@@ -8,6 +8,7 @@ export type WSMessageType =
   | "steamcmd:login-failed"
   | "steamcmd:logout"
   | "server:status"
+  | "server:deleted"
   | "server:output"
   | "install:progress"
   | "install:complete"

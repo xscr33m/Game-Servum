@@ -32,6 +32,7 @@ const statusConfig = {
   queued: { label: "Queued", variant: "secondary" as const },
   installing: { label: "Installing", variant: "warning" as const },
   updating: { label: "Updating", variant: "warning" as const },
+  deleting: { label: "Deleting", variant: "destructive" as const },
   error: { label: "Error", variant: "destructive" as const },
 };
 
@@ -53,7 +54,8 @@ export function ServerCard({
     server.status === "installing" ||
     server.status === "updating" ||
     server.status === "starting" ||
-    server.status === "stopping";
+    server.status === "stopping" ||
+    server.status === "deleting";
 
   const hoverGlowClass = isRunning
     ? "hover:server-card-glow-success"
@@ -62,13 +64,13 @@ export function ServerCard({
       : "hover:server-card-glow";
 
   function handleOpenServer() {
-    if (disabled) return;
+    if (disabled || server.status === "deleting") return;
     navigate(`/server/${server.id}`);
   }
 
   return (
     <div
-      className={`group relative rounded-xl border bg-card text-card-foreground shadow-md overflow-hidden transition-all duration-300 ease-out ${disabled ? "opacity-75 cursor-default" : `${hoverGlowClass} cursor-pointer`}`}
+      className={`group relative rounded-xl border bg-card text-card-foreground shadow-md overflow-hidden transition-all duration-300 ease-out ${disabled || server.status === "deleting" ? "opacity-75 cursor-default" : `${hoverGlowClass} cursor-pointer`}`}
       onClick={handleOpenServer}
     >
       {/* Running indicator glow */}
@@ -153,7 +155,9 @@ export function ServerCard({
                   ? "Updating..."
                   : server.status === "starting"
                     ? "Starting..."
-                    : "Stopping..."}
+                    : server.status === "deleting"
+                      ? "Deleting..."
+                      : "Stopping..."}
           </Button>
         ) : isRunning ? (
           <Button

@@ -187,6 +187,11 @@ export function Dashboard() {
         // Reload servers when installation completes
         loadServers();
       }
+      if (message.type === "server:deleted") {
+        const payload = message.payload as { serverId: number };
+        // Remove the deleted server from the list without a full reload
+        setServers((prev) => prev.filter((s) => s.id !== payload.serverId));
+      }
     });
     return unsubscribe;
   }, [subscribe, loadServers]);
@@ -226,7 +231,9 @@ export function Dashboard() {
   async function confirmDeleteServer(server: GameServer) {
     try {
       await api.servers.delete(server.id, server.name);
-      toastSuccess(`${server.name} deleted`);
+      toastSuccess(`${server.name} is being deleted...`);
+      // The server:status WS event will update the card to "Deleting"
+      // and server:deleted will remove it once complete
       await loadServers();
     } catch (err) {
       toastError((err as Error).message);
