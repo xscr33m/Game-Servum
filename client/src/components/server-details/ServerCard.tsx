@@ -5,6 +5,7 @@ import {
   FaTrashCan,
   FaArrowUpRightFromSquare,
   FaSpinner,
+  FaXmark,
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +22,7 @@ interface ServerCardProps {
   onStart: (id: number) => void;
   onStop: (id: number) => void;
   onDelete: (id: number) => void;
+  onCancelInstall?: (id: number) => void;
   disabled?: boolean;
   installProgress?: { percent: number; message: string };
 }
@@ -42,6 +44,7 @@ export function ServerCard({
   onStart,
   onStop,
   onDelete,
+  onCancelInstall,
   disabled = false,
   installProgress,
 }: ServerCardProps) {
@@ -215,15 +218,29 @@ export function ServerCard({
           <FaArrowUpRightFromSquare className="h-3.5 w-3.5 mr-1.5" />
           Open
         </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-          onClick={() => onDelete(server.id)}
-          disabled={isRunning || isBusy || disabled}
-        >
-          <FaTrashCan className="h-3.5 w-3.5" />
-        </Button>
+        {(server.status === "installing" || server.status === "queued") &&
+        onCancelInstall ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+            onClick={() => onCancelInstall(server.id)}
+            disabled={disabled}
+            title="Cancel Installation"
+          >
+            <FaXmark className="h-4 w-4" />
+          </Button>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+            onClick={() => onDelete(server.id)}
+            disabled={isRunning || isBusy || disabled}
+          >
+            <FaTrashCan className="h-3.5 w-3.5" />
+          </Button>
+        )}
       </div>
     </div>
   );

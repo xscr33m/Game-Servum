@@ -49,6 +49,7 @@ import { readGameFile } from "../games/encoding.js";
 import {
   installServer,
   cancelInstallation,
+  cancelAndCleanupInstallation,
   isInstalling,
   getInstallationProgress,
   queueInstallation,
@@ -483,8 +484,8 @@ router.get("/:id/install-status", (req: Request, res: Response) => {
   res.json(getInstallationProgress(id));
 });
 
-// POST /api/servers/:id/cancel-install - Cancel installation
-router.post("/:id/cancel-install", (req: Request, res: Response) => {
+// POST /api/servers/:id/cancel-install - Cancel installation and clean up
+router.post("/:id/cancel-install", async (req: Request, res: Response) => {
   const id = parseInt(req.params.id, 10);
   const server = getServerById(id);
 
@@ -492,12 +493,17 @@ router.post("/:id/cancel-install", (req: Request, res: Response) => {
     return res.status(404).json({ error: "Server not found" });
   }
 
-  const cancelled = cancelInstallation(id);
+  const cancelled = await cancelAndCleanupInstallation(id);
 
   if (cancelled) {
-    res.json({ success: true, message: "Installation cancelled" });
+    res.json({
+      success: true,
+      message: "Installation cancelled and server removed",
+    });
   } else {
-    res.status(400).json({ error: "No active installation to cancel" });
+    res
+      .status(400)
+      .json({ error: "No active or queued installation to cancel" });
   }
 });
 

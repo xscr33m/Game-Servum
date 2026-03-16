@@ -24,6 +24,7 @@ import {
 } from "@/components/onboarding/onboardingState";
 import { AddServerDialog } from "@/components/server-details/dialogs/AddServerDialog";
 import { DeleteServerDialog } from "@/components/server-details/dialogs/DeleteServerDialog";
+import { CancelInstallDialog } from "@/components/server-details/dialogs/CancelInstallDialog";
 import { SteamAccountDialog } from "@/components/agent/SteamAccountDialog";
 import { SystemMonitor } from "@/components/agent/SystemMonitor";
 import { AgentStatusBanner } from "@/components/agent/AgentStatusBanner";
@@ -62,6 +63,7 @@ export function Dashboard() {
     "connect" | undefined
   >(undefined);
   const [serverToDelete, setServerToDelete] = useState<GameServer | null>(null);
+  const [serverToCancel, setServerToCancel] = useState<GameServer | null>(null);
   const [installProgress, setInstallProgress] = useState<
     Map<number, { percent: number; message: string }>
   >(new Map());
@@ -294,6 +296,24 @@ export function Dashboard() {
     } catch (err) {
       toastError((err as Error).message);
       throw err; // Re-throw so dialog knows it failed
+    }
+  }
+
+  function handleCancelInstall(id: number) {
+    const server = servers.find((s) => s.id === id);
+    if (server) {
+      setServerToCancel(server);
+    }
+  }
+
+  async function confirmCancelInstall(server: GameServer) {
+    try {
+      await api.servers.cancelInstall(server.id);
+      toastSuccess(`Installation of ${server.name} cancelled`);
+      await loadServers();
+    } catch (err) {
+      toastError((err as Error).message);
+      throw err;
     }
   }
 
@@ -559,6 +579,7 @@ export function Dashboard() {
                       onStart={handleStartServer}
                       onStop={handleStopServer}
                       onDelete={handleDeleteServer}
+                      onCancelInstall={handleCancelInstall}
                       disabled={!isConnected}
                       installProgress={installProgress.get(server.id)}
                     />
@@ -585,6 +606,14 @@ export function Dashboard() {
         open={serverToDelete !== null}
         onOpenChange={(open) => !open && setServerToDelete(null)}
         onConfirm={confirmDeleteServer}
+      />
+
+      {/* Cancel Installation Confirmation Dialog */}
+      <CancelInstallDialog
+        server={serverToCancel}
+        open={serverToCancel !== null}
+        onOpenChange={(open) => !open && setServerToCancel(null)}
+        onConfirm={confirmCancelInstall}
       />
 
       {/* Steam Account Dialog */}

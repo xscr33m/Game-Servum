@@ -11,9 +11,15 @@
 import { spawn, type ChildProcess } from "child_process";
 import path from "path";
 import fs from "fs";
+import fsPromises from "fs/promises";
 import { getConfig, getSteamCMDExecutable } from "./config.js";
 import { broadcast, logger } from "../index.js";
-import { updateServerStatus, getSteamConfig } from "../db/index.js";
+import {
+  updateServerStatus,
+  getSteamConfig,
+  getServerById,
+  deleteServer,
+} from "../db/index.js";
 import {
   getGameDefinition,
   getGameDefinitionByAppId,
@@ -405,6 +411,51 @@ export function cancelInstallation(serverId: number): boolean {
     return true;
   }
   return false;
+}
+
+/**
+ * Cancel an installation (or dequeue) and clean up all server data.
+ * Kills the SteamCMD process, deletes downloaded files, removes the DB entry,
+ * and broadcasts server:deleted so the UI removes the card.
+ */
+export async function cancelAndCleanupInstallation(
+  serverId: number,
+): Promise<boolean> {
+  const server = getServerById(serverId);
+  if (!server) return false;
+
+  const isActive = cancelInstallation(serverId);
+  const wasQueued = !isActive && removeFromQueue(serverId);
+
+  if (!isActive && !wasQueued) return false;
+
+  // Delete partially downloaded server files
+  if (server.installPath && fs.existsSync(server.installPath)) {
+    try {
+      await fsPromises.rm(server.installPath, {
+        recursive: true,
+        force: true,
+      });
+      logger.info(
+        `[Install] Removed server files after cancel: ${server.installPath}`,
+      );
+    } catch (err) {
+      logger.error(
+        `[Install] Failed to remove server files after cancel: ${err}`,
+      );
+    }
+  }
+
+  // Remove the database entry (cascades related records)
+  deleteServer(serverId);
+  logger.info(
+    `[Install] Cancelled and cleaned up server ${server.name} (ID: ${serverId})`,
+  );
+
+  // Notify clients so the card is removed from the UI
+  broadcast("server:deleted", { serverId });
+
+  return true;
 }
 
 /**

@@ -14,6 +14,7 @@ import {
   FaSpinner,
   FaTerminal,
   FaTrashCan,
+  FaXmark,
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +32,7 @@ import { AgentControlPanel } from "@/components/agent/AgentControlPanel";
 import { AppHeader } from "@/components/AppHeader";
 import { AgentStatusBanner } from "@/components/agent/AgentStatusBanner";
 import { DeleteServerDialog } from "@/components/server-details/dialogs/DeleteServerDialog";
+import { CancelInstallDialog } from "@/components/server-details/dialogs/CancelInstallDialog";
 import {
   toastSuccess,
   toastError,
@@ -63,6 +65,7 @@ export function ServerDetail() {
   const [installProgress, setInstallProgress] = useState<string>("");
   const [terminalOutput, setTerminalOutput] = useState<string[]>([]);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
   const { capabilities } = useGameCapabilities(server?.gameId ?? "");
   const hasPlayers = capabilities?.playerTracking !== false;
   const terminalRef = useRef<HTMLDivElement>(null);
@@ -292,6 +295,17 @@ export function ServerDetail() {
     }
   }
 
+  async function confirmCancelInstall(serverToCancel: GameServer) {
+    try {
+      await api.servers.cancelInstall(serverToCancel.id);
+      toastSuccess(`Installation of ${serverToCancel.name} cancelled`);
+      // server:deleted WS event will navigate to dashboard
+    } catch (err) {
+      toastError((err as Error).message);
+      throw err;
+    }
+  }
+
   // Auto-scroll terminal during installation
   useEffect(() => {
     if (terminalRef.current) {
@@ -398,16 +412,29 @@ export function ServerDetail() {
             >
               <FaArrowsRotate className="h-4 w-4" />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-destructive"
-              onClick={() => setShowDeleteDialog(true)}
-              disabled={isRunning || isBusy || !isConnected}
-              title="Delete Server"
-            >
-              <FaTrashCan className="h-4 w-4" />
-            </Button>
+            {server.status === "installing" || server.status === "queued" ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                onClick={() => setShowCancelDialog(true)}
+                disabled={!isConnected}
+                title="Cancel Installation"
+              >
+                <FaXmark className="h-4 w-4" />
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                onClick={() => setShowDeleteDialog(true)}
+                disabled={isRunning || isBusy || !isConnected}
+                title="Delete Server"
+              >
+                <FaTrashCan className="h-4 w-4" />
+              </Button>
+            )}
           </>
         }
       />
@@ -555,6 +582,13 @@ export function ServerDetail() {
         open={showDeleteDialog}
         onOpenChange={setShowDeleteDialog}
         onConfirm={confirmDeleteServer}
+      />
+
+      <CancelInstallDialog
+        server={server}
+        open={showCancelDialog}
+        onOpenChange={setShowCancelDialog}
+        onConfirm={confirmCancelInstall}
       />
     </div>
   );
