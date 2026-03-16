@@ -1,4 +1,4 @@
-; Game Servum Agent — NSIS Installer Script
+; Game-Servum Agent — NSIS Installer Script
 ; Installs the Agent as a Windows Service using WinSW
 ;
 ; Expected staging layout (set via STAGING_DIR define):
@@ -23,13 +23,13 @@
 ; ──────────────────────────────────────────────────────────
 ;  Constants
 ; ──────────────────────────────────────────────────────────
-!define PRODUCT_NAME        "Game Servum Agent"
+!define PRODUCT_NAME        "Game-Servum Agent"
 !define SERVICE_NAME        "GameServumAgent"
-!define INSTALL_DIR         "$PROGRAMFILES64\Game Servum Agent"
-!define DEFAULT_DATA_DIR    "$%ProgramData%\Game Servum"
+!define INSTALL_DIR         "$PROGRAMFILES64\Game-Servum Agent"
+!define DEFAULT_DATA_DIR    "$%ProgramData%\Game-Servum"
 !define UNINSTALL_REG_KEY   "Software\Microsoft\Windows\CurrentVersion\Uninstall\${SERVICE_NAME}"
 !define ENV_REG_KEY         "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
-!define FIREWALL_RULE_NAME  "Game Servum Agent (TCP 3001)"
+!define FIREWALL_RULE_NAME  "Game-Servum Agent (TCP 3001)"
 
 ; ──────────────────────────────────────────────────────────
 ;  Installer attributes
@@ -139,6 +139,9 @@ Function .onInit
   ; Check if an older version is installed — offer upgrade
   ReadRegStr $0 HKLM "${UNINSTALL_REG_KEY}" "InstallLocation"
   StrCmp $0 "" check_legacy
+
+  ; Use existing install location for upgrade (may differ from new default)
+  StrCpy $INSTDIR $0
 
   MessageBox MB_OKCANCEL|MB_ICONINFORMATION \
     "${PRODUCT_NAME} is already installed.$\n$\nThe installer will stop the service, upgrade files, and restart the service." \

@@ -113,7 +113,7 @@ export class SevenDaysAdapter extends BaseGameAdapter {
         content = setXmlProperty(
           content,
           "ServerDescription",
-          `${serverName} - powered by Game Servum`,
+          `powered by Game-Servum`,
         );
         content = setXmlProperty(content, "ServerPort", String(port));
 

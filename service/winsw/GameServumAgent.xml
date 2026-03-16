@@ -1,8 +1,8 @@
 <service>
   <!-- Service identity -->
   <id>GameServumAgent</id>
-  <name>Game Servum Agent</name>
-  <description>Game server management agent for Game Servum. Manages SteamCMD game servers, provides REST API and WebSocket for remote Dashboard connections.</description>
+  <name>Game-Servum Agent</name>
+  <description>Game server management agent for Game-Servum. Manages SteamCMD game servers, provides REST API and WebSocket for remote Dashboard connections.</description>
 
   <!-- Executable & arguments -->
   <executable>%BASE%\node.exe</executable>

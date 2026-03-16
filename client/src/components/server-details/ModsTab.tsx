@@ -259,7 +259,7 @@ export function ModsTab({ server }: ModsTabProps) {
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              This game doesn't support Steam Workshop mods through Game Servum.
+              This game doesn't support Steam Workshop mods through Game-Servum.
               Mods must be downloaded from external sources (e.g., Nexus Mods)
               and installed manually into the server directory.
             </p>

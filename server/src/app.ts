@@ -94,7 +94,7 @@ app.get("/", (req, res, next) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Game Servum Agent</title>
+  <title>Game-Servum Agent</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     
@@ -216,9 +216,9 @@ app.get("/", (req, res, next) => {
   <div class="container">
     <div class="header">
       <div class="logo">
-        <img src="https://game-servum.com/logos/agent-icon.webp" alt="Game Servum Agent">
+        <img src="https://game-servum.com/logos/agent-icon.webp" alt="Game-Servum Agent">
       </div>
-      <h1>Game Servum Agent</h1>
+      <h1>Game-Servum Agent</h1>
       <div class="version">v${APP_VERSION}</div>
       <div class="status">Operational</div>
     </div>

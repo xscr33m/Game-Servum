@@ -910,7 +910,7 @@ export function Logs() {
                           logs to:
                         </p>
                         <code className="text-xs bg-muted px-2 py-1 rounded block">
-                          Documents/Game Servum/Logs/
+                          Documents/Game-Servum/Logs/
                         </code>
                         <p className="text-sm text-muted-foreground leading-relaxed">
                           Files rotate daily and are managed independently per
