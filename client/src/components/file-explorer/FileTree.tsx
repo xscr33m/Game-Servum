@@ -55,9 +55,12 @@ interface TreeNodeProps {
   parentPath: string;
   selectedPath: string | null;
   expandedDirs: Set<string>;
+  dragOverDir: string | null;
   onToggleDir: (path: string) => void;
   onFileSelect: (relativePath: string) => void;
   onDirectorySelect?: (relativePath: string) => void;
+  onDragOverDir: (path: string | null) => void;
+  onDropOnDir: (files: FileList, dirPath: string) => void;
 }
 
 function TreeNode({
@@ -66,15 +69,19 @@ function TreeNode({
   parentPath,
   selectedPath,
   expandedDirs,
+  dragOverDir,
   onToggleDir,
   onFileSelect,
   onDirectorySelect,
+  onDragOverDir,
+  onDropOnDir,
 }: TreeNodeProps) {
   const currentPath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
   const isExpanded = expandedDirs.has(currentPath);
   const isSelected = selectedPath === currentPath;
   const isDirectory = entry.type === "directory";
   const isEditable = entry.editable !== false;
+  const isDragTarget = isDirectory && dragOverDir === currentPath;
 
   function handleClick() {
     if (isDirectory) {
@@ -85,15 +92,35 @@ function TreeNode({
     }
   }
 
+  function handleDragOver(e: React.DragEvent) {
+    if (!isDirectory) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onDragOverDir(currentPath);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    if (!isDirectory) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onDragOverDir(null);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      onDropOnDir(e.dataTransfer.files, currentPath);
+    }
+  }
+
   return (
     <>
       <button
         type="button"
         onClick={handleClick}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
         className={cn(
           "flex items-center gap-1.5 w-full text-left py-1 px-2 text-sm rounded-sm hover:bg-accent/50 transition-colors",
           isSelected && "bg-accent text-accent-foreground",
           !isEditable && !isDirectory && "opacity-50 cursor-not-allowed",
+          isDragTarget && "bg-primary/20 ring-1 ring-primary/50",
         )}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
         disabled={!isDirectory && !isEditable}
@@ -139,9 +166,12 @@ function TreeNode({
               parentPath={currentPath}
               selectedPath={selectedPath}
               expandedDirs={expandedDirs}
+              dragOverDir={dragOverDir}
               onToggleDir={onToggleDir}
               onFileSelect={onFileSelect}
               onDirectorySelect={onDirectorySelect}
+              onDragOverDir={onDragOverDir}
+              onDropOnDir={onDropOnDir}
             />
           ))}
         </div>
@@ -159,7 +189,8 @@ export function FileTree({
 }: FileTreeProps) {
   const [filter, setFilter] = useState("");
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
-  const [isDragOver, setIsDragOver] = useState(false);
+  const [dragOverDir, setDragOverDir] = useState<string | null>(null);
+  const [isDragOverRoot, setIsDragOverRoot] = useState(false);
 
   const filteredTree = useMemo(() => filterTree(tree, filter), [tree, filter]);
 
@@ -175,51 +206,60 @@ export function FileTree({
     });
   }
 
-  const handleDragOver = useCallback(
+  const handleRootDragOver = useCallback(
     (e: React.DragEvent) => {
       if (!onUpload) return;
       e.preventDefault();
-      e.stopPropagation();
-      setIsDragOver(true);
+      // Only highlight root when dragging directly over the container (not over a folder node)
+      if (e.target === e.currentTarget) {
+        setIsDragOverRoot(true);
+        setDragOverDir(null);
+      }
     },
     [onUpload],
   );
 
-  const handleDragLeave = useCallback(
+  const handleRootDragLeave = useCallback(
     (e: React.DragEvent) => {
       if (!onUpload) return;
       e.preventDefault();
-      e.stopPropagation();
-      // Only clear if we're leaving the container itself
       if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-        setIsDragOver(false);
+        setIsDragOverRoot(false);
+        setDragOverDir(null);
       }
     },
     [onUpload],
   );
 
-  const handleDrop = useCallback(
+  const handleRootDrop = useCallback(
     (e: React.DragEvent) => {
       if (!onUpload) return;
       e.preventDefault();
-      e.stopPropagation();
-      setIsDragOver(false);
+      setIsDragOverRoot(false);
+      setDragOverDir(null);
       if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-        // Upload to the currently selected directory, or root
-        const targetDir =
-          selectedPath &&
-          tree.some(
-            (entry) =>
-              entry.type === "directory" &&
-              entry.name === selectedPath.split("/")[0],
-          )
-            ? selectedPath
-            : "";
-        onUpload(e.dataTransfer.files, targetDir);
+        onUpload(e.dataTransfer.files, "");
       }
     },
-    [onUpload, selectedPath, tree],
+    [onUpload],
   );
+
+  const handleDragOverDir = useCallback((dirPath: string | null) => {
+    setDragOverDir(dirPath);
+    setIsDragOverRoot(false);
+  }, []);
+
+  const handleDropOnDir = useCallback(
+    (files: FileList, dirPath: string) => {
+      if (!onUpload) return;
+      setDragOverDir(null);
+      setIsDragOverRoot(false);
+      onUpload(files, dirPath);
+    },
+    [onUpload],
+  );
+
+  const showDragOverlay = isDragOverRoot && !dragOverDir;
 
   return (
     <div className="flex flex-col h-full">
@@ -237,17 +277,16 @@ export function FileTree({
       <div
         className={cn(
           "flex-1 overflow-y-auto py-1 transition-colors",
-          isDragOver &&
-            "bg-primary/10 ring-2 ring-inset ring-primary/40 ring-dashed",
+          showDragOverlay && "bg-primary/10 ring-2 ring-inset ring-primary/40",
         )}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
+        onDragOver={handleRootDragOver}
+        onDragLeave={handleRootDragLeave}
+        onDrop={handleRootDrop}
       >
-        {isDragOver ? (
+        {showDragOverlay ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-sm text-primary font-medium">
-              Drop files here to upload
+              Drop files here to upload to root
             </p>
           </div>
         ) : filteredTree.length === 0 ? (
@@ -263,9 +302,12 @@ export function FileTree({
               parentPath=""
               selectedPath={selectedPath}
               expandedDirs={expandedDirs}
+              dragOverDir={dragOverDir}
               onToggleDir={handleToggleDir}
               onFileSelect={onFileSelect}
               onDirectorySelect={onDirectorySelect}
+              onDragOverDir={handleDragOverDir}
+              onDropOnDir={handleDropOnDir}
             />
           ))
         )}

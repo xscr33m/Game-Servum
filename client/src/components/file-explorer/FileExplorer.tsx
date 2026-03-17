@@ -1,12 +1,20 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
-import { FaFolderOpen } from "react-icons/fa6";
+import { FaFolderOpen, FaTriangleExclamation } from "react-icons/fa6";
 import { useBackend } from "@/hooks/useBackend";
 import { toastSuccess, toastError } from "@/lib/toast";
 import type { BrowseTreeEntry } from "@/lib/api";
 import { FileTree } from "./FileTree";
 import { FileEditor } from "./FileEditor";
 import { FileExplorerToolbar } from "./FileExplorerToolbar";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 interface FileExplorerProps {
   serverId: number;
@@ -30,6 +38,13 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
   const [fileLoading, setFileLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+
+  // Overwrite confirmation dialog state
+  const [overwriteDialog, setOverwriteDialog] = useState<{
+    files: File[];
+    targetDir: string;
+    conflicts: string[];
+  } | null>(null);
 
   // Resizable sidebar
   const SIDEBAR_MIN = 150;
@@ -216,14 +231,55 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
     }
   }
 
+  // Find files in the tree that exist at the given directory path
+  function getExistingFileNames(
+    entries: BrowseTreeEntry[],
+    dirPath: string,
+  ): Set<string> {
+    if (!dirPath) {
+      // Root level — return file names at top level
+      return new Set(
+        entries.filter((e) => e.type === "file").map((e) => e.name),
+      );
+    }
+    const parts = dirPath.split("/");
+    let current = entries;
+    for (const part of parts) {
+      const dir = current.find(
+        (e) => e.type === "directory" && e.name === part,
+      );
+      if (!dir?.children) return new Set();
+      current = dir.children;
+    }
+    return new Set(current.filter((e) => e.type === "file").map((e) => e.name));
+  }
+
   async function handleUpload(files: FileList, targetDir: string) {
+    const fileArray = Array.from(files);
+
+    // Check for conflicts using the already-loaded tree data
+    const existing = getExistingFileNames(tree, targetDir);
+    const conflicts = fileArray
+      .map((f) => f.name)
+      .filter((name) => existing.has(name));
+
+    if (conflicts.length > 0) {
+      // Show confirmation dialog
+      setOverwriteDialog({ files: fileArray, targetDir, conflicts });
+      return;
+    }
+
+    await executeUpload(fileArray, targetDir);
+  }
+
+  async function executeUpload(files: File[], targetDir: string) {
     try {
       setUploading(true);
       const result = await api.servers.browseUpload(
         serverId,
         rootKey,
         targetDir,
-        Array.from(files),
+        files,
       );
       toastSuccess(result.message);
       await loadTree();
@@ -232,6 +288,13 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
     } finally {
       setUploading(false);
     }
+  }
+
+  function handleOverwriteConfirm() {
+    if (!overwriteDialog) return;
+    const { files, targetDir } = overwriteDialog;
+    setOverwriteDialog(null);
+    executeUpload(files, targetDir);
   }
 
   const fileName = openFile?.path.split("/").pop() ?? "";
@@ -305,6 +368,51 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
           )}
         </div>
       </div>
+
+      {/* Overwrite Confirmation Dialog */}
+      <Dialog
+        open={overwriteDialog !== null}
+        onOpenChange={(open) => {
+          if (!open) setOverwriteDialog(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FaTriangleExclamation className="h-4 w-4 text-yellow-500" />
+              Overwrite existing files?
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              The following{" "}
+              {overwriteDialog?.conflicts.length === 1 ? "file" : "files"}{" "}
+              already{" "}
+              {overwriteDialog?.conflicts.length === 1 ? "exists" : "exist"} in{" "}
+              <span className="font-medium text-foreground">
+                {overwriteDialog?.targetDir || "root"}
+              </span>{" "}
+              and will be replaced:
+            </p>
+            <ul className="text-sm space-y-1 max-h-40 overflow-y-auto">
+              {overwriteDialog?.conflicts.map((name) => (
+                <li key={name} className="font-mono text-destructive">
+                  {name}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOverwriteDialog(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleOverwriteConfirm}>
+              Replace{" "}
+              {overwriteDialog?.conflicts.length === 1 ? "file" : "files"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
