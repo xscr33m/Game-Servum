@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   FaFolder,
   FaFolderOpen,
@@ -16,6 +16,7 @@ interface FileTreeProps {
   selectedPath: string | null;
   onFileSelect: (relativePath: string) => void;
   onDirectorySelect?: (relativePath: string) => void;
+  onUpload?: (files: FileList, targetDir: string) => void;
 }
 
 function formatFileSize(bytes: number): string {
@@ -154,9 +155,11 @@ export function FileTree({
   selectedPath,
   onFileSelect,
   onDirectorySelect,
+  onUpload,
 }: FileTreeProps) {
   const [filter, setFilter] = useState("");
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const filteredTree = useMemo(() => filterTree(tree, filter), [tree, filter]);
 
@@ -172,6 +175,52 @@ export function FileTree({
     });
   }
 
+  const handleDragOver = useCallback(
+    (e: React.DragEvent) => {
+      if (!onUpload) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(true);
+    },
+    [onUpload],
+  );
+
+  const handleDragLeave = useCallback(
+    (e: React.DragEvent) => {
+      if (!onUpload) return;
+      e.preventDefault();
+      e.stopPropagation();
+      // Only clear if we're leaving the container itself
+      if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+        setIsDragOver(false);
+      }
+    },
+    [onUpload],
+  );
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      if (!onUpload) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(false);
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        // Upload to the currently selected directory, or root
+        const targetDir =
+          selectedPath &&
+          tree.some(
+            (entry) =>
+              entry.type === "directory" &&
+              entry.name === selectedPath.split("/")[0],
+          )
+            ? selectedPath
+            : "";
+        onUpload(e.dataTransfer.files, targetDir);
+      }
+    },
+    [onUpload, selectedPath, tree],
+  );
+
   return (
     <div className="flex flex-col h-full">
       <div className="px-2 py-1.5 border-b">
@@ -185,8 +234,23 @@ export function FileTree({
           />
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto py-1">
-        {filteredTree.length === 0 ? (
+      <div
+        className={cn(
+          "flex-1 overflow-y-auto py-1 transition-colors",
+          isDragOver &&
+            "bg-primary/10 ring-2 ring-inset ring-primary/40 ring-dashed",
+        )}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        {isDragOver ? (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-sm text-primary font-medium">
+              Drop files here to upload
+            </p>
+          </div>
+        ) : filteredTree.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-4">
             {filter ? "No matching files" : "Empty directory"}
           </p>

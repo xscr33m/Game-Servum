@@ -1,8 +1,11 @@
 import { Router, type Request, type Response } from "express";
 import path from "path";
+import os from "os";
 import fs from "fs";
 import fsPromises from "fs/promises";
 import { exec } from "child_process";
+import multer from "multer";
+import AdmZip from "adm-zip";
 import { logger, broadcast } from "../index.js";
 import {
   getAllServers,
@@ -2818,6 +2821,184 @@ router.post("/:id/browse/rename", (req: Request, res: Response) => {
       .json({ error: `Failed to rename: ${(err as Error).message}` });
   }
 });
+
+// ── Download (single file or folder as ZIP) ───────────────────────────
+router.get("/:id/browse/download", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const rootKey = req.query.root as string;
+  const filePath = req.query.path as string;
+
+  const server = getServerById(id);
+  if (!server) return res.status(404).json({ error: "Server not found" });
+  if (!rootKey || !filePath) {
+    return res
+      .status(400)
+      .json({ error: "Query parameters 'root' and 'path' are required" });
+  }
+
+  const resolved = resolveAndValidateBrowsePath(server, rootKey, filePath);
+  if ("error" in resolved)
+    return res.status(400).json({ error: resolved.error });
+  if (!fs.existsSync(resolved.absolutePath)) {
+    return res.status(404).json({ error: "Path not found" });
+  }
+
+  try {
+    const stats = fs.statSync(resolved.absolutePath);
+
+    if (stats.isFile()) {
+      // Single file — stream directly
+      return res.download(resolved.absolutePath);
+    }
+
+    if (stats.isDirectory()) {
+      // Directory — create ZIP on-the-fly
+      const dirName = path.basename(resolved.absolutePath);
+      const zip = new AdmZip();
+      zip.addLocalFolder(resolved.absolutePath, dirName);
+      const zipBuffer = zip.toBuffer();
+
+      res.set("Content-Type", "application/zip");
+      res.set("Content-Disposition", `attachment; filename="${dirName}.zip"`);
+      res.set("Content-Length", String(zipBuffer.length));
+      return res.send(zipBuffer);
+    }
+
+    return res
+      .status(400)
+      .json({ error: "Path is neither a file nor a directory" });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ error: `Download failed: ${(err as Error).message}` });
+  }
+});
+
+// ── Upload (multiple files via multipart form-data) ───────────────────
+const upload = multer({
+  dest: os.tmpdir(),
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500 MB
+});
+
+router.post(
+  "/:id/browse/upload",
+  upload.array("files", 100),
+  async (req: Request, res: Response) => {
+    const id = parseInt(req.params.id, 10);
+    const rootKey = req.body.root as string;
+    const targetPath = req.body.path as string;
+    const files = req.files as Express.Multer.File[] | undefined;
+
+    const server = getServerById(id);
+    if (!server) return res.status(404).json({ error: "Server not found" });
+    if (!rootKey) {
+      return res.status(400).json({ error: "Field 'root' is required" });
+    }
+
+    // Resolve target directory (use "." for root if no path provided)
+    const resolved = resolveAndValidateBrowsePath(
+      server,
+      rootKey,
+      targetPath || ".",
+    );
+    if ("error" in resolved)
+      return res.status(400).json({ error: resolved.error });
+
+    // Ensure target is a directory (create if needed)
+    if (fs.existsSync(resolved.absolutePath)) {
+      const stats = fs.statSync(resolved.absolutePath);
+      if (!stats.isDirectory()) {
+        return res
+          .status(400)
+          .json({ error: "Target path is not a directory" });
+      }
+    } else {
+      fs.mkdirSync(resolved.absolutePath, { recursive: true });
+    }
+
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: "No files provided" });
+    }
+
+    const movedFiles: string[] = [];
+    const errors: string[] = [];
+
+    for (const file of files) {
+      // Sanitize filename — strip path separators, reject traversal attempts
+      const safeName = path.basename(file.originalname);
+      if (
+        !safeName ||
+        safeName === ".." ||
+        safeName === "." ||
+        safeName.includes("/") ||
+        safeName.includes("\\")
+      ) {
+        errors.push(`Rejected unsafe filename: ${file.originalname}`);
+        // Clean up temp file
+        try {
+          fs.unlinkSync(file.path);
+        } catch {
+          /* ignore */
+        }
+        continue;
+      }
+
+      const destPath = path.join(resolved.absolutePath, safeName);
+
+      // Verify destination is still within the root
+      if (!destPath.startsWith(resolved.rootDir)) {
+        errors.push(`Path traversal detected for: ${safeName}`);
+        try {
+          fs.unlinkSync(file.path);
+        } catch {
+          /* ignore */
+        }
+        continue;
+      }
+
+      try {
+        // Move from temp to target (rename is fast on same fs, otherwise copy+delete)
+        await fsPromises.rename(file.path, destPath).catch(async () => {
+          // Cross-device: copy then delete
+          await fsPromises.copyFile(file.path, destPath);
+          await fsPromises.unlink(file.path);
+        });
+        movedFiles.push(safeName);
+      } catch (err) {
+        errors.push(`Failed to save ${safeName}: ${(err as Error).message}`);
+        try {
+          fs.unlinkSync(file.path);
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+
+    if (movedFiles.length === 0) {
+      return res.status(400).json({
+        error: "No files were uploaded successfully",
+        details: errors,
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `${movedFiles.length} file(s) uploaded`,
+      files: movedFiles,
+      ...(errors.length > 0 ? { warnings: errors } : {}),
+    });
+  },
+);
+
+// Handle multer file-size errors
+router.use(
+  (err: any, _req: Request, res: Response, next: (err?: any) => void) => {
+    if (err && err.code === "LIMIT_FILE_SIZE") {
+      return res.status(413).json({ error: "File too large (max 500 MB)" });
+    }
+    next(err);
+  },
+);
 
 export { router as serversRouter };
 

@@ -31,7 +31,7 @@ const corsOptions: cors.CorsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 
 // Public endpoints (no auth required)
 app.get("/api/v1/health", (_req, res) => {

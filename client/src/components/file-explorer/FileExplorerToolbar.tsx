@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   FaArrowsRotate,
   FaFolderPlus,
@@ -6,6 +6,8 @@ import {
   FaPen,
   FaTrash,
   FaChevronRight,
+  FaDownload,
+  FaUpload,
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +29,9 @@ interface FileExplorerToolbarProps {
   onNewFolder: (relativePath: string) => void;
   onRename: (from: string, to: string) => void;
   onDelete: (path: string) => void;
+  onDownload: (path: string) => void;
+  onUpload: (files: FileList, targetDir: string) => void;
+  uploading?: boolean;
 }
 
 function BreadcrumbPath({ path }: { path: string | null }) {
@@ -64,6 +69,9 @@ export function FileExplorerToolbar({
   onNewFolder,
   onRename,
   onDelete,
+  onDownload,
+  onUpload,
+  uploading,
 }: FileExplorerToolbarProps) {
   const [newFileOpen, setNewFileOpen] = useState(false);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
@@ -73,6 +81,8 @@ export function FileExplorerToolbar({
   const [newFileName, setNewFileName] = useState("");
   const [newFolderName, setNewFolderName] = useState("");
   const [renameTo, setRenameTo] = useState("");
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Determine the parent directory for new file/folder creation
   function getBaseDir(): string {
@@ -171,6 +181,39 @@ export function FileExplorerToolbar({
           >
             <FaTrash className="h-3.5 w-3.5" />
           </Button>
+          <div className="w-px h-5 bg-border mx-0.5" />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => selectedPath && onDownload(selectedPath)}
+            disabled={!selectedPath}
+            title="Download"
+          >
+            <FaDownload className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            title="Upload Files"
+          >
+            <FaUpload className="h-3.5 w-3.5" />
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files && e.target.files.length > 0) {
+                onUpload(e.target.files, getBaseDir());
+                e.target.value = "";
+              }
+            }}
+          />
           <div className="w-px h-5 bg-border mx-0.5" />
           <Button
             variant="ghost"

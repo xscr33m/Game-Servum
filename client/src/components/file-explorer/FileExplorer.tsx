@@ -28,6 +28,7 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
   const [openFile, setOpenFile] = useState<OpenFile | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   // Resizable sidebar
   const SIDEBAR_MIN = 150;
@@ -202,6 +203,34 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
     }
   }
 
+  function handleDownload(filePath: string) {
+    const url = api.servers.browseDownloadUrl(serverId, rootKey, filePath);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  async function handleUpload(files: FileList, targetDir: string) {
+    try {
+      setUploading(true);
+      const result = await api.servers.browseUpload(
+        serverId,
+        rootKey,
+        targetDir,
+        Array.from(files),
+      );
+      toastSuccess(result.message);
+      await loadTree();
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : "Failed to upload");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   const fileName = openFile?.path.split("/").pop() ?? "";
 
   return (
@@ -215,6 +244,9 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
         onNewFolder={handleNewFolder}
         onRename={handleRename}
         onDelete={handleDelete}
+        onDownload={handleDownload}
+        onUpload={handleUpload}
+        uploading={uploading}
       />
 
       {/* Main content area */}
@@ -234,6 +266,7 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
               selectedPath={selectedPath}
               onFileSelect={handleFileSelect}
               onDirectorySelect={handleDirectorySelect}
+              onUpload={handleUpload}
             />
           )}
         </div>

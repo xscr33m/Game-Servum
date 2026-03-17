@@ -386,6 +386,18 @@ export interface ServersApiClient {
     from: string,
     to: string,
   ) => Promise<{ success: boolean; message: string }>;
+  browseDownloadUrl: (id: number, rootKey: string, filePath: string) => string;
+  browseUpload: (
+    id: number,
+    rootKey: string,
+    targetPath: string,
+    files: File[],
+  ) => Promise<{
+    success: boolean;
+    message: string;
+    files: string[];
+    warnings?: string[];
+  }>;
 }
 
 export interface SystemApiClient {
@@ -547,7 +559,11 @@ function createSteamcmdApi(fetchApi: FetchApiFn): SteamcmdApiClient {
   };
 }
 
-function createServersApi(fetchApi: FetchApiFn): ServersApiClient {
+function createServersApi(
+  fetchApi: FetchApiFn,
+  baseUrl: string,
+  getToken?: () => string | undefined,
+): ServersApiClient {
   return {
     getAll: () => fetchApi<GameServer[]>("/servers"),
     getById: (id: number) => fetchApi<GameServer>(`/servers/${id}`),
@@ -1046,6 +1062,60 @@ function createServersApi(fetchApi: FetchApiFn): ServersApiClient {
           body: JSON.stringify({ root: rootKey, from, to }),
         },
       ),
+    browseDownloadUrl: (
+      id: number,
+      rootKey: string,
+      filePath: string,
+    ): string => {
+      const token = getToken?.();
+      const params = new URLSearchParams({
+        root: rootKey,
+        path: filePath,
+      });
+      if (token) params.set("token", token);
+      return `${baseUrl}/servers/${id}/browse/download?${params.toString()}`;
+    },
+    browseUpload: async (
+      id: number,
+      rootKey: string,
+      targetPath: string,
+      files: File[],
+    ) => {
+      const formData = new FormData();
+      formData.append("root", rootKey);
+      formData.append("path", targetPath);
+      for (const file of files) {
+        formData.append("files", file);
+      }
+
+      const headers: Record<string, string> = {};
+      const token = getToken?.();
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      let response: Response;
+      try {
+        response = await fetch(`${baseUrl}/servers/${id}/browse/upload`, {
+          method: "POST",
+          headers,
+          body: formData,
+        });
+      } catch {
+        throw new Error("Agent not reachable — check connection");
+      }
+
+      if (response.status === 401) {
+        throw new ApiAuthError("Invalid or expired session token");
+      }
+
+      if (!response.ok) {
+        const error = await response
+          .json()
+          .catch(() => ({ error: "Unknown error" }));
+        throw new Error(error.error || `HTTP ${response.status}`);
+      }
+
+      return response.json();
+    },
   };
 }
 
@@ -1185,9 +1255,10 @@ export function createApiClient(
   getToken?: () => string | undefined,
 ): ApiClient {
   const fetchApi = createFetchApi(connection, getToken);
+  const baseUrl = getApiBase(connection);
   return {
     steamcmd: createSteamcmdApi(fetchApi),
-    servers: createServersApi(fetchApi),
+    servers: createServersApi(fetchApi, baseUrl, getToken),
     system: createSystemApi(fetchApi),
     health: createHealthApi(fetchApi),
     auth: createAuthApi(fetchApi),
