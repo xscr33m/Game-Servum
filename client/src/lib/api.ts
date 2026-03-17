@@ -387,6 +387,11 @@ export interface ServersApiClient {
     to: string,
   ) => Promise<{ success: boolean; message: string }>;
   browseDownloadUrl: (id: number, rootKey: string, filePath: string) => string;
+  browseDownload: (
+    id: number,
+    rootKey: string,
+    filePath: string,
+  ) => Promise<void>;
   browseUpload: (
     id: number,
     rootKey: string,
@@ -1074,6 +1079,56 @@ function createServersApi(
       });
       if (token) params.set("token", token);
       return `${baseUrl}/servers/${id}/browse/download?${params.toString()}`;
+    },
+    browseDownload: async (
+      id: number,
+      rootKey: string,
+      filePath: string,
+    ): Promise<void> => {
+      const url = `${baseUrl}/servers/${id}/browse/download`;
+      const params = new URLSearchParams({
+        root: rootKey,
+        path: filePath,
+      });
+
+      const headers: Record<string, string> = {};
+      const token = getToken?.();
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      let response: Response;
+      try {
+        response = await fetch(`${url}?${params.toString()}`, { headers });
+      } catch {
+        throw new Error("Agent not reachable \u2014 check connection");
+      }
+
+      if (response.status === 401) {
+        throw new ApiAuthError("Invalid or expired session token");
+      }
+
+      if (!response.ok) {
+        const error = await response
+          .json()
+          .catch(() => ({ error: "Unknown error" }));
+        throw new Error(error.error || `HTTP ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition");
+      let filename = filePath.split("/").pop() ?? "download";
+      if (disposition) {
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        if (match) filename = match[1];
+      }
+
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
     },
     browseUpload: async (
       id: number,

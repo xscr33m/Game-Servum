@@ -203,14 +203,14 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
     }
   }
 
-  function handleDownload(filePath: string) {
-    const url = api.servers.browseDownloadUrl(serverId, rootKey, filePath);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  async function handleDownload(filePath: string) {
+    try {
+      await api.servers.browseDownload(serverId, rootKey, filePath);
+      const name = filePath.split("/").pop() ?? filePath;
+      toastSuccess(`Downloaded "${name}"`);
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : "Download failed");
+    }
   }
 
   async function handleUpload(files: FileList, targetDir: string) {
