@@ -124,8 +124,8 @@ const darkTheme = EditorView.theme(
 );
 
 export function FileEditor({
-  content,
-  originalContent,
+  content: rawContent,
+  originalContent: rawOriginalContent,
   fileName,
   fileSize,
   saving,
@@ -133,6 +133,11 @@ export function FileEditor({
   onReset,
   onContentChange,
 }: FileEditorProps) {
+  // Normalize line endings — CodeMirror uses \n internally,
+  // so \r\n from Windows files would cause false "unsaved" diffs
+  const content = rawContent.replace(/\r\n/g, "\n");
+  const originalContent = rawOriginalContent.replace(/\r\n/g, "\n");
+
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
@@ -208,7 +213,7 @@ export function FileEditor({
     };
   }, [fileName]); // Recreate when switching files
 
-  // Sync content when it changes externally (e.g., reset)
+  // Sync content when it changes externally (e.g., reset or save)
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
@@ -223,6 +228,10 @@ export function FileEditor({
         },
       });
     }
+    // Always recompute hasChanges when content or originalContent change
+    // (e.g., after save sets originalContent = content)
+    const docNow = view.state.doc.toString();
+    setHasChanges(docNow !== originalContent);
   }, [content, originalContent]);
 
   const handleSave = useCallback(() => {
