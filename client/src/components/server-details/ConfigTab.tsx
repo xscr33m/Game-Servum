@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   FaFloppyDisk,
   FaRotateLeft,
+  FaFile,
   FaFileCode,
+  FaFilePen,
   FaCircleExclamation,
   FaCircleInfo,
   FaFolderOpen,
@@ -275,8 +277,10 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
               const state = fileStates.current.get(file);
               return (
                 <TabsTrigger key={file} value={file} className="gap-2">
-                  {isDirEntry && (
-                    <FaFolderOpen className="h-3.5 w-3.5 text-yellow-500" />
+                  {isDirEntry ? (
+                    <FaFolderOpen className="h-3.5 w-3.5 text-ring/70" />
+                  ) : (
+                    <FaFile className="h-3.5 w-3.5 text-ring/70" />
                   )}
                   {isDirEntry ? file.slice(0, -1) : file}
                   {!isDirEntry && state?.hasChanges && (
@@ -304,7 +308,10 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
         <Tabs defaultValue="form">
           <div className="flex items-center justify-between sticky top-0 z-10 bg-background/95 backdrop-blur-sm py-2 -mt-2">
             <TabsList>
-              <TabsTrigger value="form">Form Editor</TabsTrigger>
+              <TabsTrigger value="form" className="gap-2">
+                <FaFilePen className="h-4 w-4 text-ring/70" />
+                Form Editor
+              </TabsTrigger>
               <TabsTrigger value="raw" className="gap-2">
                 <FaFileCode className="h-4 w-4 text-ring/70" />
                 Raw Editor

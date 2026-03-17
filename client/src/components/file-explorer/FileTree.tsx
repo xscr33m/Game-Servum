@@ -138,9 +138,9 @@ function TreeNode({
               <FaChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
             )}
             {isExpanded ? (
-              <FaFolderOpen className="h-4 w-4 shrink-0 text-yellow-500" />
+              <FaFolderOpen className="h-4 w-4 shrink-0 text-ring/70" />
             ) : (
-              <FaFolder className="h-4 w-4 shrink-0 text-yellow-500" />
+              <FaFolder className="h-4 w-4 shrink-0 text-ring/70" />
             )}
           </>
         ) : (
