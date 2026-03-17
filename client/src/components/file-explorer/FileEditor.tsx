@@ -59,6 +59,10 @@ const darkTheme = EditorView.theme(
       backgroundColor: "hsl(var(--background))",
       color: "hsl(var(--foreground))",
       fontSize: "13px",
+      height: "100%",
+    },
+    ".cm-scroller": {
+      overflow: "auto",
     },
     ".cm-content": {
       caretColor: "hsl(var(--foreground))",
@@ -281,7 +285,7 @@ export function FileEditor({
       )}
 
       {/* Editor */}
-      <div ref={editorRef} className="flex-1 overflow-hidden" />
+      <div ref={editorRef} className="flex-1 min-h-0" />
     </div>
   );
 }

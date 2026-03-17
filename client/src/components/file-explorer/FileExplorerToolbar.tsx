@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   FaArrowsRotate,
   FaFolderPlus,
-  FaCirclePlus,
+  FaFileCirclePlus,
   FaPen,
   FaTrash,
   FaChevronRight,
@@ -141,7 +141,7 @@ export function FileExplorerToolbar({
             onClick={() => setNewFileOpen(true)}
             title="New File"
           >
-            <FaCirclePlus className="h-3.5 w-3.5" />
+            <FaFileCirclePlus className="h-3.5 w-3.5" />
           </Button>
           <Button
             variant="ghost"
