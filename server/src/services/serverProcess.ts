@@ -31,6 +31,7 @@ import {
   startPlayerTracking,
   stopPlayerTracking,
   notifyServerReady,
+  getRconConnection,
 } from "./playerTracker.js";
 import { archiveLogsBeforeStart, cleanupOldArchives } from "./logManager.js";
 import { getLogSettings } from "../db/index.js";
@@ -667,6 +668,11 @@ export function startServer(serverId: number): StartResult {
 
 /**
  * Stop a game server
+ *
+ * Shutdown sequence:
+ * 1. Send RCON shutdown commands (game-specific graceful shutdown)
+ * 2. Wait up to 60s for the process to exit on its own
+ * 3. Force-kill as last resort if process doesn't exit
  */
 export async function stopServer(serverId: number): Promise<StopResult> {
   const server = getServerById(serverId);
@@ -697,12 +703,56 @@ export async function stopServer(serverId: number): Promise<StopResult> {
     message: `Server ${server.name} is stopping...`,
   });
 
+  // Attempt RCON graceful shutdown before resorting to process termination
+  let rconShutdownSent = false;
+  const adapter = getGameAdapter(server.gameId);
+  const shutdownConfig = adapter?.getShutdownCommands();
+
+  if (shutdownConfig) {
+    const rcon = getRconConnection(serverId);
+    if (rcon?.isConnected()) {
+      try {
+        for (let i = 0; i < shutdownConfig.commands.length; i++) {
+          const cmd = shutdownConfig.commands[i];
+          logger.info(`[ServerProcess] Sending RCON shutdown command: ${cmd}`);
+          await rcon.sendCommand(cmd);
+
+          // Delay between commands (e.g. saveworld → doexit)
+          if (
+            shutdownConfig.delayBetweenMs &&
+            i < shutdownConfig.commands.length - 1
+          ) {
+            await new Promise((r) =>
+              setTimeout(r, shutdownConfig.delayBetweenMs),
+            );
+          }
+        }
+        rconShutdownSent = true;
+        logger.info(
+          `[ServerProcess] RCON shutdown commands sent for server ${serverId}`,
+        );
+      } catch (error) {
+        logger.warn(
+          `[ServerProcess] RCON shutdown failed for server ${serverId}, will force-kill:`,
+          (error as Error).message,
+        );
+      }
+    } else {
+      logger.warn(
+        `[ServerProcess] No active RCON connection for server ${serverId}, will force-kill`,
+      );
+    }
+  }
+
   return new Promise((resolve) => {
+    const GRACEFUL_TIMEOUT_MS = rconShutdownSent ? 60000 : 5000;
+
     // Set a timeout for forceful termination
     const forceKillTimeout = setTimeout(() => {
-      logger.warn(`[ServerProcess] Force killing server ${serverId}`);
+      logger.warn(
+        `[ServerProcess] Force killing server ${serverId} (graceful shutdown timed out after ${GRACEFUL_TIMEOUT_MS / 1000}s)`,
+      );
       if (process.platform === "win32") {
-        // Windows: Force kill with taskkill
         exec(`taskkill /PID ${child.pid} /T /F`, (error) => {
           if (error) {
             logger.error(`[ServerProcess] Force kill error:`, error);
@@ -711,7 +761,7 @@ export async function stopServer(serverId: number): Promise<StopResult> {
       } else {
         child.kill("SIGKILL");
       }
-    }, 10000); // 10 second timeout for graceful shutdown
+    }, GRACEFUL_TIMEOUT_MS);
 
     // Listen for exit to clear the timeout
     child.once("exit", () => {
@@ -722,20 +772,18 @@ export async function stopServer(serverId: number): Promise<StopResult> {
       });
     });
 
-    // Send graceful termination signal
-    if (process.platform === "win32") {
-      // Windows: Use taskkill for graceful termination
-      // /T kills child processes too
-      exec(`taskkill /PID ${child.pid} /T`, (error) => {
-        if (error) {
-          logger.error(`[ServerProcess] taskkill error:`, error);
-          // Fall back to process.kill
-          child.kill();
-        }
-      });
-    } else {
-      // Linux/Mac: SIGTERM for graceful shutdown
-      child.kill("SIGTERM");
+    // If RCON shutdown was sent, the process should exit on its own.
+    // Otherwise, send a signal to terminate the process.
+    if (!rconShutdownSent) {
+      if (process.platform === "win32") {
+        exec(`taskkill /PID ${child.pid} /T /F`, (error) => {
+          if (error) {
+            logger.error(`[ServerProcess] taskkill error:`, error);
+          }
+        });
+      } else {
+        child.kill("SIGTERM");
+      }
     }
   });
 }

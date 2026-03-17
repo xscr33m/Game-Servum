@@ -197,6 +197,13 @@ export class ArkAdapter extends BaseGameAdapter {
   private nameCacheLastRefresh = 0;
   private static readonly NAME_CACHE_TTL_MS = 60_000; // Re-read log at most once per minute
 
+  getShutdownCommands(): {
+    commands: string[];
+    delayBetweenMs?: number;
+  } | null {
+    return { commands: ["saveworld", "doexit"], delayBetweenMs: 3000 };
+  }
+
   getStartupDetector(): StartupDetector | null {
     return {
       type: "logfile",

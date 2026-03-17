@@ -282,6 +282,15 @@ export interface GameAdapter {
    */
   getAdditionalLaunchParams?(server: GameServer): string;
 
+  // ── Shutdown ─────────────────────────────────────────────────────
+
+  /**
+   * Return RCON commands to send for a graceful server shutdown.
+   * Commands are sent in order before the process is terminated.
+   * Returns null if no RCON-based shutdown is supported.
+   */
+  getShutdownCommands(): { commands: string[]; delayBetweenMs?: number } | null;
+
   // ── Optional: Game-Specific Features ─────────────────────────────
 
   /**

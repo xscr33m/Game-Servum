@@ -347,6 +347,16 @@ export abstract class BaseGameAdapter implements GameAdapter {
   }
 
   /**
+   * Default: no RCON-based shutdown commands.
+   */
+  getShutdownCommands(): {
+    commands: string[];
+    delayBetweenMs?: number;
+  } | null {
+    return null;
+  }
+
+  /**
    * Default: no extra environment variables needed.
    */
   getSpawnEnvironment(_server: GameServer): Record<string, string> {

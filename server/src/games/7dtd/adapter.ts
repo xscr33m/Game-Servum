@@ -362,6 +362,13 @@ export class SevenDaysAdapter extends BaseGameAdapter {
     return { SteamAppId: "251570" };
   }
 
+  getShutdownCommands(): {
+    commands: string[];
+    delayBetweenMs?: number;
+  } | null {
+    return { commands: ["saveworld", "shutdown"], delayBetweenMs: 3000 };
+  }
+
   getStartupDetector(): StartupDetector | null {
     // 7DTD does not have a reliable startup pattern — uses fixed delay
     return null;

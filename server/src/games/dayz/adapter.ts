@@ -55,6 +55,31 @@ function resolveProfilesPath(server: GameServer): string {
     : path.join(server.installPath, server.profilesPath);
 }
 
+/**
+ * DayZ renames BEServer_x64.cfg to BEServer_x64_active_xxx.cfg at runtime.
+ * After a non-graceful shutdown the original filename is never restored.
+ * This helper finds the active variant so RCON config can still be read.
+ */
+function findActiveBEConfig(dir: string): string | null {
+  try {
+    const files = fs.readdirSync(dir);
+    const active = files.find(
+      (f) => f.startsWith("BEServer_x64") && f.endsWith(".cfg"),
+    );
+    return active ? path.join(dir, active) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check whether any BattlEye config file exists in the given directory
+ * (including the _active_ variant that DayZ creates at runtime).
+ */
+function hasBEConfig(dir: string): boolean {
+  return findActiveBEConfig(dir) !== null;
+}
+
 // ── DayZ Adapter ───────────────────────────────────────────────────
 
 export class DayZAdapter extends BaseGameAdapter {
@@ -169,24 +194,25 @@ export class DayZAdapter extends BaseGameAdapter {
       );
     }
 
-    // Ensure BattlEye directory exists, create if missing
+    // Ensure BattlEye directory and config exist
     const resolvedProfiles = resolveProfilesPath(server);
     const battleEyePath = path.join(resolvedProfiles, "BattlEye");
     if (!fs.existsSync(battleEyePath)) {
       fs.mkdirSync(battleEyePath, { recursive: true });
       logger.info(`[DayZ] Created BattlEye directory: ${battleEyePath}`);
+    }
 
-      // Create default BattlEye config
+    // Create default BattlEye config if no config file exists at all
+    // (including _active_ variants that DayZ creates at runtime)
+    if (!hasBEConfig(battleEyePath)) {
       const beConfigPath = path.join(battleEyePath, "BEServer_x64.cfg");
-      if (!fs.existsSync(beConfigPath)) {
-        const rconPort = server.port + 3;
-        fs.writeFileSync(
-          beConfigPath,
-          `RConPassword ${generatePassword(20)}\nRConPort ${rconPort}\nRestrictRCon 0\n`,
-          "utf-8",
-        );
-        logger.info(`[DayZ] Created default BattlEye config`);
-      }
+      const rconPort = server.port + 3;
+      fs.writeFileSync(
+        beConfigPath,
+        `RConPassword ${generatePassword(20)}\nRConPort ${rconPort}\nRestrictRCon 0\n`,
+        "utf-8",
+      );
+      logger.info(`[DayZ] Created default BattlEye config`);
     }
 
     return errors;
@@ -197,34 +223,47 @@ export class DayZAdapter extends BaseGameAdapter {
   readRconConfig(server: GameServer): RconConfig | null {
     const resolvedProfiles = resolveProfilesPath(server);
 
-    const possiblePaths = [
-      path.join(resolvedProfiles, "BattlEye", "BEServer_x64.cfg"),
-      path.join(server.installPath, "battleye", "BEServer_x64.cfg"),
-      path.join(server.installPath, "BattlEye", "BEServer_x64.cfg"),
+    // Directories to check for BattlEye config (in priority order)
+    const possibleDirs = [
+      path.join(resolvedProfiles, "BattlEye"),
+      path.join(server.installPath, "battleye"),
+      path.join(server.installPath, "BattlEye"),
     ];
 
-    for (const cfgPath of possiblePaths) {
-      if (fs.existsSync(cfgPath)) {
-        try {
-          const content = fs.readFileSync(cfgPath, "utf-8");
-          const passwordMatch = content.match(/^RConPassword\s+(.+)$/m);
-          const portMatch = content.match(/^RConPort\s+(\d+)$/m);
+    for (const dir of possibleDirs) {
+      if (!fs.existsSync(dir)) continue;
 
-          if (passwordMatch) {
-            return {
-              password: passwordMatch[1].trim(),
-              port: portMatch ? parseInt(portMatch[1].trim(), 10) : 2305,
-            };
-          }
-        } catch (error) {
-          logger.error(
-            `[DayZ] Error reading BattlEye config ${cfgPath}:`,
-            error,
-          );
+      // Try the standard filename first
+      const standardPath = path.join(dir, "BEServer_x64.cfg");
+      const configPath = fs.existsSync(standardPath)
+        ? standardPath
+        : findActiveBEConfig(dir);
+
+      if (!configPath) continue;
+
+      try {
+        const content = fs.readFileSync(configPath, "utf-8");
+        const passwordMatch = content.match(/^RConPassword\s+(.+)$/m);
+        const portMatch = content.match(/^RConPort\s+(\d+)$/m);
+
+        if (passwordMatch) {
+          logger.debug(`[DayZ] Found BattlEye config: ${configPath}`);
+          return {
+            password: passwordMatch[1].trim(),
+            port: portMatch ? parseInt(portMatch[1].trim(), 10) : 2305,
+          };
         }
+      } catch (error) {
+        logger.error(
+          `[DayZ] Error reading BattlEye config ${configPath}:`,
+          error,
+        );
       }
     }
 
+    logger.debug(
+      `[DayZ] No BattlEye config found in: ${possibleDirs.join(", ")}`,
+    );
     return null;
   }
 
@@ -367,6 +406,13 @@ export class DayZAdapter extends BaseGameAdapter {
 
   getLogFileExtensions(): string[] {
     return [".ADM", ".RPT", ".log"];
+  }
+
+  getShutdownCommands(): {
+    commands: string[];
+    delayBetweenMs?: number;
+  } | null {
+    return { commands: ["#shutdown"] };
   }
 
   getStartupDetector(): StartupDetector | null {
