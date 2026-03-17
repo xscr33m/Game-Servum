@@ -12,7 +12,6 @@ import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -190,20 +189,22 @@ export function FileExplorerToolbar({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>New File</DialogTitle>
-            <DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
               Create a new file
               {getBaseDir() ? ` in ${getBaseDir()}/` : " in root directory"}
-            </DialogDescription>
-          </DialogHeader>
-          <Input
-            value={newFileName}
-            onChange={(e) => setNewFileName(e.target.value)}
-            placeholder="filename.cfg"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && newFileName.trim()) handleNewFile();
-            }}
-            autoFocus
-          />
+            </p>
+            <Input
+              value={newFileName}
+              onChange={(e) => setNewFileName(e.target.value)}
+              placeholder="filename.cfg"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && newFileName.trim()) handleNewFile();
+              }}
+              autoFocus
+            />
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNewFileOpen(false)}>
               Cancel
@@ -220,20 +221,23 @@ export function FileExplorerToolbar({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>New Folder</DialogTitle>
-            <DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
               Create a new folder
               {getBaseDir() ? ` in ${getBaseDir()}/` : " in root directory"}
-            </DialogDescription>
-          </DialogHeader>
-          <Input
-            value={newFolderName}
-            onChange={(e) => setNewFolderName(e.target.value)}
-            placeholder="folder-name"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && newFolderName.trim()) handleNewFolder();
-            }}
-            autoFocus
-          />
+            </p>
+            <Input
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              placeholder="folder-name"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && newFolderName.trim())
+                  handleNewFolder();
+              }}
+              autoFocus
+            />
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNewFolderOpen(false)}>
               Cancel
@@ -250,17 +254,21 @@ export function FileExplorerToolbar({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Rename</DialogTitle>
-            <DialogDescription>Rename "{selectedName}"</DialogDescription>
           </DialogHeader>
-          <Input
-            value={renameTo}
-            onChange={(e) => setRenameTo(e.target.value)}
-            placeholder="New name"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && renameTo.trim()) handleRename();
-            }}
-            autoFocus
-          />
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              Enter a new name for "{selectedName}"
+            </p>
+            <Input
+              value={renameTo}
+              onChange={(e) => setRenameTo(e.target.value)}
+              placeholder="New name"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && renameTo.trim()) handleRename();
+              }}
+              autoFocus
+            />
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRenameOpen(false)}>
               Cancel
@@ -279,13 +287,12 @@ export function FileExplorerToolbar({
             <DialogTitle>
               Delete {selectedIsDirectory ? "Folder" : "File"}
             </DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete "{selectedName}"?
-              {selectedIsDirectory &&
-                " Only empty folders can be deleted."}{" "}
-              This action cannot be undone.
-            </DialogDescription>
           </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete "{selectedName}"?
+            {selectedIsDirectory && " Only empty folders can be deleted."} This
+            action cannot be undone.
+          </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteOpen(false)}>
               Cancel

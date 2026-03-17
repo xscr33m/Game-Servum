@@ -253,7 +253,8 @@ export function FileEditor({
           {isLargeFile && (
             <Badge
               variant="outline"
-              className="gap-1 text-yellow-500 border-yellow-500/50"
+              className="gap-1 text-yellow-500 border-yellow-500/50 cursor-help"
+              title="This file is large. Editor performance may be affected."
             >
               <FaTriangleExclamation className="h-3 w-3" />
               Large file
