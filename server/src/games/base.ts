@@ -18,6 +18,7 @@ import type {
   PlayerFileConfig,
   PlayerListResult,
   EditableFileConfig,
+  BrowsableRoot,
   ModCopyResult,
   LogPaths,
 } from "./types.js";
@@ -338,6 +339,10 @@ export abstract class BaseGameAdapter implements GameAdapter {
   }
 
   getEditableFiles(_server: GameServer): EditableFileConfig[] {
+    return [];
+  }
+
+  getBrowsableRoots(_server: GameServer): BrowsableRoot[] {
     return [];
   }
 

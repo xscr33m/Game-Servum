@@ -5,6 +5,7 @@ import {
   FaFileCode,
   FaCircleExclamation,
   FaCircleInfo,
+  FaFolderOpen,
 } from "react-icons/fa6";
 import {
   Card,
@@ -22,6 +23,7 @@ import { useBackend } from "@/hooks/useBackend";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { toastSuccess } from "@/lib/toast";
 import { getConfigEditor } from "@/components/server-details/games/registry";
+import { FileExplorer } from "@/components/file-explorer/FileExplorer";
 import type { GameServer } from "@/types";
 
 interface FileState {
@@ -129,6 +131,8 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
 
   function handleFileSwitch(fileName: string) {
     setActiveFile(fileName);
+    // Directory entries are handled by the FileExplorer — don't load as config file
+    if (fileName.endsWith("/")) return;
     const state = fileStates.current.get(fileName);
     if (!state?.loaded) {
       loadFile(fileName);
@@ -244,6 +248,7 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
 
   const isRunning = server.status === "running";
   const hasMultipleFiles = configFiles.length > 1;
+  const isActiveFileBrowsable = activeFile.endsWith("/");
 
   return (
     <div className="space-y-4">
@@ -260,11 +265,15 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
         <Tabs value={activeFile} onValueChange={handleFileSwitch}>
           <TabsList>
             {configFiles.map((file) => {
+              const isDirEntry = file.endsWith("/");
               const state = fileStates.current.get(file);
               return (
                 <TabsTrigger key={file} value={file} className="gap-2">
-                  {file}
-                  {state?.hasChanges && (
+                  {isDirEntry && (
+                    <FaFolderOpen className="h-3.5 w-3.5 text-yellow-500" />
+                  )}
+                  {isDirEntry ? file.slice(0, -1) : file}
+                  {!isDirEntry && state?.hasChanges && (
                     <span className="h-2 w-2 rounded-full bg-yellow-500" />
                   )}
                 </TabsTrigger>
@@ -274,8 +283,19 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
         </Tabs>
       )}
 
-      {/* Config Editor */}
-      {currentState && (
+      {/* File Explorer for browsable directory entries */}
+      {isActiveFileBrowsable && (
+        <div className="h-[600px]">
+          <FileExplorer
+            serverId={server.id}
+            rootKey={activeFile.slice(0, -1)}
+            rootLabel={activeFile.slice(0, -1)}
+          />
+        </div>
+      )}
+
+      {/* Config Editor for regular file entries */}
+      {!isActiveFileBrowsable && currentState && (
         <Tabs defaultValue="form">
           <div className="flex items-center justify-between sticky top-0 z-10 bg-background/95 backdrop-blur-sm py-2 -mt-2">
             <TabsList>

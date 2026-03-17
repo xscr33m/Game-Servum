@@ -20,6 +20,15 @@ import { getApiBase } from "./config";
 
 // ── Types for the API client ──
 
+export interface BrowseTreeEntry {
+  name: string;
+  type: "file" | "directory";
+  size?: number;
+  extension?: string;
+  editable?: boolean;
+  children?: BrowseTreeEntry[];
+}
+
 export type FetchApiFn = <T>(
   endpoint: string,
   options?: RequestInit,
@@ -328,6 +337,55 @@ export interface ServersApiClient {
   ) => Promise<{ success: boolean; message: string }>;
   getWhitelistContent: (serverId: number) => Promise<{ content: string }>;
   getBanContent: (serverId: number) => Promise<{ content: string }>;
+  // File browser
+  browseRoots: (
+    id: number,
+  ) => Promise<{ roots: Array<{ key: string; label: string }> }>;
+  browseTree: (
+    id: number,
+    rootKey: string,
+  ) => Promise<{
+    root: string;
+    tree: BrowseTreeEntry[];
+  }>;
+  browseReadFile: (
+    id: number,
+    rootKey: string,
+    filePath: string,
+  ) => Promise<{ content: string; size: number; path: string }>;
+  browseWriteFile: (
+    id: number,
+    rootKey: string,
+    filePath: string,
+    content: string,
+  ) => Promise<{ success: boolean; message: string }>;
+  browseCreateFile: (
+    id: number,
+    rootKey: string,
+    filePath: string,
+    content?: string,
+  ) => Promise<{ success: boolean; message: string }>;
+  browseDeleteFile: (
+    id: number,
+    rootKey: string,
+    filePath: string,
+  ) => Promise<{ success: boolean; message: string }>;
+  browseCreateDirectory: (
+    id: number,
+    rootKey: string,
+    dirPath: string,
+  ) => Promise<{ success: boolean; message: string }>;
+  browseDeleteDirectory: (
+    id: number,
+    rootKey: string,
+    dirPath: string,
+  ) => Promise<{ success: boolean; message: string }>;
+  browseRename: (
+    id: number,
+    rootKey: string,
+    from: string,
+    to: string,
+  ) => Promise<{ success: boolean; message: string }>;
 }
 
 export interface SystemApiClient {
@@ -919,6 +977,75 @@ function createServersApi(fetchApi: FetchApiFn): ServersApiClient {
       ),
     getBanContent: (serverId: number) =>
       fetchApi<{ content: string }>(`/servers/${serverId}/players/ban-content`),
+    // File browser
+    browseRoots: (id: number) =>
+      fetchApi<{ roots: Array<{ key: string; label: string }> }>(
+        `/servers/${id}/browse/roots`,
+      ),
+    browseTree: (id: number, rootKey: string) =>
+      fetchApi<{ root: string; tree: BrowseTreeEntry[] }>(
+        `/servers/${id}/browse/tree?root=${encodeURIComponent(rootKey)}`,
+      ),
+    browseReadFile: (id: number, rootKey: string, filePath: string) =>
+      fetchApi<{ content: string; size: number; path: string }>(
+        `/servers/${id}/browse/file?root=${encodeURIComponent(rootKey)}&path=${encodeURIComponent(filePath)}`,
+      ),
+    browseWriteFile: (
+      id: number,
+      rootKey: string,
+      filePath: string,
+      content: string,
+    ) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${id}/browse/file`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ root: rootKey, path: filePath, content }),
+        },
+      ),
+    browseCreateFile: (
+      id: number,
+      rootKey: string,
+      filePath: string,
+      content?: string,
+    ) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${id}/browse/file`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            root: rootKey,
+            path: filePath,
+            content: content ?? "",
+          }),
+        },
+      ),
+    browseDeleteFile: (id: number, rootKey: string, filePath: string) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${id}/browse/file?root=${encodeURIComponent(rootKey)}&path=${encodeURIComponent(filePath)}`,
+        { method: "DELETE" },
+      ),
+    browseCreateDirectory: (id: number, rootKey: string, dirPath: string) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${id}/browse/directory`,
+        {
+          method: "POST",
+          body: JSON.stringify({ root: rootKey, path: dirPath }),
+        },
+      ),
+    browseDeleteDirectory: (id: number, rootKey: string, dirPath: string) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${id}/browse/directory?root=${encodeURIComponent(rootKey)}&path=${encodeURIComponent(dirPath)}`,
+        { method: "DELETE" },
+      ),
+    browseRename: (id: number, rootKey: string, from: string, to: string) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${id}/browse/rename`,
+        {
+          method: "POST",
+          body: JSON.stringify({ root: rootKey, from, to }),
+        },
+      ),
   };
 }
 

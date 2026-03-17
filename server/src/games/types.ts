@@ -62,6 +62,17 @@ export interface PlayerFileConfig {
   idType: "battleye-guid" | "steam-id";
 }
 
+// ── Browsable Root Config ─────────────────────────────────────────────
+
+export interface BrowsableRoot {
+  /** Unique key used in API requests (e.g., "profiles") */
+  key: string;
+  /** Human-readable label for the UI */
+  label: string;
+  /** Resolve the absolute path on disk for a given server */
+  resolvePath: (server: GameServer) => string;
+}
+
 // ── Editable File Config ─────────────────────────────────────────────
 
 export interface EditableFileConfig {
@@ -239,6 +250,12 @@ export interface GameAdapter {
    * Includes resolved paths and read-only flags.
    */
   getEditableFiles(server: GameServer): EditableFileConfig[];
+
+  /**
+   * Directories the frontend may browse and edit files in via the browse API.
+   * Each root defines a key, label, and path resolver.
+   */
+  getBrowsableRoots(server: GameServer): BrowsableRoot[];
 
   /**
    * Extra environment variables required when spawning the server process.

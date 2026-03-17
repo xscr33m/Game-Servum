@@ -22,6 +22,7 @@ import type {
   RconConfig,
   PlayerFileConfig,
   EditableFileConfig,
+  BrowsableRoot,
   ModCopyResult,
   LogPaths,
   StartupDetector,
@@ -382,6 +383,16 @@ export class DayZAdapter extends BaseGameAdapter {
         name: "BEServer_x64.cfg",
         path: path.join(resolvedProfiles, "BattlEye", "BEServer_x64.cfg"),
         readonly: true,
+      },
+    ];
+  }
+
+  getBrowsableRoots(server: GameServer): BrowsableRoot[] {
+    return [
+      {
+        key: "profiles",
+        label: "Profiles",
+        resolvePath: (s: GameServer) => resolveProfilesPath(s),
       },
     ];
   }
