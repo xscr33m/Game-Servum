@@ -61,7 +61,7 @@ const pollCounters = new Map<number, number>();
 
 const POLL_INTERVAL_MS = 30000; // 30 seconds
 const RCON_RECONNECT_DELAY_MS = 30000; // 30 seconds
-const RCON_CONNECT_DELAY_MS = 15000; // Fallback: wait 15s when no startup pattern defined
+const RCON_CONNECT_DELAY_MS = 30000; // Fallback: wait 30s when no startup pattern defined
 const CHARACTER_ID_SYNC_INTERVAL = 5; // Sync character IDs every N polls
 
 // Servers waiting for a startup-complete signal before connecting RCON
