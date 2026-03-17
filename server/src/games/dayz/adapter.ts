@@ -72,7 +72,7 @@ export class DayZAdapter extends BaseGameAdapter {
       "-config=serverDZ.cfg -port={PORT} -profiles={PROFILES} -doLogs -adminLog -netLog -freezeCheck",
     description:
       "Post-apocalyptic survival game. Requires Steam login to download.",
-    configFiles: ["serverDZ.cfg", "profiles/"],
+    configFiles: ["serverDZ.cfg", "profiles/", "mpmissions/"],
     firewallRules: [
       { portOffset: 0, portCount: 3, protocol: "UDP", description: "Game" },
       {
@@ -393,6 +393,11 @@ export class DayZAdapter extends BaseGameAdapter {
         key: "profiles",
         label: "Profiles",
         resolvePath: (s: GameServer) => resolveProfilesPath(s),
+      },
+      {
+        key: "mpmissions",
+        label: "MPMissions",
+        resolvePath: (s: GameServer) => path.join(s.installPath, "mpmissions"),
       },
     ];
   }
