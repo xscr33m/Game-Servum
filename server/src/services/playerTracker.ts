@@ -270,7 +270,7 @@ async function connectRcon(
 
     // Start periodic polling
     const interval = setInterval(async () => {
-      if (rcon.isConnected()) {
+      if (rcon.isConnected() && serverInfo.has(serverId)) {
         await pollPlayers(serverId, rcon);
       }
     }, POLL_INTERVAL_MS);
@@ -386,9 +386,12 @@ async function pollPlayers(serverId: number, rcon: RconClient): Promise<void> {
       }
     }
   } catch (error) {
-    logger.error(
-      `[PlayerTracker] RCON poll failed for server ${serverId}:`,
-      (error as Error).message,
-    );
+    // Only log poll errors if the server is still being tracked (not during shutdown)
+    if (serverInfo.has(serverId)) {
+      logger.error(
+        `[PlayerTracker] RCON poll failed for server ${serverId}:`,
+        (error as Error).message,
+      );
+    }
   }
 }
