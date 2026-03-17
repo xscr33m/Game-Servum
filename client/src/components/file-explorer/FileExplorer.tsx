@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { FaFolderOpen } from "react-icons/fa6";
 import { useBackend } from "@/hooks/useBackend";
 import { toastSuccess, toastError } from "@/lib/toast";
@@ -10,7 +10,6 @@ import { FileExplorerToolbar } from "./FileExplorerToolbar";
 interface FileExplorerProps {
   serverId: number;
   rootKey: string;
-  rootLabel?: string;
 }
 
 interface OpenFile {
@@ -20,11 +19,7 @@ interface OpenFile {
   size: number;
 }
 
-export function FileExplorer({
-  serverId,
-  rootKey,
-  rootLabel,
-}: FileExplorerProps) {
+export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
   const { api } = useBackend();
   const [tree, setTree] = useState<BrowseTreeEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,6 +28,43 @@ export function FileExplorer({
   const [openFile, setOpenFile] = useState<OpenFile | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Resizable sidebar
+  const SIDEBAR_MIN = 150;
+  const SIDEBAR_MAX = 600;
+  const SIDEBAR_DEFAULT = 256;
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
+  const isResizing = useRef(false);
+
+  useEffect(() => {
+    function handleMouseMove(e: MouseEvent) {
+      if (!isResizing.current || !containerRef.current) return;
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const newWidth = e.clientX - containerRect.left;
+      setSidebarWidth(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, newWidth)));
+    }
+    function handleMouseUp() {
+      if (isResizing.current) {
+        isResizing.current = false;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      }
+    }
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, []);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  function handleResizeStart() {
+    isResizing.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }
 
   const loadTree = useCallback(async () => {
     try {
@@ -186,16 +218,12 @@ export function FileExplorer({
       />
 
       {/* Main content area */}
-      <div className="flex flex-1 min-h-0">
+      <div ref={containerRef} className="flex flex-1 min-h-0">
         {/* Sidebar */}
-        <div className="w-64 border-r shrink-0 overflow-hidden flex flex-col">
-          {rootLabel && (
-            <div className="px-3 py-1.5 border-b bg-muted/50">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                {rootLabel}
-              </span>
-            </div>
-          )}
+        <div
+          className="border-r shrink-0 overflow-hidden flex flex-col"
+          style={{ width: `${sidebarWidth}px` }}
+        >
           {loading ? (
             <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
               Loading...
@@ -209,6 +237,12 @@ export function FileExplorer({
             />
           )}
         </div>
+
+        {/* Resize handle */}
+        <div
+          className="w-1 shrink-0 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
+          onMouseDown={handleResizeStart}
+        />
 
         {/* Editor area */}
         <div className="flex-1 min-w-0 flex flex-col">

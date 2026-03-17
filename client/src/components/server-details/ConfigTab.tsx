@@ -251,7 +251,13 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
   const isActiveFileBrowsable = activeFile.endsWith("/");
 
   return (
-    <div className="space-y-4">
+    <div
+      className={
+        isActiveFileBrowsable
+          ? "flex flex-col gap-4 h-[calc(100vh-14rem)] min-h-[400px]"
+          : "space-y-4"
+      }
+    >
       {/* Messages */}
       {error && (
         <Alert variant="destructive">
@@ -285,11 +291,10 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
 
       {/* File Explorer for browsable directory entries */}
       {isActiveFileBrowsable && (
-        <div className="h-[600px]">
+        <div className="flex-1 min-h-0">
           <FileExplorer
             serverId={server.id}
             rootKey={activeFile.slice(0, -1)}
-            rootLabel={activeFile.slice(0, -1)}
           />
         </div>
       )}
@@ -366,7 +371,7 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
               </CardHeader>
               <CardContent>
                 <Textarea
-                  className="font-mono text-sm h-[500px]"
+                  className="font-mono text-sm h-[calc(100vh-28rem)] min-h-[200px]"
                   value={currentState.rawContent}
                   onChange={(e) => handleContentChange(e.target.value)}
                   spellCheck={false}

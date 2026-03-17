@@ -23,7 +23,6 @@ import {
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface FileEditorProps {
   content: string;
@@ -247,10 +246,19 @@ export function FileEditor({
   return (
     <div className="flex flex-col h-full">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/30">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-sm font-medium truncate">{fileName}</span>
           {hasChanges && <Badge variant="warning">Unsaved</Badge>}
+          {isLargeFile && (
+            <Badge
+              variant="outline"
+              className="gap-1 text-yellow-500 border-yellow-500/50"
+            >
+              <FaTriangleExclamation className="h-3 w-3" />
+              Large file
+            </Badge>
+          )}
           {fileSize != null && (
             <span className="text-xs text-muted-foreground">
               {fileSize < 1024
@@ -281,17 +289,6 @@ export function FileEditor({
           </Button>
         </div>
       </div>
-
-      {/* Large file warning */}
-      {isLargeFile && (
-        <Alert className="m-2 mb-0">
-          <FaTriangleExclamation className="h-4 w-4" />
-          <AlertDescription>
-            This file is large ({((fileSize ?? 0) / (1024 * 1024)).toFixed(1)}{" "}
-            MB). Editor performance may be affected.
-          </AlertDescription>
-        </Alert>
-      )}
 
       {/* Editor */}
       <div ref={editorRef} className="flex-1 min-h-0" />

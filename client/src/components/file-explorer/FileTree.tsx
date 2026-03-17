@@ -98,8 +98,8 @@ function TreeNode({
         disabled={!isDirectory && !isEditable}
         title={
           !isEditable && !isDirectory
-            ? "Binary file — cannot be edited"
-            : undefined
+            ? `${entry.name} — Binary file, cannot be edited`
+            : entry.name
         }
       >
         {isDirectory ? (
@@ -174,14 +174,14 @@ export function FileTree({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-2 border-b">
+      <div className="px-2 py-1.5 border-b">
         <div className="relative">
           <FaMagnifyingGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
           <Input
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             placeholder="Filter files..."
-            className="h-7 pl-7 text-sm"
+            className="h-8 pl-7 text-sm"
           />
         </div>
       </div>
