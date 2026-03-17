@@ -2309,6 +2309,9 @@ const TEXT_FILE_EXTENSIONS = new Set([
   ".cpp",
   ".properties",
   ".log",
+  ".ADM",
+  ".RPT",
+  ".DayZProfile",
   ".md",
   ".yaml",
   ".yml",
@@ -2326,7 +2329,6 @@ const TEXT_FILE_EXTENSIONS = new Set([
   ".hpp",
   ".c",
   ".h",
-  ".bikey",
 ]);
 
 function isTextFile(filePath: string): boolean {
@@ -2746,12 +2748,9 @@ router.delete("/:id/browse/directory", (req: Request, res: Response) => {
 
     const entries = fs.readdirSync(resolved.absolutePath);
     if (entries.length > 0) {
-      return res
-        .status(400)
-        .json({
-          error:
-            "Directory is not empty. Only empty directories can be deleted.",
-        });
+      return res.status(400).json({
+        error: "Directory is not empty. Only empty directories can be deleted.",
+      });
     }
 
     fs.rmdirSync(resolved.absolutePath);
