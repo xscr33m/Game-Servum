@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { toast } from "sonner";
 import { FaFolderOpen } from "react-icons/fa6";
 import { useBackend } from "@/hooks/useBackend";
 import { toastSuccess, toastError } from "@/lib/toast";
@@ -204,11 +205,13 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
   }
 
   async function handleDownload(filePath: string) {
+    const name = filePath.split("/").pop() ?? filePath;
+    const toastId = toast.loading(`Preparing download "${name}"...`);
     try {
       await api.servers.browseDownload(serverId, rootKey, filePath);
-      const name = filePath.split("/").pop() ?? filePath;
-      toastSuccess(`Downloaded "${name}"`);
+      toast.dismiss(toastId);
     } catch (err) {
+      toast.dismiss(toastId);
       toastError(err instanceof Error ? err.message : "Download failed");
     }
   }
