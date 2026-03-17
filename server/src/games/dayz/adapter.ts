@@ -256,23 +256,35 @@ export class DayZAdapter extends BaseGameAdapter {
       fs.writeFileSync(modCppPath, modCppContent);
     }
 
-    // DayZ-specific: Copy .bikey files to server keys folder
-    const keysSource = path.join(targetPath, "keys");
+    // DayZ-specific: Recursively find and copy .bikey files to server keys folder
     const keysTarget = path.join(serverInstallPath, "keys");
+    const bikeyFiles: string[] = [];
 
-    if (fs.existsSync(keysSource)) {
+    function findBikeys(dir: string): void {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          findBikeys(fullPath);
+        } else if (entry.name.endsWith(".bikey")) {
+          bikeyFiles.push(fullPath);
+        }
+      }
+    }
+
+    findBikeys(targetPath);
+
+    if (bikeyFiles.length > 0) {
       if (!fs.existsSync(keysTarget)) {
         fs.mkdirSync(keysTarget, { recursive: true });
       }
-      const keyFiles = fs.readdirSync(keysSource);
-      for (const keyFile of keyFiles) {
-        if (keyFile.endsWith(".bikey")) {
-          fs.copyFileSync(
-            path.join(keysSource, keyFile),
-            path.join(keysTarget, keyFile),
-          );
-        }
+      for (const bikeyPath of bikeyFiles) {
+        const fileName = path.basename(bikeyPath);
+        fs.copyFileSync(bikeyPath, path.join(keysTarget, fileName));
       }
+      logger.info(
+        `[DayZ] Copied ${bikeyFiles.length} .bikey file(s) to keys/ for mod "${mod.name}"`,
+      );
     }
 
     return result;
