@@ -9,6 +9,7 @@
  */
 
 import type { GameAdapter, GameDefinition, GameMetadata } from "./types.js";
+import { getQueryPortOffset, getConsecutivePortCount } from "./base.js";
 import { DayZAdapter } from "./dayz/index.js";
 import { ArkAdapter } from "./ark/index.js";
 import { SevenDaysAdapter } from "./7dtd/index.js";
@@ -104,6 +105,41 @@ export async function runPostInstall(
   }
 }
 
+/**
+ * Compute ALL ports a server occupies based on its firewallRules.
+ * Uses firewallRules as the single source of truth for port enumeration.
+ * Falls back to consecutive port count + query port offset if no firewallRules are defined.
+ */
+export function getAllPortsFromRules(
+  basePort: number,
+  gameId: string,
+): number[] {
+  const gameDef = getGameDefinition(gameId);
+  if (!gameDef) return [basePort];
+
+  const ports = new Set<number>();
+
+  if (gameDef.firewallRules && gameDef.firewallRules.length > 0) {
+    for (const rule of gameDef.firewallRules) {
+      for (let i = 0; i < rule.portCount; i++) {
+        ports.add(basePort + rule.portOffset + i);
+      }
+    }
+  } else {
+    // Fallback: use consecutive port count + query port offset
+    const portCount = getConsecutivePortCount(gameDef);
+    for (let i = 0; i < portCount; i++) {
+      ports.add(basePort + i);
+    }
+    const qpOffset = getQueryPortOffset(gameDef);
+    if (qpOffset != null) {
+      ports.add(basePort + qpOffset);
+    }
+  }
+
+  return Array.from(ports).sort((a, b) => a - b);
+}
+
 // ── Re-exports ─────────────────────────────────────────────────────
 
 export type {
@@ -118,7 +154,12 @@ export type {
   ModCopyResult,
   LogPaths,
 } from "./types.js";
-export { BaseGameAdapter } from "./base.js";
+export {
+  BaseGameAdapter,
+  getQueryPortOffset,
+  getRconPortOffset,
+  getConsecutivePortCount,
+} from "./base.js";
 export { DayZAdapter } from "./dayz/index.js";
 export { ArkAdapter } from "./ark/index.js";
 export { SevenDaysAdapter } from "./7dtd/index.js";

@@ -76,7 +76,7 @@ export function EditAgentDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-4">
           {/* Agent info summary */}
           <div className="rounded-lg border border-border/50 bg-muted/30 p-4 space-y-3">
             <div className="flex items-center gap-3">
@@ -139,10 +139,15 @@ export function EditAgentDialog({
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
+              className="w-full sm:w-auto"
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={!name.trim()}>
+            <Button
+              type="submit"
+              disabled={!name.trim()}
+              className="w-full sm:w-auto"
+            >
               Save
             </Button>
           </DialogFooter>

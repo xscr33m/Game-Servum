@@ -1,6 +1,6 @@
 // ── Credential Storage Abstraction ──
 // Pluggable storage backends for persisting agent credentials.
-// Current: localStorage (plaintext) + Electron IPC (plaintext file in Documents/Game Servum/data/).
+// Current: localStorage (plaintext) + Electron IPC (plaintext file in Documents/Game-Servum/data/).
 
 import type { BackendConnection } from "./config";
 
@@ -95,8 +95,8 @@ export class LocalCredentialStore implements CredentialStore {
   }
 }
 
-// ── Electron Credential Store (persists in Documents/Game Servum/data/) ──
-// Uses Electron IPC to store plaintext JSON file in Documents/Game Servum/data/dashboard-connections.json.
+// ── Electron Credential Store (persists in Documents/Game-Servum/data/) ──
+// Uses Electron IPC to store plaintext JSON file in Documents/Game-Servum/data/dashboard-connections.json.
 // Data survives reinstalls because Documents/ is preserved.
 
 interface ElectronCredentialsAPI {

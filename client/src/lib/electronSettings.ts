@@ -1,5 +1,5 @@
 // ── Electron Settings Storage ──
-// Provides a localStorage-compatible API that persists data in Documents/Game Servum/data/
+// Provides a localStorage-compatible API that persists data in Documents/Game-Servum/data/
 // instead of Electron's userData (which gets deleted on reinstall).
 //
 // Usage:
@@ -65,7 +65,7 @@ class ElectronSettingsStore {
   }
 
   /**
-   * One-time migration of localStorage settings to Documents/Game Servum/data/
+   * One-time migration of localStorage settings to Documents/Game-Servum/data/
    */
   private async migrateLegacySettings(): Promise<void> {
     const keysToMigrate = [

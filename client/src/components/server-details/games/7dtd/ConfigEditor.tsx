@@ -952,7 +952,7 @@ const SECTIONS: SectionDef[] = [
         label: "Telnet Password",
         type: "password",
         placeholder: "Required for remote access",
-        description: "Must be set for Game Servum RCON features",
+        description: "Must be set for Game-Servum RCON features",
       },
       {
         key: "TelnetFailedLoginLimit",

@@ -5,7 +5,7 @@ import App from "./App.tsx";
 import { initElectronSettings } from "./lib/electronSettings";
 
 // Initialize Electron stores (if running in Electron) before rendering.
-// This pre-loads app settings from Documents/Game Servum/
+// This pre-loads app settings from Documents/Game-Servum/
 // so they're available synchronously when React components initialize.
 async function boot() {
   await initElectronSettings();

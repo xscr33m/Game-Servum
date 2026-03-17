@@ -137,7 +137,7 @@ export function Settings() {
                 className="h-7 w-auto mr-1"
               />
             </Button>
-            <div className="h-7 w-px bg-border" />
+            <div className="h-7 w-px bg-ring/30" />
             <h1 className="text-xl font-bold">Settings</h1>
           </>
         }
@@ -145,7 +145,7 @@ export function Settings() {
 
       <AgentStatusBanner />
 
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
         <div className="max-w-6xl mx-auto px-6 py-6">
           {/* ── General Settings ── */}
           <section className="rounded-lg border bg-card mb-6">

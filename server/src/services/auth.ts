@@ -134,12 +134,12 @@ function writeCredentialsFile(
 ): void {
   const host = config.host === "0.0.0.0" ? "<SERVER-IP>" : config.host;
   const content = `════════════════════════════════════════════════════════════════
-  GAME SERVUM — AGENT CREDENTIALS
+  GAME-SERVUM — AGENT CREDENTIALS
 ════════════════════════════════════════════════════════════════
 
 Generated: ${new Date().toLocaleString()}
 
-Use these credentials to connect a Game Servum Dashboard
+Use these credentials to connect a Game-Servum Dashboard
 to this Agent.
 
   API-Key:    ${apiKey}

@@ -676,7 +676,7 @@ export function Logs() {
                 className="h-7 w-auto mr-1"
               />
             </Button>
-            <div className="h-7 w-px bg-border" />
+            <div className="h-7 w-px bg-ring/30" />
             <h1 className="text-xl font-bold">Logs</h1>
           </>
         }
@@ -910,7 +910,7 @@ export function Logs() {
                           logs to:
                         </p>
                         <code className="text-xs bg-muted px-2 py-1 rounded block">
-                          Documents/Game Servum/Logs/
+                          Documents/Game-Servum/Logs/
                         </code>
                         <p className="text-sm text-muted-foreground leading-relaxed">
                           Files rotate daily and are managed independently per
@@ -1107,7 +1107,11 @@ export function Logs() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteTarget(null)}
+              className="w-full sm:w-auto"
+            >
               Cancel
             </Button>
             <Button
@@ -1118,6 +1122,7 @@ export function Logs() {
                   setDeleteTarget(null);
                 }
               }}
+              className="w-full sm:w-auto"
             >
               Delete
             </Button>

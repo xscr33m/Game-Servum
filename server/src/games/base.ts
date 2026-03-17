@@ -22,6 +22,52 @@ import type {
   LogPaths,
 } from "./types.js";
 
+// ── Port Helper Functions ──────────────────────────────────────────
+
+/**
+ * Derive the query port offset from firewallRules.
+ * Finds the rule whose description contains "query" (case-insensitive).
+ */
+export function getQueryPortOffset(def: GameDefinition): number | undefined {
+  const rule = def.firewallRules?.find((r) =>
+    r.description.toLowerCase().includes("query"),
+  );
+  return rule?.portOffset;
+}
+
+/**
+ * Derive the RCON port offset from firewallRules.
+ * Finds the rule whose description contains "rcon" (case-insensitive).
+ */
+export function getRconPortOffset(def: GameDefinition): number | undefined {
+  const rule = def.firewallRules?.find((r) =>
+    r.description.toLowerCase().includes("rcon"),
+  );
+  return rule?.portOffset;
+}
+
+/**
+ * Compute the number of consecutive ports starting from offset 0.
+ * Walks through firewallRules sorted by portOffset and counts
+ * all ports that form a contiguous block from the base port.
+ */
+export function getConsecutivePortCount(def: GameDefinition): number {
+  if (!def.firewallRules || def.firewallRules.length === 0) return 1;
+
+  const sorted = [...def.firewallRules]
+    .filter((r) => r.portOffset >= 0)
+    .sort((a, b) => a.portOffset - b.portOffset);
+
+  let consecutiveEnd = 0;
+  for (const rule of sorted) {
+    if (rule.portOffset > consecutiveEnd) break;
+    const ruleEnd = rule.portOffset + rule.portCount;
+    if (ruleEnd > consecutiveEnd) consecutiveEnd = ruleEnd;
+  }
+
+  return Math.max(consecutiveEnd, 1);
+}
+
 export abstract class BaseGameAdapter implements GameAdapter {
   abstract readonly definition: GameDefinition;
 

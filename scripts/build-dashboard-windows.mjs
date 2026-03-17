@@ -61,7 +61,7 @@ function pngToIco(pngPath, icoPath) {
 }
 
 console.log("╔════════════════════════════════════════════");
-console.log(`║  Game Servum Dashboard Builder (Windows)   `);
+console.log(`║  Game-Servum Dashboard Builder (Windows)   `);
 console.log(`║  Version: ${APP_VERSION.padEnd(32)}`);
 console.log("╚════════════════════════════════════════════");
 
@@ -92,7 +92,7 @@ if (existsSync(STAGING)) {
 const electronPkg = {
   name: "game-servum-dashboard",
   version: APP_VERSION,
-  description: "Game Servum Dashboard — Remote Agent Management",
+  description: "Game-Servum Dashboard — Remote Agent Management",
   author: "xscr33mLabs",
   license: "MIT",
   main: "main/main-unified.js",
@@ -109,7 +109,7 @@ const electronPkg = {
   },
   build: {
     appId: "com.gameservum.dashboard",
-    productName: "Game Servum Dashboard",
+    productName: "Game-Servum Dashboard",
     copyright: "Copyright © 2026 xscr33mLabs",
     directories: { output: "release", buildResources: "build" },
     files: ["main/**/*", "assets/**/*"],
@@ -250,7 +250,7 @@ if (outputFile) {
 }
 console.log("║                                                              ");
 console.log("║  Mode: Dashboard only (connects to remote/local Agents)      ");
-console.log("║  Data stored in: Documents/Game Servum/                      ");
+console.log("║  Data stored in: Documents/Game-Servum/                      ");
 console.log("║                                                              ");
 console.log("║  GitHub Release Assets (flat):                               ");
 console.log("║    ├── Game-Servum-Dashboard-Setup-v{version}.exe            ");

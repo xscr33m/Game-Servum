@@ -13,6 +13,8 @@ import {
   FaWrench,
   FaSpinner,
   FaTerminal,
+  FaTrashCan,
+  FaXmark,
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +31,8 @@ import { useGameCapabilities } from "@/hooks/useGameCapabilities";
 import { AgentControlPanel } from "@/components/agent/AgentControlPanel";
 import { AppHeader } from "@/components/AppHeader";
 import { AgentStatusBanner } from "@/components/agent/AgentStatusBanner";
+import { DeleteServerDialog } from "@/components/server-details/dialogs/DeleteServerDialog";
+import { CancelInstallDialog } from "@/components/server-details/dialogs/CancelInstallDialog";
 import {
   toastSuccess,
   toastError,
@@ -43,8 +47,9 @@ const statusConfig = {
   running: { label: "Running", variant: "success" as const },
   stopping: { label: "Stopping", variant: "warning" as const },
   queued: { label: "Queued", variant: "secondary" as const },
-  installing: { label: "Installing", variant: "warning" as const },
+  installing: { label: "Installing", variant: "success" as const },
   updating: { label: "Updating", variant: "warning" as const },
+  deleting: { label: "Deleting", variant: "destructive" as const },
   error: { label: "Error", variant: "destructive" as const },
 };
 
@@ -59,9 +64,12 @@ export function ServerDetail() {
   const [actionLoading, setActionLoading] = useState(false);
   const [installProgress, setInstallProgress] = useState<string>("");
   const [terminalOutput, setTerminalOutput] = useState<string[]>([]);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
   const { capabilities } = useGameCapabilities(server?.gameId ?? "");
   const hasPlayers = capabilities?.playerTracking !== false;
   const terminalRef = useRef<HTMLDivElement>(null);
+  const hasFetchedInstallOutput = useRef(false);
 
   const { api, subscribe, isConnected, activeConnection } = useBackend();
 
@@ -84,12 +92,14 @@ export function ServerDetail() {
     [id, api],
   );
 
-  // Load server data (wait for connection)
+  // Load server data (wait for connection) — also refresh on tab switch
+  // so that changes made in one tab (e.g. Config → launch params) are
+  // reflected when navigating to another tab (e.g. Overview).
   useEffect(() => {
     if (id && isConnected) {
       loadServer();
     }
-  }, [id, loadServer, isConnected]);
+  }, [id, tab, loadServer, isConnected]);
 
   // Reload data when connection is (re-)established
   const prevConnected = useRef(isConnected);
@@ -103,6 +113,40 @@ export function ServerDetail() {
 
   // Redirect to dashboard when agent is switched on server detail page
   const initialAgentId = useRef(activeConnection?.id);
+
+  // Fetch buffered installation output when opening page during an active install
+  const serverStatus = server?.status;
+  const serverId = server?.id;
+  useEffect(() => {
+    if (
+      serverStatus === "installing" &&
+      serverId &&
+      !hasFetchedInstallOutput.current &&
+      isConnected
+    ) {
+      hasFetchedInstallOutput.current = true;
+      api.servers
+        .getInstallStatus(serverId)
+        .then((data) => {
+          if (data.installing) {
+            if (data.output.length > 0) {
+              setTerminalOutput(data.output);
+            }
+            if (data.message) {
+              setInstallProgress(data.message);
+            }
+          }
+        })
+        .catch(() => {
+          // Non-critical — live WS will still deliver updates
+        });
+    }
+    // Reset the flag when server stops installing so a future install can fetch again
+    if (serverStatus && serverStatus !== "installing") {
+      hasFetchedInstallOutput.current = false;
+    }
+  }, [serverStatus, serverId, isConnected, api.servers]);
+
   useEffect(() => {
     // Store initial agent ID on first mount
     if (initialAgentId.current === undefined && activeConnection?.id) {
@@ -200,9 +244,16 @@ export function ServerDetail() {
           loadServer();
         }
       }
+      if (message.type === "server:deleted") {
+        const payload = message.payload as { serverId: number };
+        if (payload.serverId === Number(id)) {
+          toastInfo("Server has been deleted");
+          navigate("/", { replace: true });
+        }
+      }
     });
     return unsubscribe;
-  }, [subscribe, id, loadServer]);
+  }, [subscribe, id, loadServer, navigate]);
 
   async function handleStart() {
     if (!server) return;
@@ -230,6 +281,30 @@ export function ServerDetail() {
       toastError((err as Error).message);
     } finally {
       setActionLoading(false);
+    }
+  }
+
+  async function confirmDeleteServer(serverToDelete: GameServer) {
+    try {
+      await api.servers.delete(serverToDelete.id, serverToDelete.name);
+      toastSuccess(`${serverToDelete.name} is being deleted...`);
+      await loadServer();
+    } catch (err) {
+      toastError((err as Error).message);
+      throw err;
+    }
+  }
+
+  async function confirmCancelInstall(serverToCancel: GameServer) {
+    try {
+      await api.servers.cancelInstall(serverToCancel.id);
+      toastSuccess(`Cancelling installation of ${serverToCancel.name}...`);
+      // server:status WS event updates to "deleting",
+      // server:deleted WS event will navigate to dashboard
+      await loadServer();
+    } catch (err) {
+      toastError((err as Error).message);
+      throw err;
     }
   }
 
@@ -265,7 +340,7 @@ export function ServerDetail() {
           right={<AgentControlPanel />}
         />
         <AgentStatusBanner />
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
           <div className="container mx-auto px-4 py-8">
             <div className="text-center text-destructive">
               {error || "Server not found"}
@@ -283,7 +358,8 @@ export function ServerDetail() {
     server.status === "installing" ||
     server.status === "updating" ||
     server.status === "starting" ||
-    server.status === "stopping";
+    server.status === "stopping" ||
+    server.status === "deleting";
 
   return (
     <div className="h-screen flex flex-col bg-background">
@@ -338,6 +414,29 @@ export function ServerDetail() {
             >
               <FaArrowsRotate className="h-4 w-4" />
             </Button>
+            {server.status === "installing" || server.status === "queued" ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                onClick={() => setShowCancelDialog(true)}
+                disabled={!isConnected}
+                title="Cancel Installation"
+              >
+                <FaXmark className="h-4 w-4" />
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                onClick={() => setShowDeleteDialog(true)}
+                disabled={isRunning || isBusy || !isConnected}
+                title="Delete Server"
+              >
+                <FaTrashCan className="h-4 w-4" />
+              </Button>
+            )}
           </>
         }
       />
@@ -345,7 +444,7 @@ export function ServerDetail() {
       <AgentStatusBanner />
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
         <div className="container mx-auto px-4 py-6">
           {server.status === "queued" ? (
             /* ── Queued View ── */
@@ -455,7 +554,7 @@ export function ServerDetail() {
               </TabsContent>
 
               <TabsContent value="config">
-                <ConfigTab server={server} />
+                <ConfigTab server={server} onRefresh={loadServer} />
               </TabsContent>
 
               <TabsContent value="mods">
@@ -479,6 +578,20 @@ export function ServerDetail() {
           )}
         </div>
       </main>
+
+      <DeleteServerDialog
+        server={server}
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        onConfirm={confirmDeleteServer}
+      />
+
+      <CancelInstallDialog
+        server={server}
+        open={showCancelDialog}
+        onOpenChange={setShowCancelDialog}
+        onConfirm={confirmCancelInstall}
+      />
     </div>
   );
 }

@@ -219,7 +219,7 @@ npm run clean                # Clear build caches and dist folders
 
 ### Electron Settings (`client/src/lib/electronSettings.ts`)
 
-- Persistent settings store that survives reinstalls — stores in `Documents/Game Servum/app-settings.json` (not Electron userData)
+- Persistent settings store that survives reinstalls — stores in `Documents/Game-Servum/app-settings.json` (not Electron userData)
 - Falls back to localStorage in browser mode
 - Used for: auto-update preferences, system monitoring toggle, UI preferences
 
@@ -246,10 +246,10 @@ npm run clean                # Clear build caches and dist folders
 
 The Agent runs as a native Windows Service via WinSW (v3.0.0-alpha.11):
 
-- **Service name**: `GameServumAgent`, display name "Game Servum Agent"
+- **Service name**: `GameServumAgent`, display name "Game-Servum Agent"
 - **Recovery**: auto-restart on failure (10s, 10s, 30s delays), reset after 1 hour
-- **Data directory**: Configurable during installation (default: `C:\ProgramData\Game Servum\`), stored as system env var `GAME_SERVUM_ROOT`. NSIS installer patches WinSW XML at install time replacing `{{LOGPATH}}` and `{{DATA_DIR}}` placeholders with actual paths (WinSW cannot expand env vars reliably on first install)
-- **Installer**: NSIS (`scripts/nsis/agent-installer.nsi`) — installs to `Program Files\Game Servum Agent\`
+- **Data directory**: Configurable during installation (default: `C:\ProgramData\Game-Servum\`), stored as system env var `GAME_SERVUM_ROOT`. NSIS installer patches WinSW XML at install time replacing `{{LOGPATH}}` and `{{DATA_DIR}}` placeholders with actual paths (WinSW cannot expand env vars reliably on first install)
+- **Installer**: NSIS (`scripts/nsis/agent-installer.nsi`) — installs to `Program Files\Game-Servum Agent\`
 - **Auto-start**: managed via `sc.exe` (AUTO_START/DEMAND_ONLY), exposed through REST API
 - **Self-updater**: `agentUpdater.ts` checks GitHub Releases API, downloads update ZIP, runs PowerShell script to stop service → extract → restart
 - **Graceful shutdown**: 30s stop timeout in WinSW config
@@ -260,7 +260,7 @@ The Agent runs as a native Windows Service via WinSW (v3.0.0-alpha.11):
 Dashboard-only Electron app (no agent code):
 
 - Single-instance lock, BrowserWindow + system tray
-- User data in `Documents/Game Servum` (Windows) or `~/.config/game-servum-dashboard/` (Linux)
+- User data in `Documents/Game-Servum` (Windows) or `~/.config/game-servum-dashboard/` (Linux)
 - IPC handlers: credential storage, app settings, logger, local logs, auto-updater
 - Uses `electron-updater` for Dashboard self-updates (GitHub Releases)
 - `app-settings.json` stores `auto_update_enabled`, `minimize_to_tray` preferences
@@ -296,14 +296,14 @@ Dashboard-only Electron app (no agent code):
 
 **Platform-specific paths:**
 
-- Windows: `Documents/Game Servum/`
+- Windows: `Documents/Game-Servum/`
 - Linux: `~/.config/game-servum-dashboard/` (Dashboard-only)
-- macOS: `~/Library/Application Support/Game Servum/`
+- macOS: `~/Library/Application Support/Game-Servum/`
 
 **Agent NSIS installer features:**
 
-- Installs to `C:\Program Files\Game Servum Agent\`
-- Data stored in configurable directory (default: `C:\ProgramData\Game Servum\`, preserved on uninstall)
+- Installs to `C:\Program Files\Game-Servum Agent\`
+- Data stored in configurable directory (default: `C:\ProgramData\Game-Servum\`, preserved on uninstall)
 - Registers and starts `GameServumAgent` Windows Service
 - Adds Windows Firewall rule for TCP port 3001
 - Supports upgrade (stops service → updates files → restarts)

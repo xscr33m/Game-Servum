@@ -1,5 +1,5 @@
 /**
- * Game Servum — Dashboard Electron Main Process
+ * Game-Servum — Dashboard Electron Main Process
  *
  * Standalone Dashboard SPA with credential storage, tray, and auto-updater.
  * The Agent runs as a native Windows Service — no agent code here.
@@ -8,9 +8,9 @@
  *   resources/runtime/client/         — Vite build output (loaded by BrowserWindow)
  *
  * Writable data:
- *   Windows:  Documents/Game Servum/
+ *   Windows:  Documents/Game-Servum/
  *   Linux:    ~/.config/game-servum-dashboard/
- *   macOS:    ~/Library/Application Support/Game Servum/
+ *   macOS:    ~/Library/Application Support/Game-Servum/
  */
 
 // ─── App Imports ────────────────────────────────────────────────
@@ -51,19 +51,20 @@ const DASHBOARD_ICON = isDev
 
 // App home: writable data directory
 // Platform-specific paths:
-//   Windows: Documents/Game Servum
+//   Windows: Documents/Game-Servum
 //   Linux:   ~/.config/game-servum-dashboard
-//   macOS:   ~/Library/Application Support/Game Servum
+//   macOS:   ~/Library/Application Support/Game-Servum
+
 const APP_HOME = isDev
   ? path.resolve(__dirname, "..", "..")
   : process.platform === "win32"
-    ? path.join(app.getPath("documents"), "Game Servum")
+    ? path.join(app.getPath("documents"), "Game-Servum")
     : process.platform === "darwin"
       ? path.join(
           app.getPath("home"),
           "Library",
           "Application Support",
-          "Game Servum",
+          "Game-Servum",
         )
       : path.join(app.getPath("home"), ".config", "game-servum-dashboard");
 
@@ -77,7 +78,7 @@ const logger = new SimpleLogger(MODE, LOGS_DIR, {
   writeToConsole: isDev,
 });
 
-logger.info(`[${MODE.toUpperCase()}] Game Servum starting...`, {
+logger.info(`[${MODE.toUpperCase()}] Game-Servum starting...`, {
   mode: MODE,
   isDev,
   appHome: APP_HOME,
@@ -107,7 +108,7 @@ function ensureDirectories() {
   }
 }
 
-// Store dashboard connections in Documents/Game Servum/data/ so they survive reinstalls.
+// Store dashboard connections in Documents/Game-Servum/data/ so they survive reinstalls.
 // (The NSIS uninstaller deletes %APPDATA% userData but preserves Documents.)
 const CREDENTIALS_DIR = path.join(APP_HOME, "data");
 const CONNECTIONS_FILE = path.join(
@@ -168,7 +169,7 @@ function dashboard_setupIPC() {
   logger.info("[Connections] Initialization complete");
 
   // ── Dashboard Connection Storage (Simple Plaintext JSON) ──
-  // Stored in Documents/Game Servum/data/dashboard-connections.json
+  // Stored in Documents/Game-Servum/data/dashboard-connections.json
   // No encryption, no database API - simple and reliable!
 
   ipcMain.handle("credentials:store", async (_event, data) => {
@@ -515,7 +516,7 @@ function dashboard_createWindow() {
     height: 900,
     minWidth: 1024,
     minHeight: 700,
-    title: "Game Servum Dashboard",
+    title: "Game-Servum Dashboard",
     icon: DASHBOARD_ICON,
     backgroundColor: "#0a0a0a",
     autoHideMenuBar: true,
@@ -598,7 +599,7 @@ function dashboard_createTray() {
     .createFromPath(DASHBOARD_ICON)
     .resize({ width: 16, height: 16 });
   tray = new Tray(icon);
-  tray.setToolTip("Game Servum Dashboard");
+  tray.setToolTip("Game-Servum Dashboard");
 
   const contextMenu = Menu.buildFromTemplate([
     {

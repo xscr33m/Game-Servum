@@ -354,7 +354,7 @@ export async function installUpdate(): Promise<void> {
     .join(STAGING_DIR, "update-log.txt")
     .replace(/\\/g, "\\\\");
   const psScript = `
-# Game Servum Agent Update Script
+# Game-Servum Agent Update Script
 # Auto-generated — do not edit
 $ErrorActionPreference = "Stop"
 $ServiceName = "${SERVICE_NAME}"

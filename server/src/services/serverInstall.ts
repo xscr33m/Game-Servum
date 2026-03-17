@@ -8,23 +8,38 @@
  * - Post-install hooks for initial configuration
  */
 
-import { spawn, type ChildProcess } from "child_process";
+import { spawn, exec, type ChildProcess } from "child_process";
 import path from "path";
 import fs from "fs";
 import { getConfig, getSteamCMDExecutable } from "./config.js";
 import { broadcast, logger } from "../index.js";
-import { updateServerStatus, getSteamConfig } from "../db/index.js";
+import {
+  updateServerStatus,
+  getSteamConfig,
+  getServerById,
+} from "../db/index.js";
 import {
   getGameDefinition,
   getGameDefinitionByAppId,
   runPostInstall,
 } from "../games/index.js";
+import { performBackgroundDeletion } from "./serverDelete.js";
 
-// Track active installations
-const activeInstallations: Map<
-  number,
-  { process: ChildProcess; gameId: string }
-> = new Map();
+// Track active installations with buffered output & progress
+interface ActiveInstallation {
+  process: ChildProcess;
+  gameId: string;
+  outputLines: string[];
+  percent: number;
+  progressMessage: string;
+  progressStatus: string;
+}
+
+const activeInstallations: Map<number, ActiveInstallation> = new Map();
+
+// Server IDs whose installation was cancelled via cancelAndCleanupInstallation().
+// The proc.on("close") handler checks this to skip its normal logic.
+const cancelledServerIds: Set<number> = new Set();
 
 // Installation queue — ensures only one SteamCMD install runs at a time
 const installQueue: InstallOptions[] = [];
@@ -118,9 +133,17 @@ export async function installServer(
       stdio: ["pipe", "pipe", "pipe"],
     });
 
-    activeInstallations.set(serverId, { process: proc, gameId });
+    activeInstallations.set(serverId, {
+      process: proc,
+      gameId,
+      outputLines: [],
+      percent: 0,
+      progressMessage: `Starting installation of ${serverName}...`,
+      progressStatus: "starting",
+    });
 
     let lastPercent = 0;
+    let lastPhase = "";
 
     // ── Log-file polling (source of truth for output) ──
     const config = getConfig();
@@ -178,23 +201,57 @@ export async function installServer(
           logger.debug(`[Install ${serverId}]:`, line);
           broadcast("steamcmd:output", { message: line, serverId });
 
+          // Buffer output line for REST endpoint
+          const entry = activeInstallations.get(serverId);
+          if (entry) {
+            entry.outputLines.push(line);
+          }
+
           // Parse progress: "Update state (0x61) downloading, progress: 45.23 (… / …)"
           const progressMatch = line.match(
-            /progress:\s*([\d.]+)\s*\((\d+)\s*\/\s*(\d+)\)/i,
+            /Update state\s+\(0x[0-9a-fA-F]+\)\s+(.+?),\s*progress:\s*([\d.]+)\s*\(/i,
           );
           if (progressMatch) {
-            const percent = Math.round(parseFloat(progressMatch[1]));
-            if (percent !== lastPercent) {
-              lastPercent = percent;
+            const phaseName = progressMatch[1].trim().toLowerCase();
+            const percent = Math.round(parseFloat(progressMatch[2]));
 
-              // Determine phase from update state
-              const isVerifying =
-                line.toLowerCase().includes("verifying") ||
-                line.includes("0x81");
-              const status = isVerifying ? "validating" : "downloading";
-              const label = isVerifying
-                ? `Verifying... ${percent}%`
-                : `Downloading... ${percent}%`;
+            // Map SteamCMD phase names to display labels and status keys
+            let status: string;
+            let phaseLabel: string;
+            if (phaseName.includes("preallocat")) {
+              status = "preallocating";
+              phaseLabel = "Preallocating";
+            } else if (phaseName.includes("reconfigur")) {
+              status = "reconfiguring";
+              phaseLabel = "Reconfiguring";
+            } else if (phaseName.includes("download")) {
+              status = "downloading";
+              phaseLabel = "Downloading";
+            } else if (phaseName.includes("verif")) {
+              status = "verifying";
+              phaseLabel = "Verifying";
+            } else if (phaseName.includes("commit")) {
+              status = "committing";
+              phaseLabel = "Committing";
+            } else {
+              status = "downloading";
+              phaseLabel =
+                phaseName.charAt(0).toUpperCase() + phaseName.slice(1);
+            }
+
+            // Broadcast when phase changes or percent changes
+            if (status !== lastPhase || percent !== lastPercent) {
+              lastPhase = status;
+              lastPercent = percent;
+              const label = `${phaseLabel}... ${percent}%`;
+
+              // Update buffered progress state
+              const progressEntry = activeInstallations.get(serverId);
+              if (progressEntry) {
+                progressEntry.percent = percent;
+                progressEntry.progressMessage = label;
+                progressEntry.progressStatus = status;
+              }
 
               broadcast("install:progress", {
                 serverId,
@@ -208,6 +265,13 @@ export async function installServer(
 
           // Final success line
           if (line.toLowerCase().includes("success! app")) {
+            const successEntry = activeInstallations.get(serverId);
+            if (successEntry) {
+              successEntry.percent = 100;
+              successEntry.progressMessage = "Download complete!";
+              successEntry.progressStatus = "downloading";
+            }
+
             broadcast("install:progress", {
               serverId,
               gameId,
@@ -248,8 +312,26 @@ export async function installServer(
       readNewLogContent();
       cleanupPoll();
 
+      // If this installation was cancelled, skip all post-process logic —
+      // cancelAndCleanupInstallation() handles cleanup and DB deletion.
+      if (cancelledServerIds.has(serverId)) {
+        cancelledServerIds.delete(serverId);
+        resolve({
+          success: false,
+          message: "Installation cancelled",
+        });
+        return;
+      }
+
       if (code === 0) {
         // Installation successful, run post-install hook
+        const postEntry = activeInstallations.get(serverId);
+        if (postEntry) {
+          postEntry.percent = 100;
+          postEntry.progressMessage = "Running post-install configuration...";
+          postEntry.progressStatus = "post-install";
+        }
+
         broadcast("install:progress", {
           serverId,
           gameId,
@@ -346,6 +428,125 @@ export function cancelInstallation(serverId: number): boolean {
 }
 
 /**
+ * Cancel an installation (or dequeue) and fully clean up the server.
+ *
+ * The SteamCMD process is killed synchronously so the download stops
+ * immediately.  The heavy cleanup (waiting for process exit, deleting
+ * files, firewall rules, DB entry) runs in the background so the
+ * caller (route handler / Express) is never blocked.
+ *
+ * Returns true if a cancellation was initiated, false if nothing to cancel.
+ */
+export function cancelAndCleanupInstallation(serverId: number): boolean {
+  const server = getServerById(serverId);
+  if (!server) return false;
+
+  const isActive = activeInstallations.has(serverId);
+  const isInQueue = isQueued(serverId);
+
+  if (!isActive && !isInQueue) return false;
+
+  // Set status to "deleting" immediately — the card shows "Deleting..." while
+  // the background cleanup runs, identical to the normal delete flow.
+  updateServerStatus(serverId, "deleting", null);
+  broadcast("server:status", { serverId, status: "deleting" });
+
+  if (isActive) {
+    const installation = activeInstallations.get(serverId)!;
+
+    // Mark as cancelled so the proc.on("close") handler skips its logic
+    cancelledServerIds.add(serverId);
+
+    // Prepare a promise that resolves when the process actually exits
+    const processExited = new Promise<void>((resolve) => {
+      installation.process.on("close", () => resolve());
+      installation.process.on("error", () => resolve());
+    });
+
+    // On Windows, use taskkill /T /F to kill the entire process tree.
+    // A bare process.kill() only kills the parent — SteamCMD child processes
+    // keep running and hold file locks on the download directory.
+    const pid = installation.process.pid;
+    if (process.platform === "win32" && pid) {
+      exec(`taskkill /PID ${pid} /T /F`, (err) => {
+        if (err) {
+          logger.warn(
+            `[Install] taskkill failed, falling back to process.kill: ${err.message}`,
+          );
+          installation.process.kill();
+        }
+      });
+    } else {
+      installation.process.kill();
+    }
+    activeInstallations.delete(serverId);
+
+    broadcast("install:progress", {
+      serverId,
+      gameId: installation.gameId,
+      status: "cancelled",
+      message: "Installation cancelled",
+      percent: 0,
+    });
+
+    // Background: wait for process exit, then full cleanup
+    processExited
+      .then(() => {
+        logger.info(
+          `[Install] SteamCMD exited for cancelled server ${server.name} (ID: ${serverId}), cleaning up...`,
+        );
+
+        // Notify clients BEFORE cleanup — server:deleted (inside
+        // performBackgroundDeletion) may trigger navigation away from
+        // the page, so the toast must be sent first.
+        broadcast("install:cancelled", {
+          serverId,
+          serverName: server.name,
+        });
+
+        return performBackgroundDeletion(
+          serverId,
+          server.name,
+          server.gameId,
+          server.port,
+          server.installPath,
+        );
+      })
+      .catch((err) => {
+        logger.error(
+          `[Install] Cleanup failed for cancelled server ${serverId}: ${err}`,
+        );
+      });
+  } else {
+    // Queued — no running process, just clean up directly in background
+    removeFromQueue(serverId);
+
+    broadcast("install:cancelled", {
+      serverId,
+      serverName: server.name,
+    });
+
+    performBackgroundDeletion(
+      serverId,
+      server.name,
+      server.gameId,
+      server.port,
+      server.installPath,
+    ).catch((err) => {
+      logger.error(
+        `[Install] Cleanup failed for dequeued server ${serverId}: ${err}`,
+      );
+    });
+  }
+
+  logger.info(
+    `[Install] Cancellation initiated for server ${server.name} (ID: ${serverId})`,
+  );
+
+  return true;
+}
+
+/**
  * Check if a server is currently being installed
  */
 export function isInstalling(serverId: number): boolean {
@@ -364,6 +565,30 @@ export function getInstallationStatus(serverId: number): {
     return { installing: true, gameId: installation.gameId };
   }
   return { installing: false };
+}
+
+/**
+ * Get detailed installation progress for a server (for REST endpoint).
+ * Returns buffered output lines + current progress percentage/status.
+ */
+export function getInstallationProgress(serverId: number): {
+  installing: boolean;
+  percent: number;
+  status: string;
+  message: string;
+  output: string[];
+} {
+  const installation = activeInstallations.get(serverId);
+  if (installation) {
+    return {
+      installing: true,
+      percent: installation.percent,
+      status: installation.progressStatus,
+      message: installation.progressMessage,
+      output: installation.outputLines,
+    };
+  }
+  return { installing: false, percent: 0, status: "", message: "", output: [] };
 }
 
 /**

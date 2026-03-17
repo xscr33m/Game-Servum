@@ -49,7 +49,7 @@ const WINSW_VERSION = "3.0.0-alpha.11";
 const WINSW_URL = `https://github.com/winsw/winsw/releases/download/v${WINSW_VERSION}/WinSW-x64.exe`;
 
 console.log("╔════════════════════════════════════════════");
-console.log(`║  Game Servum Agent Builder (Windows)       `);
+console.log(`║  Game-Servum Agent Builder (Windows)       `);
 console.log(`║  Version: ${APP_VERSION.padEnd(32)}`);
 console.log(`║  Mode: Windows Service (WinSW + NSIS)      `);
 console.log("╚════════════════════════════════════════════");
@@ -141,7 +141,7 @@ cpSync(
 
 // 3d. .env.example
 const envExample = `# Game-Servum Agent Configuration
-# Copy to %PROGRAMDATA%\\Game Servum\\.env and adjust values as needed.
+# Copy to %PROGRAMDATA%\\Game-Servum\\.env and adjust values as needed.
 
 # Network
 PORT=3001
@@ -274,7 +274,7 @@ console.log(
   "\u2551  Mode: Windows Service (WinSW)                              ",
 );
 console.log(
-  "\u2551  Data stored in: C:\\ProgramData\\Game Servum\\                ",
+  "\u2551  Data stored in: C:\\ProgramData\\Game-Servum\\                ",
 );
 console.log(
   "\u2551  Port: 3001 (configurable via .env)                          ",
@@ -290,7 +290,7 @@ console.log(`║    └── ${updateZipName.padEnd(50)}`);
 console.log("║                                                              ");
 console.log("║  Installer will:                                             ");
 console.log(
-  "║    • Install to C:\\Program Files\\Game Servum Agent\\          ",
+  "║    • Install to C:\\Program Files\\Game-Servum Agent\\          ",
 );
 console.log("║    • Register & start Windows Service                        ");
 console.log("║    • Add firewall rule for port 3001                         ");

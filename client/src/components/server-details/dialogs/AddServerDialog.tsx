@@ -25,6 +25,7 @@ import { SteamAccountDialog } from "@/components/agent/SteamAccountDialog";
 import { publicAsset } from "@/lib/assets";
 import { getGameLogo } from "@/components/server-details/games/registry";
 import { toastSuccess } from "@/lib/toast";
+import { STEAM_RESERVED_PORT_RANGES } from "@game-servum/shared";
 import type { GameDefinition, GameServer, SteamCMDStatus } from "@/types";
 
 type WizardStep = "select-game" | "steam-login" | "configure";
@@ -135,11 +136,20 @@ export function AddServerDialog({
     for (const s of usedPorts) {
       const gameDef = games.find((g) => g.id === s.gameId);
       if (gameDef) {
-        for (let i = 0; i < gameDef.portCount; i++) {
-          occupied.add(s.port + i);
-        }
-        if (gameDef.queryPortOffset != null) {
-          occupied.add(s.port + gameDef.queryPortOffset);
+        // Use firewallRules as source of truth for port enumeration
+        if (gameDef.firewallRules && gameDef.firewallRules.length > 0) {
+          for (const rule of gameDef.firewallRules) {
+            for (let i = 0; i < rule.portCount; i++) {
+              occupied.add(s.port + rule.portOffset + i);
+            }
+          }
+        } else {
+          for (let i = 0; i < gameDef.portCount; i++) {
+            occupied.add(s.port + i);
+          }
+          if (gameDef.queryPortOffset != null) {
+            occupied.add(s.port + gameDef.queryPortOffset);
+          }
         }
       } else {
         occupied.add(s.port);
@@ -147,6 +157,26 @@ export function AddServerDialog({
       }
     }
     return occupied;
+  }
+
+  /** Compute all ports a server would use based on firewallRules */
+  function getPortsForGame(basePort: number, game: GameDefinition): number[] {
+    const ports = new Set<number>();
+    if (game.firewallRules && game.firewallRules.length > 0) {
+      for (const rule of game.firewallRules) {
+        for (let i = 0; i < rule.portCount; i++) {
+          ports.add(basePort + rule.portOffset + i);
+        }
+      }
+    } else {
+      for (let i = 0; i < game.portCount; i++) {
+        ports.add(basePort + i);
+      }
+      if (game.queryPortOffset != null) {
+        ports.add(basePort + game.queryPortOffset);
+      }
+    }
+    return Array.from(ports).sort((a, b) => a - b);
   }
 
   function calculatePorts(
@@ -159,14 +189,8 @@ export function AddServerDialog({
       return;
     }
 
-    const ports: number[] = [];
-    for (let i = 0; i < game.portCount; i++) {
-      ports.push(basePort + i);
-    }
-    if (game.queryPortOffset != null) {
-      ports.push(basePort + game.queryPortOffset);
-    }
-    setPortsUsed(ports.sort((a, b) => a - b));
+    const ports = getPortsForGame(basePort, game);
+    setPortsUsed(ports);
 
     const occupied = buildOccupiedPorts();
     const conflicts: string[] = [];
@@ -175,16 +199,17 @@ export function AddServerDialog({
         const conflictServer = usedPorts.find((s) => {
           const sd = games.find((g) => g.id === s.gameId);
           if (sd) {
-            for (let j = 0; j < sd.portCount; j++) {
-              if (s.port + j === p) return true;
-            }
-            if (sd.queryPortOffset != null && s.port + sd.queryPortOffset === p)
-              return true;
+            return getPortsForGame(s.port, sd).includes(p);
           }
           return s.port === p || s.queryPort === p;
         });
         conflicts.push(
           `Port ${p} is already used by "${conflictServer?.name || "unknown"}"`,
+        );
+      }
+      if (STEAM_RESERVED_PORT_RANGES.some(([lo, hi]) => p >= lo && p <= hi)) {
+        conflicts.push(
+          `Port ${p} conflicts with Steam internal ports (27030–27050)`,
         );
       }
     }
@@ -293,7 +318,7 @@ export function AddServerDialog({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
-          className="sm:max-w-[600px]"
+          className="sm:max-w-xl"
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <DialogHeader>
@@ -303,25 +328,21 @@ export function AddServerDialog({
             </DialogDescription>
           </DialogHeader>
 
-          {/* Step indicator */}
+          {/* Step indicator — always 2 steps: Select Game → Configure */}
           <div className="flex items-center gap-2 px-1">
-            {(["select-game", "steam-login", "configure"] as const)
-              .filter((s) => s !== "steam-login" || selectedGame?.requiresLogin)
-              .map((s, i, arr) => {
-                const currentIndex = arr.indexOf(step);
-                const isActive = s === step;
-                const isDone = currentIndex >= 0 && i < currentIndex;
-                return (
-                  <div key={s} className="flex items-center gap-2 flex-1">
-                    <div
-                      className={`h-1.5 flex-1 rounded-full transition-colors ${
-                        isActive || isDone ? "bg-primary" : "bg-muted"
-                      }`}
-                    />
-                    {i < arr.length - 1 && <div className="w-1" />}
-                  </div>
-                );
-              })}
+            {[0, 1].map((i) => {
+              const isFilled = i === 0 || (i === 1 && step === "configure");
+              return (
+                <div key={i} className="flex items-center gap-2 flex-1">
+                  <div
+                    className={`h-1.5 flex-1 rounded-full transition-colors ${
+                      isFilled ? "bg-primary" : "bg-muted"
+                    }`}
+                  />
+                  {i < 1 && <div className="w-1" />}
+                </div>
+              );
+            })}
           </div>
 
           <div className="py-2">
@@ -349,9 +370,9 @@ export function AddServerDialog({
                           key={game.id}
                           type="button"
                           onClick={() => handleGameSelect(game)}
-                          className={`group relative rounded-xl border-2 p-4 text-left transition-all hover:border-primary/50 hover:shadow-md ${
+                          className={`group relative rounded-xl border-2 p-4 text-left transition-all hover:cursor-pointer hover:border-ring/50 hover:shadow-md ${
                             selectedGame?.id === game.id
-                              ? "border-primary bg-primary/5"
+                              ? "border-ring bg-ring/5"
                               : "border-border bg-card"
                           }`}
                         >
@@ -515,15 +536,35 @@ export function AddServerDialog({
                     }}
                     disabled={loading}
                   />
-                  {portsUsed.length > 0 && (
+                  {portsUsed.length > 0 && selectedGame && (
                     <p className="text-xs text-muted-foreground">
-                      Ports used:{" "}
-                      {portsUsed.map((p, i) => (
-                        <span key={p}>
-                          {i > 0 && ", "}
-                          <span className="font-mono">{p}</span>
-                        </span>
-                      ))}
+                      {selectedGame.firewallRules &&
+                      selectedGame.firewallRules.length > 0
+                        ? selectedGame.firewallRules.map((rule, i) => {
+                            const start =
+                              (port || selectedGame.defaultPort) +
+                              rule.portOffset;
+                            const end = start + rule.portCount - 1;
+                            const portRange =
+                              start === end ? String(start) : `${start}–${end}`;
+                            return (
+                              <span key={i}>
+                                {i > 0 && ", "}
+                                <span className="font-mono">
+                                  {portRange}
+                                </span>{" "}
+                                <span className="text-muted-foreground/70">
+                                  {rule.protocol} ({rule.description})
+                                </span>
+                              </span>
+                            );
+                          })
+                        : portsUsed.map((p, i) => (
+                            <span key={p}>
+                              {i > 0 && ", "}
+                              <span className="font-mono">{p}</span>
+                            </span>
+                          ))}
                     </p>
                   )}
                   {portConflict && (
@@ -536,9 +577,13 @@ export function AddServerDialog({
             )}
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0">
             {step === "select-game" ? (
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
+              <Button
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                className="w-full sm:w-auto"
+              >
                 Cancel
               </Button>
             ) : (
@@ -547,17 +592,24 @@ export function AddServerDialog({
                   variant="outline"
                   onClick={handleBack}
                   disabled={loading}
+                  className="w-full sm:w-auto"
                 >
                   <FaArrowLeft className="h-3.5 w-3.5 mr-1.5" />
                   Back
                 </Button>
                 {step === "steam-login" && isLoggedIn && (
-                  <Button onClick={() => setStep("configure")}>Continue</Button>
+                  <Button
+                    onClick={() => setStep("configure")}
+                    className="w-full sm:w-auto"
+                  >
+                    Continue
+                  </Button>
                 )}
                 {step === "configure" && (
                   <Button
                     onClick={handleCreate}
                     disabled={!canCreate || loading}
+                    className="w-full sm:w-auto"
                   >
                     {loading ? (
                       <>

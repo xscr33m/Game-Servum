@@ -14,6 +14,16 @@ export interface ConfigEditorProps {
   originalContent: string;
   onContentChange: (content: string) => void;
   fileName: string;
+  /** When true, show only initial setup fields (pre-first-start) */
+  initialMode?: boolean;
+  /** Server ID — needed for initial mode and map selection API calls */
+  serverId?: number;
+  /** Current launch parameters — needed for map selection */
+  launchParams?: string;
+  /** Callback when launch params change (e.g. map selection) */
+  onLaunchParamsChange?: () => void;
+  /** Server name — used as default for SessionName in initial mode */
+  serverName?: string;
 }
 
 /** Frontend game plugin — provides UI components for a specific game */

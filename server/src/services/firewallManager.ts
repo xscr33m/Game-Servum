@@ -5,8 +5,8 @@
  * `netsh advfirewall firewall` commands. All operations are no-ops on
  * non-Windows platforms (dev environments).
  *
- * Rule naming convention: "Game Servum - {ServerName} ({Description})"
- * Executable rule: "Game Servum - {ServerName} (Program)"
+ * Rule naming convention: "Game-Servum - {ServerName} ({Description})"
+ * Executable rule: "Game-Servum - {ServerName} (Program)"
  */
 
 import { execFile } from "child_process";
@@ -20,7 +20,7 @@ import type {
   FirewallResult,
 } from "@game-servum/shared";
 
-const RULE_PREFIX = "Game Servum";
+const RULE_PREFIX = "Game-Servum";
 
 interface ServerInfo {
   name: string;

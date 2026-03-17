@@ -20,7 +20,7 @@
    *    inputs, and inactive areas.
    *  - Borders are just bright enough to define edges without being harsh.
    *  - Near-neutral grays (minimal saturation) keep the UI clean while
-   *    green accents (ring, accent) tie into the Game Servum branding.
+   *    green accents (ring, accent) tie into the Game-Servum branding.
    */
 
   /* Page background — near-black neutral */
@@ -115,10 +115,10 @@
     scroll-behavior: smooth;
   }
 
-  /* Scrollbar styling — matches the slate-blue theme */
+  /* Scrollbar styling — neutral gray to match theme */
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
   }
 
   ::-webkit-scrollbar-track {
@@ -126,18 +126,18 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: hsl(218 14% 22%);
-    border-radius: 4px;
+    background: hsl(0 0% 24%);
+    border-radius: 9999px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: hsl(218 14% 30%);
+    background: hsl(0 0% 32%);
   }
 
   /* Firefox scrollbar */
   * {
     scrollbar-width: thin;
-    scrollbar-color: hsl(218 14% 22%) transparent;
+    scrollbar-color: hsl(0 0% 24%) transparent;
   }
 
   /* Consistent focus ring */

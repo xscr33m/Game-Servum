@@ -29,10 +29,7 @@ export interface GameDefinition {
   workshopAppId?: number;
   executable: string;
   defaultPort: number;
-  portCount: number;
   portStride?: number;
-  queryPort?: number;
-  queryPortOffset?: number;
   requiresLogin: boolean;
   defaultLaunchParams: string;
   description: string;
@@ -41,7 +38,6 @@ export interface GameDefinition {
   capabilities: GameCapabilities;
   broadcastCommand?: string;
   playerListCommand?: string;
-  rconPortOffset?: number;
   /** Regex pattern matched against server log output to detect startup completion.
    *  When matched, RCON connection is triggered. If not set, uses a fixed delay. */
   startupCompletePattern?: string;
@@ -309,4 +305,17 @@ export interface GameAdapter {
    * E.g. ARK writes ActiveMods= into GameUserSettings.ini.
    */
   updateActiveModsInConfig?(serverInstallPath: string, mods: ServerMod[]): void;
+
+  /**
+   * Check whether the game has generated its config files.
+   * Used by games like ARK where the server creates configs on first start.
+   * Returns true if config files exist and are non-trivial.
+   */
+  isConfigGenerated?(server: GameServer): boolean;
+
+  /**
+   * Write initial settings (from launch params) into game-generated config files.
+   * Called after the first successful server start once configs exist.
+   */
+  writeInitialSettingsToConfig?(server: GameServer): void;
 }

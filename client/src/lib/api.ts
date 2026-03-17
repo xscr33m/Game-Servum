@@ -185,6 +185,13 @@ export interface ServersApiClient {
   ) => Promise<{ sizeBytes: number; sizeFormatted: string }>;
   openFolder: (id: number) => Promise<{ success: boolean; message: string }>;
   cancelInstall: (id: number) => Promise<{ success: boolean; message: string }>;
+  getInstallStatus: (id: number) => Promise<{
+    installing: boolean;
+    percent: number;
+    status: string;
+    message: string;
+    output: string[];
+  }>;
   getFirewallStatus: (id: number) => Promise<import("@/types").FirewallStatus>;
   addFirewallRules: (id: number) => Promise<import("@/types").FirewallResult>;
   removeFirewallRules: (
@@ -203,6 +210,21 @@ export interface ServersApiClient {
     content: string;
     configFiles?: string[];
   }>;
+  getConfigStatus: (id: number) => Promise<{
+    configGenerated: boolean;
+    configFiles: string[];
+    existingFiles: string[];
+  }>;
+  saveInitialSettings: (
+    id: number,
+    settings: {
+      sessionName?: string;
+      adminPassword?: string;
+      serverPassword?: string;
+      maxPlayers?: number;
+      map?: string;
+    },
+  ) => Promise<{ success: boolean; message: string }>;
   saveConfig: (
     id: number,
     content: string,
@@ -679,6 +701,14 @@ function createServersApi(fetchApi: FetchApiFn): ServersApiClient {
           method: "POST",
         },
       ),
+    getInstallStatus: (id: number) =>
+      fetchApi<{
+        installing: boolean;
+        percent: number;
+        status: string;
+        message: string;
+        output: string[];
+      }>(`/servers/${id}/install-status`),
     getFirewallStatus: (id: number) =>
       fetchApi<import("@/types").FirewallStatus>(`/servers/${id}/firewall`),
     addFirewallRules: (id: number) =>
@@ -702,6 +732,29 @@ function createServersApi(fetchApi: FetchApiFn): ServersApiClient {
         configFiles?: string[];
       }>(
         `/servers/${id}/config${file ? `?file=${encodeURIComponent(file)}` : ""}`,
+      ),
+    getConfigStatus: (id: number) =>
+      fetchApi<{
+        configGenerated: boolean;
+        configFiles: string[];
+        existingFiles: string[];
+      }>(`/servers/${id}/config-status`),
+    saveInitialSettings: (
+      id: number,
+      settings: {
+        sessionName?: string;
+        adminPassword?: string;
+        serverPassword?: string;
+        maxPlayers?: number;
+        map?: string;
+      },
+    ) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${id}/initial-settings`,
+        {
+          method: "PUT",
+          body: JSON.stringify(settings),
+        },
       ),
     saveConfig: (id: number, content: string, file?: string) =>
       fetchApi<{ success: boolean; message: string }>(

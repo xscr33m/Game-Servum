@@ -44,12 +44,18 @@ import {
   getAllGameDefinitions,
   getGameDefinition,
   getGameAdapter,
+  getAllPortsFromRules,
+  getQueryPortOffset,
+  getConsecutivePortCount,
 } from "../games/index.js";
+import { STEAM_RESERVED_PORT_RANGES } from "@game-servum/shared";
 import { readGameFile } from "../games/encoding.js";
 import {
   installServer,
   cancelInstallation,
+  cancelAndCleanupInstallation,
   isInstalling,
+  getInstallationProgress,
   queueInstallation,
   isQueued,
   removeFromQueue,
@@ -59,6 +65,7 @@ import {
   stopServer,
   isServerRunning,
   checkServerRequirements,
+  isFirstStartInProgress,
 } from "../services/serverProcess.js";
 import { startSchedule, clearSchedule } from "../services/scheduler.js";
 import { reloadMessageBroadcaster } from "../services/messageBroadcaster.js";
@@ -67,6 +74,7 @@ import {
   triggerUpdateCheck,
   startUpdateChecker,
 } from "../services/updateChecker.js";
+import { performBackgroundDeletion } from "../services/serverDelete.js";
 import {
   parseWorkshopId,
   getWorkshopModInfo,
@@ -111,9 +119,9 @@ router.get("/games", (_req: Request, res: Response) => {
     appId: game.appId,
     workshopAppId: game.workshopAppId,
     defaultPort: game.defaultPort,
-    portCount: game.portCount,
-    queryPort: game.queryPort,
-    queryPortOffset: game.queryPortOffset,
+    portCount: getConsecutivePortCount(game),
+    portStride: game.portStride,
+    queryPortOffset: getQueryPortOffset(game),
     requiresLogin: game.requiresLogin,
     description: game.description,
     defaultLaunchParams: game.defaultLaunchParams,
@@ -149,56 +157,63 @@ router.get("/suggest-ports", (req: Request, res: Response) => {
     return res.status(400).json({ error: `Unknown game: ${gameId}` });
   }
 
-  // Collect ALL ports in use across all servers (considering their port ranges)
+  // Collect ALL ports in use across all servers (using firewallRules as source of truth)
   const servers = getUsedPorts();
   const allUsedPorts = new Set<number>();
   for (const s of servers) {
-    const sDef = getGameDefinition(s.gameId);
-    if (sDef) {
-      for (let i = 0; i < sDef.portCount; i++) {
-        allUsedPorts.add(s.port + i);
-      }
-      if (sDef.queryPortOffset != null) {
-        allUsedPorts.add(s.port + sDef.queryPortOffset);
-      }
-    } else {
-      allUsedPorts.add(s.port);
-      if (s.queryPort) allUsedPorts.add(s.queryPort);
+    for (const p of getAllPortsFromRules(s.port, s.gameId)) {
+      allUsedPorts.add(p);
     }
   }
 
-  // Find next available base port (stride by portCount for clean ranges)
+  // Find next available base port (stride for clean aligned ranges)
   let candidate = gameDef.defaultPort;
   const maxPort = 65535;
 
   while (candidate < maxPort) {
-    const portsNeeded: number[] = [];
-    for (let i = 0; i < gameDef.portCount; i++) {
-      portsNeeded.push(candidate + i);
-    }
-    if (gameDef.queryPortOffset != null) {
-      portsNeeded.push(candidate + gameDef.queryPortOffset);
-    }
+    const portsNeeded = getAllPortsFromRules(candidate, gameId);
 
-    if (portsNeeded.every((p) => !allUsedPorts.has(p) && p <= maxPort)) {
+    // Check: all ports available, within range, and not in Steam reserved ranges
+    const isAvailable = portsNeeded.every(
+      (p) =>
+        !allUsedPorts.has(p) &&
+        p <= maxPort &&
+        !STEAM_RESERVED_PORT_RANGES.some(([lo, hi]) => p >= lo && p <= hi),
+    );
+
+    if (isAvailable) {
+      // Build port details from firewallRules for richer frontend display
+      const portDetails = (gameDef.firewallRules ?? []).map((rule) => {
+        const start = candidate + rule.portOffset;
+        const end = start + rule.portCount - 1;
+        return {
+          startPort: start,
+          endPort: end,
+          protocol: rule.protocol,
+          description: rule.description,
+        };
+      });
+
+      const qpOffset = getQueryPortOffset(gameDef);
       return res.json({
         port: candidate,
-        queryPort:
-          gameDef.queryPortOffset != null
-            ? candidate + gameDef.queryPortOffset
-            : null,
-        portsUsed: portsNeeded.sort((a, b) => a - b),
+        queryPort: qpOffset != null ? candidate + qpOffset : null,
+        portsUsed: portsNeeded,
+        portDetails,
       });
     }
 
-    candidate += gameDef.portStride || gameDef.portCount; // stride for clean aligned ranges
+    candidate += gameDef.portStride || getConsecutivePortCount(gameDef);
   }
 
   // Fallback: return defaults
+  const fallbackQpOffset = getQueryPortOffset(gameDef);
   res.json({
     port: gameDef.defaultPort,
-    queryPort: gameDef.queryPort || null,
+    queryPort:
+      fallbackQpOffset != null ? gameDef.defaultPort + fallbackQpOffset : null,
     portsUsed: [gameDef.defaultPort],
+    portDetails: [],
   });
 });
 
@@ -230,73 +245,40 @@ router.post("/", async (req: Request, res: Response) => {
     body.installPath ||
     path.join(config.serversPath, sanitizeDirName(body.name));
 
-  // Check for port conflicts with existing servers (using full port ranges)
+  // Check for port conflicts with existing servers (using firewallRules as source of truth)
   const requestedPort = body.port || gameDef.defaultPort;
+  const createQpOffset = getQueryPortOffset(gameDef);
   const requestedQueryPort =
     body.queryPort ||
-    (gameDef.queryPortOffset != null
-      ? requestedPort + gameDef.queryPortOffset
-      : null);
+    (createQpOffset != null ? requestedPort + createQpOffset : null);
 
   // Collect ALL ports in use across all servers
   const servers = getUsedPorts();
   const allUsedPorts = new Set<number>();
   for (const s of servers) {
-    const sDef = getGameDefinition(s.gameId);
-    if (sDef) {
-      for (let i = 0; i < sDef.portCount; i++) {
-        allUsedPorts.add(s.port + i);
-      }
-      if (sDef.queryPortOffset != null) {
-        allUsedPorts.add(s.port + sDef.queryPortOffset);
-      }
-    } else {
-      allUsedPorts.add(s.port);
-      if (s.queryPort) allUsedPorts.add(s.queryPort);
+    for (const p of getAllPortsFromRules(s.port, s.gameId)) {
+      allUsedPorts.add(p);
     }
   }
 
-  // Check all ports in the requested range
+  // Get all ports the new server would occupy
+  const requestedPorts = getAllPortsFromRules(requestedPort, body.gameId);
+
+  // Check for conflicts with existing servers and Steam reserved ranges
   const conflicts: string[] = [];
-  for (let i = 0; i < gameDef.portCount; i++) {
-    const p = requestedPort + i;
+  for (const p of requestedPorts) {
     if (allUsedPorts.has(p)) {
       const conflictServer = servers.find((s) => {
-        const sd = getGameDefinition(s.gameId);
-        if (sd) {
-          for (let j = 0; j < sd.portCount; j++) {
-            if (s.port + j === p) return true;
-          }
-          if (sd.queryPortOffset != null && s.port + sd.queryPortOffset === p)
-            return true;
-        }
-        return s.port === p || s.queryPort === p;
+        const sPorts = getAllPortsFromRules(s.port, s.gameId);
+        return sPorts.includes(p);
       });
       conflicts.push(
         `Port ${p} is already used by "${conflictServer?.name || "unknown"}"`,
       );
     }
-  }
-  if (requestedQueryPort && allUsedPorts.has(requestedQueryPort)) {
-    const conflictServer = servers.find((s) => {
-      const sd = getGameDefinition(s.gameId);
-      if (sd) {
-        for (let j = 0; j < sd.portCount; j++) {
-          if (s.port + j === requestedQueryPort) return true;
-        }
-        if (
-          sd.queryPortOffset != null &&
-          s.port + sd.queryPortOffset === requestedQueryPort
-        )
-          return true;
-      }
-      return (
-        s.port === requestedQueryPort || s.queryPort === requestedQueryPort
-      );
-    });
-    conflicts.push(
-      `Query port ${requestedQueryPort} is already used by "${conflictServer?.name || "unknown"}"`,
-    );
+    if (STEAM_RESERVED_PORT_RANGES.some(([lo, hi]) => p >= lo && p <= hi)) {
+      conflicts.push(`Port ${p} is in the Steam reserved range (27030-27050)`);
+    }
   }
 
   if (conflicts.length > 0) {
@@ -316,8 +298,8 @@ router.post("/", async (req: Request, res: Response) => {
     port: body.port || gameDef.defaultPort,
     queryPort:
       body.queryPort ||
-      (gameDef.queryPortOffset != null
-        ? (body.port || gameDef.defaultPort) + gameDef.queryPortOffset
+      (createQpOffset != null
+        ? (body.port || gameDef.defaultPort) + createQpOffset
         : null),
     profilesPath: "profiles",
   });
@@ -421,6 +403,10 @@ router.post("/:id/start", async (req: Request, res: Response) => {
     return res.status(400).json({ error: "Server is queued for installation" });
   }
 
+  if (server.status === "deleting") {
+    return res.status(400).json({ error: "Server is being deleted" });
+  }
+
   const result = startServer(id);
 
   if (result.success) {
@@ -443,6 +429,10 @@ router.post("/:id/stop", async (req: Request, res: Response) => {
     return res.status(400).json({ error: "Server is already stopping" });
   }
 
+  if (server.status === "deleting") {
+    return res.status(400).json({ error: "Server is being deleted" });
+  }
+
   if (
     server.status !== "running" &&
     server.status !== "starting" &&
@@ -460,7 +450,19 @@ router.post("/:id/stop", async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/servers/:id/cancel-install - Cancel installation
+// GET /api/servers/:id/install-status - Get installation progress and buffered output
+router.get("/:id/install-status", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  res.json(getInstallationProgress(id));
+});
+
+// POST /api/servers/:id/cancel-install - Cancel installation and clean up
 router.post("/:id/cancel-install", (req: Request, res: Response) => {
   const id = parseInt(req.params.id, 10);
   const server = getServerById(id);
@@ -469,12 +471,17 @@ router.post("/:id/cancel-install", (req: Request, res: Response) => {
     return res.status(404).json({ error: "Server not found" });
   }
 
-  const cancelled = cancelInstallation(id);
+  const cancelled = cancelAndCleanupInstallation(id);
 
   if (cancelled) {
-    res.json({ success: true, message: "Installation cancelled" });
+    res.status(202).json({
+      success: true,
+      message: "Installation cancellation started",
+    });
   } else {
-    res.status(400).json({ error: "No active installation to cancel" });
+    res
+      .status(400)
+      .json({ error: "No active or queued installation to cancel" });
   }
 });
 
@@ -565,6 +572,37 @@ router.put("/:id/ports", (req: Request, res: Response) => {
     return res
       .status(400)
       .json({ error: "Invalid query port number (1-65535)" });
+  }
+
+  // Check for port conflicts with other servers (exclude self)
+  const otherServers = getUsedPorts().filter((s) => s.id !== id);
+  const allUsedPorts = new Set<number>();
+  for (const s of otherServers) {
+    for (const p of getAllPortsFromRules(s.port, s.gameId)) {
+      allUsedPorts.add(p);
+    }
+  }
+
+  const newPorts = getAllPortsFromRules(port, server.gameId);
+  const conflicts: string[] = [];
+  for (const p of newPorts) {
+    if (allUsedPorts.has(p)) {
+      const conflictServer = otherServers.find((s) =>
+        getAllPortsFromRules(s.port, s.gameId).includes(p),
+      );
+      conflicts.push(
+        `Port ${p} is already used by "${conflictServer?.name || "unknown"}"`,
+      );
+    }
+    if (STEAM_RESERVED_PORT_RANGES.some(([lo, hi]) => p >= lo && p <= hi)) {
+      conflicts.push(`Port ${p} is in the Steam reserved range (27030-27050)`);
+    }
+  }
+
+  if (conflicts.length > 0) {
+    return res.status(400).json({
+      error: `Port conflict: ${conflicts.join(". ")}`,
+    });
   }
 
   updateServerPorts(id, port, queryPort);
@@ -1091,6 +1129,119 @@ router.get("/:id/disk-usage", async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/servers/:id/config-status - Check if game config files have been generated
+router.get("/:id/config-status", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  const gameDef = getGameDefinition(server.gameId);
+  const configFiles = gameDef?.configFiles || [];
+  const adapter = getGameAdapter(server.gameId);
+
+  // Check if adapter supports isConfigGenerated (e.g. ARK)
+  // If the server is currently in its first start, config files may exist but
+  // are still incomplete — report as not generated until startup is done.
+  const configGenerated = isFirstStartInProgress(id)
+    ? false
+    : adapter?.isConfigGenerated
+      ? adapter.isConfigGenerated(server)
+      : true; // Non-ARK games always have config generated after install
+
+  // Check which config files actually exist
+  const existingFiles = configFiles
+    .map((f) => path.basename(f))
+    .filter((basename) => {
+      const fullPath = configFiles.find((f) => path.basename(f) === basename);
+      return fullPath && fs.existsSync(path.join(server.installPath, fullPath));
+    });
+
+  res.json({
+    configGenerated,
+    configFiles: configFiles.map((f) => path.basename(f)),
+    existingFiles,
+  });
+});
+
+// PUT /api/servers/:id/initial-settings - Save initial config settings as launch params
+router.put("/:id/initial-settings", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  if (server.status === "running") {
+    return res.status(400).json({
+      error: "Cannot modify settings while server is running.",
+    });
+  }
+
+  const { sessionName, adminPassword, serverPassword, maxPlayers, map } =
+    req.body as {
+      sessionName?: string;
+      adminPassword?: string;
+      serverPassword?: string;
+      maxPlayers?: number;
+      map?: string;
+    };
+
+  // Get current launch params (base template)
+  const gameDef = getGameDefinition(server.gameId);
+  let launchParams = server.launchParams || gameDef?.defaultLaunchParams || "";
+
+  // Helper: set or replace a ?Key=Value in the launch params
+  const setParam = (key: string, value: string): void => {
+    const regex = new RegExp(`([?])${key}=[^?\\s]*`, "i");
+    if (regex.test(launchParams)) {
+      launchParams = launchParams.replace(regex, `$1${key}=${value}`);
+    } else {
+      // Insert before first -flag argument (UE4 convention)
+      const dashIndex = launchParams.search(/\s+-/);
+      const param = `?${key}=${value}`;
+      if (dashIndex !== -1) {
+        launchParams =
+          launchParams.slice(0, dashIndex) +
+          param +
+          launchParams.slice(dashIndex);
+      } else {
+        launchParams += param;
+      }
+    }
+  };
+
+  // Replace map name (first token before the first '?' in launch params)
+  if (map !== undefined && map.trim()) {
+    const firstQ = launchParams.indexOf("?");
+    if (firstQ !== -1) {
+      launchParams = map.trim() + launchParams.slice(firstQ);
+    } else {
+      launchParams = map.trim();
+    }
+  }
+
+  if (sessionName !== undefined) {
+    // ARK: SessionName may only contain letters, digits, hyphens, underscores
+    const sanitizedSessionName = sessionName.replace(/[^a-zA-Z0-9_-]/g, "_");
+    setParam("SessionName", sanitizedSessionName);
+  }
+  if (adminPassword !== undefined)
+    setParam("ServerAdminPassword", adminPassword);
+  if (serverPassword !== undefined) setParam("ServerPassword", serverPassword);
+  if (maxPlayers !== undefined) setParam("MaxPlayers", String(maxPlayers));
+
+  updateServerLaunchParams(id, launchParams);
+
+  res.json({
+    success: true,
+    message: "Initial settings saved to launch parameters",
+  });
+});
+
 // GET /api/servers/:id/config - Get server configuration file
 router.get("/:id/config", (req: Request, res: Response) => {
   const id = parseInt(req.params.id, 10);
@@ -1126,10 +1277,25 @@ router.get("/:id/config", (req: Request, res: Response) => {
   const configPath = path.join(server.installPath, configFileName);
 
   if (!fs.existsSync(configPath)) {
-    return res.status(404).json({
-      error: "Config file not found",
-      path: configPath,
-    });
+    // For ARK's Game.ini: auto-create with section header since ARK doesn't
+    // generate this file on first start (it's purely for user overrides)
+    if (
+      server.gameId === "ark" &&
+      path.basename(configFileName) === "Game.ini"
+    ) {
+      const dir = path.dirname(configPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      const initialContent = "[/Script/ShooterGame.ShooterGameMode]\n";
+      fs.writeFileSync(configPath, initialContent, "utf-8");
+      console.log(`[ARK] Created initial Game.ini at ${configPath}`);
+    } else {
+      return res.status(404).json({
+        error: "Config file not found",
+        path: configPath,
+      });
+    }
   }
 
   try {
@@ -1150,7 +1316,7 @@ router.get("/:id/config", (req: Request, res: Response) => {
 // PUT /api/servers/:id/config - Update server configuration file
 router.put("/:id/config", (req: Request, res: Response) => {
   const id = parseInt(req.params.id, 10);
-  const { content } = req.body as { content: string };
+  let { content } = req.body as { content: string };
   const server = getServerById(id);
 
   if (!server) {
@@ -1199,7 +1365,135 @@ router.put("/:id/config", (req: Request, res: Response) => {
       fs.copyFileSync(configPath, backupPath);
     }
 
+    // ARK: sanitize SessionName in the INI content before writing
+    if (
+      server.gameId === "ark" &&
+      path.basename(configFileName) === "GameUserSettings.ini"
+    ) {
+      const sessionNameMatch = content.match(/^(SessionName\s*=\s*)(.+)$/im);
+      if (sessionNameMatch) {
+        const sanitized = sessionNameMatch[2].replace(/[^a-zA-Z0-9_-]/g, "_");
+        if (sanitized !== sessionNameMatch[2]) {
+          content = content.replace(
+            sessionNameMatch[0],
+            `${sessionNameMatch[1]}${sanitized}`,
+          );
+        }
+      }
+    }
+
     fs.writeFileSync(configPath, content, "utf-8");
+
+    // ARK sync: when saving GameUserSettings.ini, sync critical values back to launch params
+    // so that getAdditionalLaunchParams() always reflects the latest config
+    if (
+      server.gameId === "ark" &&
+      path.basename(configFileName) === "GameUserSettings.ini"
+    ) {
+      try {
+        const adapter = getGameAdapter(server.gameId);
+        if (adapter) {
+          const savedContent = content;
+          let launchParams = server.launchParams || "";
+          const gameDef = getGameDefinition(server.gameId);
+          if (!launchParams && gameDef) {
+            launchParams = gameDef.defaultLaunchParams;
+          }
+
+          // Helper to extract INI values from the saved content
+          const getIniVal = (section: string, key: string): string | null => {
+            const lines = savedContent.split("\n");
+            const sectionHeader = `[${section}]`;
+            let inSection = false;
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (trimmed.toLowerCase() === sectionHeader.toLowerCase()) {
+                inSection = true;
+                continue;
+              }
+              if (trimmed.startsWith("[")) {
+                if (inSection) break;
+                continue;
+              }
+              if (inSection) {
+                const eqIdx = trimmed.indexOf("=");
+                if (eqIdx > 0) {
+                  const k = trimmed.substring(0, eqIdx).trim();
+                  if (k.toLowerCase() === key.toLowerCase()) {
+                    return trimmed.substring(eqIdx + 1).trim();
+                  }
+                }
+              }
+            }
+            return null;
+          };
+
+          // Sync critical values to launch params
+          const syncKeys = [
+            {
+              paramKey: "SessionName",
+              iniSection: "SessionSettings",
+              iniKey: "SessionName",
+            },
+            {
+              paramKey: "ServerAdminPassword",
+              iniSection: "ServerSettings",
+              iniKey: "ServerAdminPassword",
+            },
+            {
+              paramKey: "ServerPassword",
+              iniSection: "ServerSettings",
+              iniKey: "ServerPassword",
+            },
+            {
+              paramKey: "RCONPort",
+              iniSection: "ServerSettings",
+              iniKey: "RCONPort",
+            },
+            {
+              paramKey: "MaxPlayers",
+              iniSection: "/Script/Engine.GameSession",
+              iniKey: "MaxPlayers",
+            },
+          ];
+
+          for (const { paramKey, iniSection, iniKey } of syncKeys) {
+            const val = getIniVal(iniSection, iniKey);
+            if (val !== null) {
+              const regex = new RegExp(`([?])${paramKey}=[^?\\s]*`, "i");
+              if (regex.test(launchParams)) {
+                launchParams = launchParams.replace(
+                  regex,
+                  `$1${paramKey}=${val}`,
+                );
+              } else {
+                const dashIndex = launchParams.search(/\s+-/);
+                const param = `?${paramKey}=${val}`;
+                if (dashIndex !== -1) {
+                  launchParams =
+                    launchParams.slice(0, dashIndex) +
+                    param +
+                    launchParams.slice(dashIndex);
+                } else {
+                  launchParams += param;
+                }
+              }
+            }
+          }
+
+          updateServerLaunchParams(id, launchParams);
+          logger.info(
+            `[ARK] Synced config values to launch params for server ${id}`,
+          );
+        }
+      } catch (syncErr) {
+        logger.error(
+          `[ARK] Failed to sync config values to launch params:`,
+          syncErr,
+        );
+      }
+    }
+
     res.json({ success: true, message: "Configuration saved" });
   } catch (err) {
     res.status(500).json({
@@ -1448,6 +1742,10 @@ router.delete("/:id", async (req: Request, res: Response) => {
       .json({ error: "Cannot delete running server. Stop it first." });
   }
 
+  if (server.status === "deleting") {
+    return res.status(400).json({ error: "Server is already being deleted." });
+  }
+
   // Require name confirmation for safety
   if (!confirmName || confirmName !== server.name) {
     return res.status(400).json({
@@ -1456,47 +1754,22 @@ router.delete("/:id", async (req: Request, res: Response) => {
     });
   }
 
-  if (isInstalling(id)) {
-    cancelInstallation(id);
-  }
+  // Mark as deleting immediately and respond — actual deletion happens in background
+  updateServerStatus(id, "deleting", null);
+  broadcast("server:status", { serverId: id, status: "deleting" });
 
-  if (isQueued(id)) {
-    removeFromQueue(id);
-  }
+  // Fire-and-forget background deletion
+  performBackgroundDeletion(
+    id,
+    server.name,
+    server.gameId,
+    server.port,
+    server.installPath,
+  );
 
-  // Remove firewall rules before deleting (non-blocking, don't fail deletion)
-  try {
-    await removeFirewallRules(server.name, server.gameId, server.port);
-    logger.info(`[Delete] Removed firewall rules for server: ${server.name}`);
-  } catch (err) {
-    logger.error(`[Delete] Failed to remove firewall rules: ${err}`);
-  }
-
-  // Delete server files
-  const installPath = server.installPath;
-  let filesDeleted = false;
-
-  if (installPath && fs.existsSync(installPath)) {
-    try {
-      fs.rmSync(installPath, { recursive: true, force: true });
-      filesDeleted = true;
-      logger.info(`[Delete] Removed server files: ${installPath}`);
-    } catch (err) {
-      logger.error(`[Delete] Failed to remove server files: ${err}`);
-      return res.status(500).json({
-        error: `Failed to delete server files: ${(err as Error).message}`,
-      });
-    }
-  }
-
-  // Delete database entry
-  deleteServer(id);
-
-  res.json({
+  res.status(202).json({
     success: true,
-    message: filesDeleted
-      ? "Server and all files deleted successfully"
-      : "Server entry deleted (no files found)",
+    message: "Server deletion started",
   });
 });
 

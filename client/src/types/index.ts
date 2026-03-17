@@ -72,7 +72,7 @@ export interface GameDefinition {
   workshopAppId?: number;
   defaultPort: number;
   portCount: number;
-  queryPort?: number;
+  portStride?: number;
   queryPortOffset?: number;
   requiresLogin: boolean;
   description: string;

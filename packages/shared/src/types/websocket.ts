@@ -8,10 +8,12 @@ export type WSMessageType =
   | "steamcmd:login-failed"
   | "steamcmd:logout"
   | "server:status"
+  | "server:deleted"
   | "server:output"
   | "install:progress"
   | "install:complete"
   | "install:error"
+  | "install:cancelled"
   | "mod:progress"
   | "mod:installed"
   | "mod:error"
@@ -26,7 +28,8 @@ export type WSMessageType =
   | "update:restart"
   | "update:applied"
   | "update-check:complete"
-  | "firewall:updated";
+  | "firewall:updated"
+  | "server:config-ready";
 
 export interface WSMessage {
   type: WSMessageType;

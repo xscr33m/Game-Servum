@@ -259,7 +259,7 @@ export function ModsTab({ server }: ModsTabProps) {
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              This game doesn't support Steam Workshop mods through Game Servum.
+              This game doesn't support Steam Workshop mods through Game-Servum.
               Mods must be downloaded from external sources (e.g., Nexus Mods)
               and installed manually into the server directory.
             </p>
@@ -592,17 +592,24 @@ export function ModsTab({ server }: ModsTabProps) {
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter className="gap-2 sm:gap-0">
-                <Button variant="outline" onClick={() => setModToRemove(null)}>
+                <Button
+                  variant="outline"
+                  onClick={() => setModToRemove(null)}
+                  disabled={actionInProgress === modToRemove?.id}
+                  className="w-full sm:w-auto"
+                >
                   Cancel
                 </Button>
                 <Button
                   variant="destructive"
+                  disabled={actionInProgress === modToRemove?.id}
                   onClick={() => {
                     if (modToRemove) {
                       handleRemoveMod(modToRemove);
                       setModToRemove(null);
                     }
                   }}
+                  className="w-full sm:w-auto"
                 >
                   Remove
                 </Button>

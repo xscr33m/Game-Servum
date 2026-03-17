@@ -37,7 +37,7 @@ const STAGING = resolve(ROOT, "dist", "staging-linux-dashboard");
 const DIST_DIR = resolve(ROOT, "dist", `v${APP_VERSION}`);
 
 console.log("╔════════════════════════════════════════════");
-console.log(`║  Game Servum Dashboard Builder (Linux)     `);
+console.log(`║  Game-Servum Dashboard Builder (Linux)     `);
 console.log(`║  Version: ${APP_VERSION.padEnd(32)}`);
 console.log("╚════════════════════════════════════════════");
 
@@ -68,7 +68,7 @@ if (existsSync(STAGING)) {
 const electronPkg = {
   name: "game-servum-dashboard",
   version: APP_VERSION,
-  description: "Game Servum Dashboard — Remote Agent Management",
+  description: "Game-Servum Dashboard — Remote Agent Management",
   author: "xscr33mLabs",
   license: "MIT",
   main: "main/main-unified.js",
@@ -85,7 +85,7 @@ const electronPkg = {
   },
   build: {
     appId: "com.gameservum.dashboard",
-    productName: "Game Servum Dashboard",
+    productName: "Game-Servum Dashboard",
     copyright: "Copyright © 2026 xscr33mLabs",
     directories: { output: "release", buildResources: "build" },
     files: ["main/**/*", "assets/**/*"],

@@ -24,6 +24,7 @@ import {
 } from "@/components/onboarding/onboardingState";
 import { AddServerDialog } from "@/components/server-details/dialogs/AddServerDialog";
 import { DeleteServerDialog } from "@/components/server-details/dialogs/DeleteServerDialog";
+import { CancelInstallDialog } from "@/components/server-details/dialogs/CancelInstallDialog";
 import { SteamAccountDialog } from "@/components/agent/SteamAccountDialog";
 import { SystemMonitor } from "@/components/agent/SystemMonitor";
 import { AgentStatusBanner } from "@/components/agent/AgentStatusBanner";
@@ -62,6 +63,10 @@ export function Dashboard() {
     "connect" | undefined
   >(undefined);
   const [serverToDelete, setServerToDelete] = useState<GameServer | null>(null);
+  const [serverToCancel, setServerToCancel] = useState<GameServer | null>(null);
+  const [installProgress, setInstallProgress] = useState<
+    Map<number, { percent: number; message: string }>
+  >(new Map());
   const [monitoringEnabled, setMonitoringEnabled] = useState(() => {
     return (
       getElectronSettings().getItem("system_monitoring_enabled") === "true"
@@ -90,6 +95,27 @@ export function Dashboard() {
     // Update navigation cache
     _cachedServers = data;
     _cacheAgentId = activeConnection?.id ?? null;
+
+    // Seed install progress for any servers currently installing
+    for (const s of data) {
+      if (s.status === "installing") {
+        api.servers
+          .getInstallStatus(s.id)
+          .then((status) => {
+            if (status.installing && status.percent > 0) {
+              setInstallProgress((prev) => {
+                const next = new Map(prev);
+                next.set(s.id, {
+                  percent: status.percent,
+                  message: status.message,
+                });
+                return next;
+              });
+            }
+          })
+          .catch(() => {});
+      }
+    }
   }, [api, activeConnection?.id]);
 
   const loadSteamCMD = useCallback(async () => {
@@ -175,8 +201,32 @@ export function Dashboard() {
         if (payload.status === "error" && payload.message) {
           showDependencyError(payload.message);
         }
+        // Clear install progress when server leaves installing state
+        if (payload.status !== "installing") {
+          setInstallProgress((prev) => {
+            if (!prev.has(payload.serverId)) return prev;
+            const next = new Map(prev);
+            next.delete(payload.serverId);
+            return next;
+          });
+        }
         // Reload servers on status change
         loadServers();
+      }
+      if (message.type === "install:progress") {
+        const payload = message.payload as {
+          serverId: number;
+          percent: number;
+          message: string;
+        };
+        setInstallProgress((prev) => {
+          const next = new Map(prev);
+          next.set(payload.serverId, {
+            percent: payload.percent,
+            message: payload.message,
+          });
+          return next;
+        });
       }
       if (message.type === "install:complete") {
         const payload = message.payload as {
@@ -184,8 +234,27 @@ export function Dashboard() {
           serverName?: string;
         };
         toastSuccess(`${payload.serverName || "Server"} installation complete`);
+        if (payload.serverId) {
+          setInstallProgress((prev) => {
+            if (!prev.has(payload.serverId!)) return prev;
+            const next = new Map(prev);
+            next.delete(payload.serverId!);
+            return next;
+          });
+        }
         // Reload servers when installation completes
         loadServers();
+      }
+      if (message.type === "server:deleted") {
+        const payload = message.payload as { serverId: number };
+        // Remove the deleted server from the list without a full reload
+        setServers((prev) => prev.filter((s) => s.id !== payload.serverId));
+      }
+      if (message.type === "install:cancelled") {
+        const payload = message.payload as { serverName?: string };
+        toastSuccess(
+          `Installation of ${payload.serverName || "server"} cancelled`,
+        );
       }
     });
     return unsubscribe;
@@ -226,11 +295,33 @@ export function Dashboard() {
   async function confirmDeleteServer(server: GameServer) {
     try {
       await api.servers.delete(server.id, server.name);
-      toastSuccess(`${server.name} deleted`);
+      toastSuccess(`${server.name} is being deleted...`);
+      // The server:status WS event will update the card to "Deleting"
+      // and server:deleted will remove it once complete
       await loadServers();
     } catch (err) {
       toastError((err as Error).message);
       throw err; // Re-throw so dialog knows it failed
+    }
+  }
+
+  function handleCancelInstall(id: number) {
+    const server = servers.find((s) => s.id === id);
+    if (server) {
+      setServerToCancel(server);
+    }
+  }
+
+  async function confirmCancelInstall(server: GameServer) {
+    try {
+      await api.servers.cancelInstall(server.id);
+      toastSuccess(`Cancelling installation of ${server.name}...`);
+      // The server:status WS event will update the card to "Deleting"
+      // and server:deleted will remove it once cleanup is complete
+      await loadServers();
+    } catch (err) {
+      toastError((err as Error).message);
+      throw err;
     }
   }
 
@@ -305,7 +396,7 @@ export function Dashboard() {
                 v{APP_VERSION}
               </span>
             </div>
-            <div className="h-7 w-px bg-border" />
+            <div className="h-7 w-px bg-ring/30" />
             <AgentControlPanel />
           </>
         }
@@ -434,7 +525,7 @@ export function Dashboard() {
       <AgentStatusBanner />
 
       <div className="flex-1 flex overflow-hidden">
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
           <div className="container mx-auto px-4 py-4 space-y-8">
             {/* System Monitoring */}
             {monitoringEnabled && <SystemMonitor key={activeConnection?.id} />}
@@ -496,7 +587,9 @@ export function Dashboard() {
                       onStart={handleStartServer}
                       onStop={handleStopServer}
                       onDelete={handleDeleteServer}
+                      onCancelInstall={handleCancelInstall}
                       disabled={!isConnected}
+                      installProgress={installProgress.get(server.id)}
                     />
                   ))}
                 </div>
@@ -521,6 +614,14 @@ export function Dashboard() {
         open={serverToDelete !== null}
         onOpenChange={(open) => !open && setServerToDelete(null)}
         onConfirm={confirmDeleteServer}
+      />
+
+      {/* Cancel Installation Confirmation Dialog */}
+      <CancelInstallDialog
+        server={serverToCancel}
+        open={serverToCancel !== null}
+        onOpenChange={(open) => !open && setServerToCancel(null)}
+        onConfirm={confirmCancelInstall}
       />
 
       {/* Steam Account Dialog */}

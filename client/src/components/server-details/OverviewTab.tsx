@@ -35,6 +35,9 @@ interface OverviewTabProps {
   onRefresh?: () => void;
 }
 
+// Module-level cache so disk usage survives tab switches
+const diskUsageCache = new Map<number, string>();
+
 export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
   const { api, isConnected } = useBackend();
   const { capabilities } = useGameCapabilities(server.gameId);
@@ -73,8 +76,13 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
   const [portsSaving, setPortsSaving] = useState(false);
   const [portsError, setPortsError] = useState<string | null>(null);
 
-  // Disk usage
-  const [diskUsage, setDiskUsage] = useState<string | null>(null);
+  // Disk usage — initialize from cache for instant display, refresh in background
+  const [diskUsage, setDiskUsage] = useState<string | null>(
+    () => diskUsageCache.get(server.id) ?? null,
+  );
+  const [diskLoading, setDiskLoading] = useState(
+    !diskUsageCache.has(server.id),
+  );
 
   // Sync local state when server prop changes
   useEffect(() => {
@@ -160,13 +168,18 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
 
   const nameChanged = serverName !== server.name;
 
-  // Load disk usage
+  // Load disk usage in background — cache result for instant display on next visit
   useEffect(() => {
     if (!isConnected) return;
+    setDiskLoading(true);
     api.servers
       .getDiskUsage(server.id)
-      .then((result) => setDiskUsage(result.sizeFormatted))
-      .catch(() => setDiskUsage(null));
+      .then((result) => {
+        diskUsageCache.set(server.id, result.sizeFormatted);
+        setDiskUsage(result.sizeFormatted);
+      })
+      .catch(() => {})
+      .finally(() => setDiskLoading(false));
   }, [server.id, api.servers, isConnected]);
 
   const handleSaveProfilesPath = useCallback(async () => {
@@ -296,10 +309,14 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
             <div className="h-4 w-px bg-border" />
 
             <div className="flex items-center gap-2">
-              <FaHardDrive className="h-3.5 w-3.5 text-muted-foreground" />
+              <FaHardDrive
+                className={`h-3.5 w-3.5 text-muted-foreground${diskLoading && !diskUsage ? " animate-pulse" : ""}`}
+              />
               <span className="text-sm text-muted-foreground">Disk</span>
-              <span className="text-sm font-semibold">
-                {diskUsage ?? "..."}
+              <span
+                className={`text-sm font-semibold${diskLoading && !diskUsage ? " animate-pulse text-muted-foreground" : ""}`}
+              >
+                {diskUsage ?? "Calculating..."}
               </span>
             </div>
 
