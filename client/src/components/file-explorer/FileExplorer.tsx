@@ -209,7 +209,7 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
     const toastId = toast.loading(`Preparing download "${name}"...`);
     try {
       await api.servers.browseDownload(serverId, rootKey, filePath);
-      toast.dismiss(toastId);
+      toast.success(`Download "${name}" ready`, { id: toastId });
     } catch (err) {
       toast.dismiss(toastId);
       toastError(err instanceof Error ? err.message : "Download failed");
