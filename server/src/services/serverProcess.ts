@@ -106,6 +106,9 @@ export function startServer(serverId: number): StartResult {
     return { success: false, message: "Server not found" };
   }
 
+  // Capture name for use in closures (avoids TS null-narrowing issues)
+  const serverName = server.name;
+
   if (runningProcesses.has(serverId)) {
     return { success: false, message: "Server is already running" };
   }
@@ -277,16 +280,17 @@ export function startServer(serverId: number): StartResult {
     // Store the process
     runningProcesses.set(serverId, child);
 
-    // Update database with running status, PID, and start timestamp
+    // Record PID and start timestamp but keep status as "starting" until
+    // the game-specific startup detector fires (or the timeout expires).
     const startedAt = new Date().toISOString();
-    updateServerStatus(serverId, "running", child.pid, startedAt);
+    updateServerStatus(serverId, "starting", child.pid, startedAt);
 
-    // Broadcast status update
+    // Broadcast status update (still starting — PID is known)
     broadcast("server:status", {
       serverId,
-      status: "running",
+      status: "starting",
       pid: child.pid,
-      message: `Server ${server.name} started`,
+      message: `Server ${server.name} is starting...`,
     });
 
     // Start player tracking (RCON polling + log backfill)
@@ -347,7 +351,6 @@ export function startServer(serverId: number): StartResult {
         detector?.type === "stdout" &&
         startupPattern.test(output)
       ) {
-        startupDetected = true;
         onStartupComplete();
       }
     });
@@ -357,6 +360,10 @@ export function startServer(serverId: number): StartResult {
     let lastLogSize = 0;
 
     function onStartupComplete(): void {
+      // Guard against double-invocation (pattern match + timeout race)
+      if (startupDetected) return;
+      startupDetected = true;
+
       logger.info(
         `[ServerProcess] Startup complete detected for server ${serverId}`,
       );
@@ -369,6 +376,21 @@ export function startServer(serverId: number): StartResult {
         clearInterval(logWatchInterval);
         logWatchInterval = null;
       }
+
+      // Transition status from "starting" → "running"
+      updateServerStatus(serverId, "running", child.pid ?? null, startedAt);
+      broadcast("server:status", {
+        serverId,
+        status: "running",
+        pid: child.pid ?? null,
+        message: `Server ${serverName} started`,
+      });
+
+      // Activate scheduled restart, RCON messages, and update checker
+      // (deferred until actual startup so timers start from ready time)
+      startSchedule(serverId);
+      startMessageBroadcaster(serverId);
+      startUpdateChecker(serverId);
 
       // Re-validate adapter config after start (game may have overwritten config files)
       if (adapter) {
@@ -438,7 +460,6 @@ export function startServer(serverId: number): StartResult {
 
           const newContent = buf.toString("utf-8");
           if (startupPattern.test(newContent)) {
-            startupDetected = true;
             onStartupComplete();
           }
         } catch {
@@ -451,13 +472,26 @@ export function startServer(serverId: number): StartResult {
         setTimeout(() => {
           if (!startupDetected) {
             logger.warn(
-              `[ServerProcess] Startup detection timed out after ${detector.timeoutMs}ms for server ${serverId}, proceeding with RCON connect`,
+              `[ServerProcess] Startup detection timed out after ${detector.timeoutMs}ms for server ${serverId}, proceeding anyway`,
             );
-            startupDetected = true;
             onStartupComplete();
           }
         }, detector.timeoutMs);
       }
+    }
+
+    // Fallback timeout for games without a startup detector (getStartupDetector() returns null).
+    // Ensures the server always transitions from "starting" → "running".
+    const DEFAULT_STARTUP_TIMEOUT_MS = 120_000;
+    if (!detector) {
+      setTimeout(() => {
+        if (!startupDetected) {
+          logger.info(
+            `[ServerProcess] No startup detector for server ${serverId}, marking as running after ${DEFAULT_STARTUP_TIMEOUT_MS / 1000}s default timeout`,
+          );
+          onStartupComplete();
+        }
+      }, DEFAULT_STARTUP_TIMEOUT_MS);
     }
 
     // Handle stderr
@@ -632,14 +666,9 @@ export function startServer(serverId: number): StartResult {
       });
     });
 
-    // Activate scheduled restart if configured
-    startSchedule(serverId);
-
-    // Activate scheduled RCON messages
-    startMessageBroadcaster(serverId);
-
-    // Activate update checker
-    startUpdateChecker(serverId);
+    // NOTE: startSchedule, startMessageBroadcaster, and startUpdateChecker
+    // are now called inside onStartupComplete() so that timers start from the
+    // actual server-ready time rather than from process spawn.
 
     return {
       success: true,

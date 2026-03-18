@@ -416,8 +416,11 @@ export class DayZAdapter extends BaseGameAdapter {
   }
 
   getStartupDetector(): StartupDetector | null {
-    // DayZ does not have a reliable startup pattern — uses fixed delay
-    return null;
+    return {
+      type: "stdout",
+      pattern: "BattlEye Server: Initialized",
+      timeoutMs: 120_000,
+    };
   }
 
   getLogPaths(server: GameServer): LogPaths {

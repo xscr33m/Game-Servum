@@ -370,8 +370,11 @@ export class SevenDaysAdapter extends BaseGameAdapter {
   }
 
   getStartupDetector(): StartupDetector | null {
-    // 7DTD does not have a reliable startup pattern — uses fixed delay
-    return null;
+    return {
+      type: "stdout",
+      pattern: "GameStartDone",
+      timeoutMs: 120_000,
+    };
   }
 
   getEditableFiles(server: GameServer): EditableFileConfig[] {
