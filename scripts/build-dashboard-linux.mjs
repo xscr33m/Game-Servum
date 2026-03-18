@@ -70,7 +70,7 @@ const electronPkg = {
   version: APP_VERSION,
   description: "Game-Servum Dashboard — Remote Agent Management",
   author: "xscr33mLabs",
-  license: "MIT",
+  license: "GPL-3.0-only",
   main: "main/main-unified.js",
   dependencies: {
     "electron-updater": "^6.8.3",
@@ -129,7 +129,7 @@ if (existsSync(resolve(ROOT, "LICENSE"))) {
   // Create minimal LICENSE if missing
   writeFileSync(
     resolve(STAGING, "LICENSE"),
-    "MIT License\nCopyright © 2025-2026 xscr33m",
+    "Game-Servum — Copyright (C) 2025-2026 xscr33mLabs\n\nThis program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 3.\n\nSee https://www.gnu.org/licenses/ for details.",
   );
 }
 
