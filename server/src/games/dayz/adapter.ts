@@ -415,10 +415,15 @@ export class DayZAdapter extends BaseGameAdapter {
     return { commands: ["#shutdown"] };
   }
 
-  getStartupDetector(): StartupDetector | null {
+  getStartupDetector(server: GameServer): StartupDetector | null {
+    const profilesDir = resolveProfilesPath(server);
+    // DayZ writes script logs with timestamped filenames (script_YYYY-MM-DD_HH-MM-SS.log).
+    // Use a relative glob; the polling code resolves the newest matching file.
+    const relProfiles = path.relative(server.installPath, profilesDir);
     return {
-      type: "stdout",
-      pattern: "BattlEye Server: Initialized",
+      type: "logfile",
+      pattern: "\\[MissionServer\\] OnMissionStart",
+      logFile: path.join(relProfiles, "script_*.log"),
       timeoutMs: 120_000,
     };
   }

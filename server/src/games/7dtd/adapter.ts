@@ -369,10 +369,11 @@ export class SevenDaysAdapter extends BaseGameAdapter {
     return { commands: ["saveworld", "shutdown"], delayBetweenMs: 3000 };
   }
 
-  getStartupDetector(): StartupDetector | null {
+  getStartupDetector(_server: GameServer): StartupDetector | null {
     return {
-      type: "stdout",
-      pattern: "GameStartDone",
+      type: "logfile",
+      pattern: "StartGame done",
+      logFile: "output_log.txt",
       timeoutMs: 120_000,
     };
   }

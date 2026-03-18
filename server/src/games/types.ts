@@ -267,8 +267,9 @@ export interface GameAdapter {
   /**
    * Return startup detection config, or null to use a fixed delay.
    * Replaces the hardcoded startupCompletePattern/startupLogFile in GameDefinition.
+   * Receives the server so adapters can compute per-server paths (e.g. profilesPath).
    */
-  getStartupDetector(): StartupDetector | null;
+  getStartupDetector(server: GameServer): StartupDetector | null;
 
   /**
    * Return game metadata for the frontend (name, logo, description).

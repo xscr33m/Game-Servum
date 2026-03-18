@@ -136,7 +136,9 @@ export function startPlayerTracking(
   // For freshly started servers with a startup pattern, wait for the log signal.
   // For restored servers (already running), always use the fixed delay.
   const hasStartupPattern =
-    !alreadyRunning && adapter?.getStartupDetector() !== null;
+    !alreadyRunning &&
+    server != null &&
+    adapter?.getStartupDetector(server) !== null;
   if (hasStartupPattern) {
     logger.info(
       `[PlayerTracker] Waiting for startup-complete signal before connecting RCON for server ${serverId}`,

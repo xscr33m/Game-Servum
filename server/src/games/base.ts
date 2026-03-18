@@ -367,7 +367,7 @@ export abstract class BaseGameAdapter implements GameAdapter {
    * Default: no startup detection (uses fixed delay).
    * Games override to provide pattern-based detection.
    */
-  getStartupDetector(): StartupDetector | null {
+  getStartupDetector(_server: GameServer): StartupDetector | null {
     return null;
   }
 

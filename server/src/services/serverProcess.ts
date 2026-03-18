@@ -331,7 +331,7 @@ export function startServer(serverId: number): StartResult {
 
     // Handle stdout
     let startupDetected = false;
-    const detector = adapter?.getStartupDetector() ?? null;
+    const detector = adapter?.getStartupDetector(server) ?? null;
     const startupPattern = detector ? new RegExp(detector.pattern) : null;
 
     child.stdout?.on("data", (data: Buffer) => {
@@ -344,7 +344,7 @@ export function startServer(serverId: number): StartResult {
         message: output,
       });
 
-      // Detect startup completion from stdout (for games without logfile-based detection)
+      // Detect startup completion from stdout
       if (
         !startupDetected &&
         startupPattern &&
@@ -423,16 +423,54 @@ export function startServer(serverId: number): StartResult {
       notifyServerReady(serverId);
     }
 
-    if (startupPattern && detector?.type === "logfile" && detector.logFile) {
-      const logFilePath = path.join(server.installPath, detector.logFile);
-
-      // Initialize to current file size so we only read NEW content after spawn
+    /**
+     * Resolve a logFile spec to an absolute path.
+     * Supports glob wildcards (`*`) — returns the most recently modified match.
+     */
+    function resolveLogFilePath(logFileSpec: string): string | null {
+      if (!logFileSpec.includes("*")) {
+        return path.join(server!.installPath, logFileSpec);
+      }
+      const dir = path.dirname(path.join(server!.installPath, logFileSpec));
+      const baseName = path.basename(logFileSpec);
+      const globRegex = new RegExp(
+        "^" + baseName.replace(/\./g, "\\.").replace(/\*/g, ".*") + "$",
+      );
       try {
-        if (fs.existsSync(logFilePath)) {
-          lastLogSize = fs.statSync(logFilePath).size;
-        }
+        if (!fs.existsSync(dir)) return null;
+        const matches = fs
+          .readdirSync(dir)
+          .filter((f) => globRegex.test(f))
+          .map((f) => {
+            const full = path.join(dir, f);
+            try {
+              return { path: full, mtime: fs.statSync(full).mtimeMs };
+            } catch {
+              return null;
+            }
+          })
+          .filter(Boolean) as { path: string; mtime: number }[];
+        if (matches.length === 0) return null;
+        matches.sort((a, b) => b.mtime - a.mtime);
+        return matches[0].path;
       } catch {
-        // File doesn't exist yet — will be created by the game server
+        return null;
+      }
+    }
+
+    if (startupPattern && detector?.type === "logfile" && detector.logFile) {
+      let resolvedLogPath: string | null = null;
+
+      // For non-glob paths, initialize to current file size so we only read NEW content
+      if (!detector.logFile.includes("*")) {
+        resolvedLogPath = resolveLogFilePath(detector.logFile);
+        try {
+          if (resolvedLogPath && fs.existsSync(resolvedLogPath)) {
+            lastLogSize = fs.statSync(resolvedLogPath).size;
+          }
+        } catch {
+          // File doesn't exist yet — will be created by the game server
+        }
       }
 
       // Poll the log file every 3 seconds for the startup pattern
@@ -442,8 +480,17 @@ export function startServer(serverId: number): StartResult {
           return;
         }
         try {
-          if (!fs.existsSync(logFilePath)) return;
-          const stat = fs.statSync(logFilePath);
+          // Re-resolve glob patterns each iteration (file may appear mid-startup)
+          const currentPath = resolveLogFilePath(detector!.logFile!);
+          if (!currentPath || !fs.existsSync(currentPath)) return;
+
+          // If the resolved file changed (e.g. new timestamped log), reset position
+          if (currentPath !== resolvedLogPath) {
+            resolvedLogPath = currentPath;
+            lastLogSize = 0;
+          }
+
+          const stat = fs.statSync(currentPath);
           // If file was truncated/recreated, reset position
           if (stat.size < lastLogSize) {
             lastLogSize = 0;
@@ -451,7 +498,7 @@ export function startServer(serverId: number): StartResult {
           if (stat.size <= lastLogSize) return;
 
           // Read only the new portion of the file
-          const fd = fs.openSync(logFilePath, "r");
+          const fd = fs.openSync(currentPath, "r");
           const newBytes = stat.size - lastLogSize;
           const buf = Buffer.alloc(newBytes);
           fs.readSync(fd, buf, 0, newBytes, lastLogSize);
@@ -466,33 +513,20 @@ export function startServer(serverId: number): StartResult {
           // File may not exist yet or be locked — retry next interval
         }
       }, 3000);
-
-      // Timeout: give up on startup detection after configured timeout
-      if (detector.timeoutMs) {
-        setTimeout(() => {
-          if (!startupDetected) {
-            logger.warn(
-              `[ServerProcess] Startup detection timed out after ${detector.timeoutMs}ms for server ${serverId}, proceeding anyway`,
-            );
-            onStartupComplete();
-          }
-        }, detector.timeoutMs);
-      }
     }
 
-    // Fallback timeout for games without a startup detector (getStartupDetector() returns null).
+    // Startup timeout — applies to ALL detector types (stdout, logfile) and null fallback.
     // Ensures the server always transitions from "starting" → "running".
     const DEFAULT_STARTUP_TIMEOUT_MS = 120_000;
-    if (!detector) {
-      setTimeout(() => {
-        if (!startupDetected) {
-          logger.info(
-            `[ServerProcess] No startup detector for server ${serverId}, marking as running after ${DEFAULT_STARTUP_TIMEOUT_MS / 1000}s default timeout`,
-          );
-          onStartupComplete();
-        }
-      }, DEFAULT_STARTUP_TIMEOUT_MS);
-    }
+    const startupTimeoutMs = detector?.timeoutMs ?? DEFAULT_STARTUP_TIMEOUT_MS;
+    setTimeout(() => {
+      if (!startupDetected) {
+        logger.warn(
+          `[ServerProcess] Startup detection timed out after ${startupTimeoutMs / 1000}s for server ${serverId}, marking as running`,
+        );
+        onStartupComplete();
+      }
+    }, startupTimeoutMs);
 
     // Handle stderr
     child.stderr?.on("data", (data: Buffer) => {

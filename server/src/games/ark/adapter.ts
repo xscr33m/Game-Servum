@@ -204,12 +204,12 @@ export class ArkAdapter extends BaseGameAdapter {
     return { commands: ["saveworld", "doexit"], delayBetweenMs: 3000 };
   }
 
-  getStartupDetector(): StartupDetector | null {
+  getStartupDetector(_server: GameServer): StartupDetector | null {
     return {
       type: "logfile",
-      pattern: "Full Startup: .+ seconds",
+      pattern: "has successfully started",
       logFile: "ShooterGame/Saved/Logs/ShooterGame.log",
-      timeoutMs: 300_000, // ARK can take 5 minutes to start
+      timeoutMs: 900_000, // ARK can take 10+ minutes to start
     };
   }
 
