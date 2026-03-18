@@ -4,6 +4,7 @@ import {
   FaCircleExclamation,
   FaPlugCircleXmark,
   FaTrash,
+  FaTriangleExclamation,
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { useBackend } from "@/hooks/useBackend";
@@ -58,20 +59,41 @@ export function AgentStatusBanner() {
     activeConnection?.status === "updating" ||
     activeConnection?.status === "restarting";
 
-  const shouldShow =
+  const compatWarning = activeConnection?.agentInfo?.compatibilityWarning;
+
+  const shouldShowStatus =
     !!activeConnection && activeConnection.status !== "connected";
 
   // Skip the delay for intentional disconnects (update/restart) — show immediately.
   // Keep the delay for unexpected disconnects to avoid flicker on brief network blips.
-  const delayedVisible = useDelayedVisibility(shouldShow && !isIntentional);
-  const visible = isIntentional ? shouldShow : delayedVisible;
+  const delayedVisible = useDelayedVisibility(
+    shouldShowStatus && !isIntentional,
+  );
+  const statusVisible = isIntentional ? shouldShowStatus : delayedVisible;
 
-  if (!visible || !activeConnection || activeConnection.status === "connected")
-    return null;
+  // Show compatibility warning even when connected
+  if (!activeConnection) return null;
+  if (!statusVisible && !compatWarning) return null;
 
   const name = activeConnection.name;
   const status = activeConnection.status;
   const attempts = activeConnection.reconnectAttempts ?? 0;
+
+  // ── Compatibility warning (shown even when connected) ─────────────────
+  if (status === "connected" && compatWarning) {
+    return (
+      <Banner color="amber">
+        <FaTriangleExclamation className="h-3.5 w-3.5 shrink-0" />
+        <span>
+          Agent <strong>{name}</strong> is outdated (v
+          {activeConnection.agentInfo?.version}). Update recommended for full
+          compatibility. You may experience issues or missing features.
+        </span>
+      </Banner>
+    );
+  }
+
+  if (!statusVisible) return null;
 
   // ── Updating ──────────────────────────────────────────────────────────
   if (status === "updating") {

@@ -21,6 +21,28 @@ import {
 } from "@/contexts/BackendContextDef";
 import { toastSuccess } from "@/lib/toast";
 import { logger } from "@/lib/logger";
+import {
+  isAgentCompatible,
+  MIN_COMPATIBLE_AGENT_VERSION,
+} from "@game-servum/shared";
+
+/**
+ * Build an agentInfo object from the /api/v1/info response,
+ * including a compatibility warning if the agent version is too old.
+ */
+function buildAgentInfo(info: Record<string, unknown>) {
+  const version = (info.version as string) || "unknown";
+  const compatible = version !== "unknown" && isAgentCompatible(version);
+  return {
+    version,
+    hostname: (info.hostname as string) || "unknown",
+    platform: (info.platform as string) || "unknown",
+    serverCount: (info.serverCount as number) || 0,
+    compatibilityWarning: compatible
+      ? undefined
+      : `Agent v${version} is outdated. Minimum required: v${MIN_COMPATIBLE_AGENT_VERSION}. Some features may not work correctly.`,
+  };
+}
 
 // Token renewal at 80% of lifetime (default 24h → renew after ~19.2h)
 const TOKEN_RENEWAL_RATIO = 0.8;
@@ -169,12 +191,7 @@ export function BackendProvider({ children }: { children: ReactNode }) {
             const infoRes = await fetch(`${conn.url}/api/v1/info`);
             if (infoRes.ok) {
               const info = await infoRes.json();
-              agentInfo = {
-                version: info.version || "unknown",
-                hostname: info.hostname || "unknown",
-                platform: info.platform || "unknown",
-                serverCount: info.serverCount || 0,
-              };
+              agentInfo = buildAgentInfo(info);
             }
           } catch {
             /* keep existing */
@@ -573,12 +590,7 @@ export function BackendProvider({ children }: { children: ReactNode }) {
           const infoRes = await fetch(`${conn.url}/api/v1/info`);
           if (infoRes.ok) {
             const info = await infoRes.json();
-            agentInfo = {
-              version: info.version || "unknown",
-              hostname: info.hostname || "unknown",
-              platform: info.platform || "unknown",
-              serverCount: info.serverCount || 0,
-            };
+            agentInfo = buildAgentInfo(info);
           }
         } catch {
           /* keep existing agentInfo */
@@ -686,12 +698,7 @@ export function BackendProvider({ children }: { children: ReactNode }) {
         newConn.sessionToken = token;
         newConn.tokenExpiresAt = Date.now() + expiresIn * 1000;
         newConn.status = "connected";
-        newConn.agentInfo = {
-          version: info.version || "unknown",
-          hostname: info.hostname || "unknown",
-          platform: info.platform || "unknown",
-          serverCount: info.serverCount || 0,
-        };
+        newConn.agentInfo = buildAgentInfo(info);
 
         setConnections((prev) => [...prev, newConn]);
 
@@ -824,12 +831,7 @@ export function BackendProvider({ children }: { children: ReactNode }) {
           const infoRes = await fetch(`${conn.url}/api/v1/info`);
           if (infoRes.ok) {
             const info = await infoRes.json();
-            agentInfo = {
-              version: info.version || "unknown",
-              hostname: info.hostname || "unknown",
-              platform: info.platform || "unknown",
-              serverCount: info.serverCount || 0,
-            };
+            agentInfo = buildAgentInfo(info);
           }
         } catch {
           /* keep existing agentInfo */

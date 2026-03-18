@@ -9,7 +9,7 @@ export const APP_VERSION = "0.9.8";
 export const API_VERSION = "v1";
 
 /** Minimum agent version the dashboard is compatible with */
-export const MIN_COMPATIBLE_AGENT_VERSION = "1.0.0";
+export const MIN_COMPATIBLE_AGENT_VERSION = "0.9.8";
 
 /** Default ports */
 export const DEFAULT_AGENT_PORT = 3001;
