@@ -733,9 +733,11 @@ export function startServer(serverId: number): StartResult {
  * Stop a game server
  *
  * Shutdown sequence:
- * 1. Send RCON shutdown commands (game-specific graceful shutdown)
- * 2. Wait up to 60s for the process to exit on its own
- * 3. Force-kill as last resort if process doesn't exit
+ * 1. Register process exit listener (must happen BEFORE any shutdown actions
+ *    to avoid missing the exit event if the process dies during RCON commands)
+ * 2. Send RCON shutdown commands (game-specific graceful shutdown)
+ * 3. Wait for process exit with timeout
+ * 4. Force-kill as last resort if process doesn't exit
  */
 export async function stopServer(serverId: number): Promise<StopResult> {
   const server = getServerById(serverId);
@@ -766,6 +768,16 @@ export async function stopServer(serverId: number): Promise<StopResult> {
     message: `Server ${server.name} is stopping...`,
   });
 
+  // Register exit listener BEFORE any shutdown actions to prevent the race
+  // condition where the process exits during RCON commands and the event is missed.
+  let processExited = false;
+  const exitPromise = new Promise<void>((resolve) => {
+    child.once("exit", () => {
+      processExited = true;
+      resolve();
+    });
+  });
+
   // Attempt RCON graceful shutdown before resorting to process termination
   let rconShutdownSent = false;
   const adapter = getGameAdapter(server.gameId);
@@ -776,6 +788,14 @@ export async function stopServer(serverId: number): Promise<StopResult> {
     if (rcon?.isConnected()) {
       try {
         for (let i = 0; i < shutdownConfig.commands.length; i++) {
+          // If process already exited during earlier commands, stop sending more
+          if (processExited) {
+            logger.info(
+              `[ServerProcess] Server ${serverId} already exited during RCON shutdown sequence`,
+            );
+            break;
+          }
+
           const cmd = shutdownConfig.commands[i];
           logger.info(`[ServerProcess] Sending RCON shutdown command: ${cmd}`);
           await rcon.sendCommand(cmd);
@@ -790,15 +810,20 @@ export async function stopServer(serverId: number): Promise<StopResult> {
             );
           }
         }
-        rconShutdownSent = true;
-        logger.info(
-          `[ServerProcess] RCON shutdown commands sent for server ${serverId}`,
-        );
+        if (!processExited) {
+          rconShutdownSent = true;
+          logger.info(
+            `[ServerProcess] RCON shutdown commands sent for server ${serverId}`,
+          );
+        }
       } catch (error) {
-        logger.warn(
-          `[ServerProcess] RCON shutdown failed for server ${serverId}, will force-kill:`,
-          (error as Error).message,
-        );
+        // RCON errors during shutdown are expected (connection closes when server exits)
+        if (!processExited) {
+          logger.warn(
+            `[ServerProcess] RCON shutdown failed for server ${serverId}, will force-kill:`,
+            (error as Error).message,
+          );
+        }
       }
     } else {
       logger.warn(
@@ -807,48 +832,58 @@ export async function stopServer(serverId: number): Promise<StopResult> {
     }
   }
 
-  return new Promise((resolve) => {
-    const GRACEFUL_TIMEOUT_MS = rconShutdownSent ? 60000 : 5000;
+  // If process already exited during RCON commands, we're done
+  if (processExited) {
+    logger.info(
+      `[ServerProcess] Server ${serverId} exited during shutdown sequence`,
+    );
+    return { success: true, message: `Server ${server.name} stopped` };
+  }
 
-    // Set a timeout for forceful termination
-    const forceKillTimeout = setTimeout(() => {
-      logger.warn(
-        `[ServerProcess] Force killing server ${serverId} (graceful shutdown timed out after ${GRACEFUL_TIMEOUT_MS / 1000}s)`,
-      );
-      if (process.platform === "win32") {
-        exec(`taskkill /PID ${child.pid} /T /F`, (error) => {
-          if (error) {
-            logger.error(`[ServerProcess] Force kill error:`, error);
-          }
-        });
-      } else {
-        child.kill("SIGKILL");
-      }
-    }, GRACEFUL_TIMEOUT_MS);
-
-    // Listen for exit to clear the timeout
-    child.once("exit", () => {
-      clearTimeout(forceKillTimeout);
-      resolve({
-        success: true,
-        message: `Server ${server.name} stopped`,
+  // If RCON shutdown was not sent, force-kill the process immediately
+  if (!rconShutdownSent) {
+    if (process.platform === "win32") {
+      exec(`taskkill /PID ${child.pid} /T /F`, (error) => {
+        if (error) {
+          logger.error(`[ServerProcess] taskkill error:`, error);
+        }
       });
-    });
-
-    // If RCON shutdown was sent, the process should exit on its own.
-    // Otherwise, send a signal to terminate the process.
-    if (!rconShutdownSent) {
-      if (process.platform === "win32") {
-        exec(`taskkill /PID ${child.pid} /T /F`, (error) => {
-          if (error) {
-            logger.error(`[ServerProcess] taskkill error:`, error);
-          }
-        });
-      } else {
-        child.kill("SIGTERM");
-      }
+    } else {
+      child.kill("SIGTERM");
     }
-  });
+  }
+
+  // Wait for process exit with a timeout
+  const GRACEFUL_TIMEOUT_MS = rconShutdownSent ? 60000 : 5000;
+
+  const timeoutPromise = new Promise<"timeout">((resolve) =>
+    setTimeout(() => resolve("timeout"), GRACEFUL_TIMEOUT_MS),
+  );
+
+  const result = await Promise.race([
+    exitPromise.then(() => "exited" as const),
+    timeoutPromise,
+  ]);
+
+  if (result === "timeout") {
+    logger.warn(
+      `[ServerProcess] Force killing server ${serverId} (graceful shutdown timed out after ${GRACEFUL_TIMEOUT_MS / 1000}s)`,
+    );
+    if (process.platform === "win32") {
+      exec(`taskkill /PID ${child.pid} /T /F`, (error) => {
+        if (error) {
+          logger.error(`[ServerProcess] Force kill error:`, error);
+        }
+      });
+    } else {
+      child.kill("SIGKILL");
+    }
+
+    // Wait for actual exit after force kill
+    await exitPromise;
+  }
+
+  return { success: true, message: `Server ${server.name} stopped` };
 }
 
 /**
