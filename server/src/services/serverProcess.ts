@@ -47,6 +47,13 @@ import type { GameServer } from "../types/index.js";
 // Track running server processes
 const runningProcesses: Map<number, ChildProcess> = new Map();
 
+// Track process exit promises — created at spawn time so stopServer can
+// reliably detect process exit regardless of event-loop scheduling.
+const processExitPromises: Map<
+  number,
+  { promise: Promise<void>; resolve: () => void }
+> = new Map();
+
 // Track servers currently performing their first start (config not yet generated)
 const firstStartServers = new Set<number>();
 
@@ -279,6 +286,17 @@ export function startServer(serverId: number): StartResult {
 
     // Store the process
     runningProcesses.set(serverId, child);
+
+    // Create exit promise at spawn time — resolved from the exit handler below.
+    // This guarantees stopServer can detect exit even if the process dies during RCON commands.
+    let resolveExit!: () => void;
+    const exitPromise = new Promise<void>((r) => {
+      resolveExit = r;
+    });
+    processExitPromises.set(serverId, {
+      promise: exitPromise,
+      resolve: resolveExit,
+    });
 
     // Record PID and start timestamp but keep status as "starting" until
     // the game-specific startup detector fires (or the timeout expires).
@@ -567,6 +585,13 @@ export function startServer(serverId: number): StartResult {
       // Remove from tracking
       runningProcesses.delete(serverId);
 
+      // Resolve the exit promise so stopServer detects exit immediately
+      const exitEntry = processExitPromises.get(serverId);
+      if (exitEntry) {
+        exitEntry.resolve();
+        processExitPromises.delete(serverId);
+      }
+
       // Stop player tracking
       stopPlayerTracking(serverId);
 
@@ -733,11 +758,14 @@ export function startServer(serverId: number): StartResult {
  * Stop a game server
  *
  * Shutdown sequence:
- * 1. Register process exit listener (must happen BEFORE any shutdown actions
- *    to avoid missing the exit event if the process dies during RCON commands)
- * 2. Send RCON shutdown commands (game-specific graceful shutdown)
+ * 1. Send RCON shutdown commands (game-specific graceful shutdown)
+ * 2. Race RCON commands against the process exit promise (created at spawn time)
  * 3. Wait for process exit with timeout
  * 4. Force-kill as last resort if process doesn't exit
+ *
+ * The exit promise is created in startServer at spawn time and resolved from
+ * the startServer exit handler, which is proven to fire reliably. This avoids
+ * event-loop scheduling issues with listeners registered during async operations.
  */
 export async function stopServer(serverId: number): Promise<StopResult> {
   const server = getServerById(serverId);
@@ -768,15 +796,19 @@ export async function stopServer(serverId: number): Promise<StopResult> {
     message: `Server ${server.name} is stopping...`,
   });
 
-  // Register exit listener BEFORE any shutdown actions to prevent the race
-  // condition where the process exits during RCON commands and the event is missed.
-  let processExited = false;
-  const exitPromise = new Promise<void>((resolve) => {
-    child.once("exit", () => {
-      processExited = true;
-      resolve();
+  // Get the exit promise created at spawn time — guaranteed to resolve when
+  // the startServer exit handler runs (which the logs confirm fires reliably).
+  const exitEntry = processExitPromises.get(serverId);
+  const exitPromise =
+    exitEntry?.promise ??
+    new Promise<void>((resolve) => {
+      // Fallback: register listener directly if no spawn-time promise exists
+      // (e.g. for processes restored after restart)
+      child.once("exit", resolve);
     });
-  });
+
+  // Helper: check if the process has already exited
+  const hasExited = () => !runningProcesses.has(serverId);
 
   // Attempt RCON graceful shutdown before resorting to process termination
   let rconShutdownSent = false;
@@ -789,7 +821,7 @@ export async function stopServer(serverId: number): Promise<StopResult> {
       try {
         for (let i = 0; i < shutdownConfig.commands.length; i++) {
           // If process already exited during earlier commands, stop sending more
-          if (processExited) {
+          if (hasExited()) {
             logger.info(
               `[ServerProcess] Server ${serverId} already exited during RCON shutdown sequence`,
             );
@@ -798,19 +830,42 @@ export async function stopServer(serverId: number): Promise<StopResult> {
 
           const cmd = shutdownConfig.commands[i];
           logger.info(`[ServerProcess] Sending RCON shutdown command: ${cmd}`);
-          await rcon.sendCommand(cmd);
+
+          // Race each RCON command against the exit promise so we don't
+          // block on a command that will never return (server already dead).
+          const rconResult = await Promise.race([
+            rcon.sendCommand(cmd).then(() => "sent" as const),
+            exitPromise.then(() => "exited" as const),
+          ]);
+
+          if (rconResult === "exited") {
+            logger.info(
+              `[ServerProcess] Server ${serverId} exited while sending RCON command: ${cmd}`,
+            );
+            break;
+          }
 
           // Delay between commands (e.g. saveworld → doexit)
           if (
             shutdownConfig.delayBetweenMs &&
             i < shutdownConfig.commands.length - 1
           ) {
-            await new Promise((r) =>
-              setTimeout(r, shutdownConfig.delayBetweenMs),
-            );
+            // Also race delay against exit
+            const delayResult = await Promise.race([
+              new Promise<"delayed">((r) =>
+                setTimeout(() => r("delayed"), shutdownConfig.delayBetweenMs),
+              ),
+              exitPromise.then(() => "exited" as const),
+            ]);
+            if (delayResult === "exited") {
+              logger.info(
+                `[ServerProcess] Server ${serverId} exited during shutdown delay`,
+              );
+              break;
+            }
           }
         }
-        if (!processExited) {
+        if (!hasExited()) {
           rconShutdownSent = true;
           logger.info(
             `[ServerProcess] RCON shutdown commands sent for server ${serverId}`,
@@ -818,7 +873,7 @@ export async function stopServer(serverId: number): Promise<StopResult> {
         }
       } catch (error) {
         // RCON errors during shutdown are expected (connection closes when server exits)
-        if (!processExited) {
+        if (!hasExited()) {
           logger.warn(
             `[ServerProcess] RCON shutdown failed for server ${serverId}, will force-kill:`,
             (error as Error).message,
@@ -833,7 +888,7 @@ export async function stopServer(serverId: number): Promise<StopResult> {
   }
 
   // If process already exited during RCON commands, we're done
-  if (processExited) {
+  if (hasExited()) {
     logger.info(
       `[ServerProcess] Server ${serverId} exited during shutdown sequence`,
     );
