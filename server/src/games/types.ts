@@ -93,6 +93,8 @@ export interface LogPaths {
   extensions: string[];
   /** Directory where archived log sessions are stored */
   archiveDir: string;
+  /** When set, only these specific filenames are treated as logs (overrides extension matching) */
+  includeFiles?: string[];
 }
 
 // ── Player List Operation Result ─────────────────────────────────────

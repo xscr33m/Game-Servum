@@ -352,6 +352,7 @@ export class SevenDaysAdapter extends BaseGameAdapter {
     return {
       directories: [server.installPath],
       extensions: [".txt"],
+      includeFiles: ["output_log.txt"],
       archiveDir: path.join(server.installPath, "log_archive"),
     };
   }
