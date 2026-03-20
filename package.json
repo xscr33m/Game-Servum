@@ -1,8 +1,9 @@
 {
   "name": "game-servum",
-  "version": "0.9.7",
+  "version": "0.9.8",
   "description": "Web-based GameServer management with SteamCMD",
   "private": true,
+  "license": "GPL-3.0-only",
   "workspaces": [
     "packages/shared",
     "client",
@@ -19,7 +20,7 @@
     "build:agent": "npm run build -w @game-servum/shared && npm run build --workspace=server && node scripts/build-agent-windows.mjs",
     "build:dashboard": "npm run build -w @game-servum/shared && npm run build --workspace=client && node scripts/build-dashboard-windows.mjs",
     "build:linux": "npm run build -w @game-servum/shared && npm run build --workspace=client && node scripts/build-dashboard-linux.mjs",
-    "build:all": "npm run build:agent && npm run build:dashboard && npm run build:linux"
+    "version:bump": "node scripts/bump-version.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

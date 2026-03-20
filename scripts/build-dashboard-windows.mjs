@@ -94,7 +94,7 @@ const electronPkg = {
   version: APP_VERSION,
   description: "Game-Servum Dashboard — Remote Agent Management",
   author: "xscr33mLabs",
-  license: "MIT",
+  license: "GPL-3.0-only",
   main: "main/main-unified.js",
   dependencies: {
     "electron-updater": "^6.8.3",

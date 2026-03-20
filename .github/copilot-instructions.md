@@ -52,10 +52,9 @@ npm run dev                  # Starts shared (watch) + client (:5173) + server (
 npm run dev:client           # Vite dev server with HMR + proxy to backend
 npm run dev:server           # tsx watch mode
 npm run build                # Build shared → server (tsc) → client (vite build)
-npm run build:agent          # Build Agent-only Windows installer (~100 MB)
-npm run build:dashboard      # Build Dashboard-only Windows installer (~90 MB)
-npm run build:linux          # Build Dashboard AppImage for Linux (Dashboard-only, no Agent)
-npm run build:all            # Build all platform-specific installers (only works on respective platform)
+npm run build:agent          # Build Agent-only Windows installer (~100 MB) — Windows only
+npm run build:dashboard      # Build Dashboard-only Windows installer (~90 MB) — Windows only
+npm run build:linux          # Build Dashboard AppImage for Linux (Dashboard-only, no Agent) — Linux only
 npm run update:check         # Check all workspace packages for available updates (dry-run)
 npm run update:install       # Update workspace packages to latest versions
 npm run clean                # Clear build caches and dist folders
@@ -66,10 +65,9 @@ npm run clean                # Clear build caches and dist folders
 - `build:agent` requires Windows (uses NSIS installer, bundles Node.js runtime + WinSW service wrapper)
 - `build:dashboard` requires Windows (uses Squirrel.Windows installer, Electron only)
 - `build:linux` requires Linux build environment (uses `mksquashfs`, `AppImage` tools)
-- `build:all` builds only what's possible on current platform (Windows: Agent+Dashboard, Linux: Dashboard AppImage)
 - `dev` and `build` work on any platform but agent runtime is Windows-only
 
-**⚠️ Important:** For a full release, build Windows installers on Windows, then build Linux AppImage on Linux separately.
+**⚠️ Important:** For a full release, build Windows installers (`build:agent` + `build:dashboard`) on Windows, then build Linux AppImage (`build:linux`) on Linux separately.
 
 **Testing & Linting:**
 
@@ -456,23 +454,45 @@ GAME_PLUGINS.set("mygame", mygamePlugin);
 
 ## Version Management & Releases
 
-**Version synchronization is critical** — two locations must always match:
+**Single shared version** for Agent + Dashboard — both always release together.
 
-1. **`package.json`** (root) — use `npm version major|minor|patch` to update
-2. **`packages/shared/src/constants/index.ts`** — manually update `APP_VERSION` to match
+**Version bump** (replaces manual `npm version` + constant editing):
+
+```bash
+# Bump to specific version:
+npm run version:bump -- 0.10.0
+
+# Bump by keyword:
+npm run version:bump -- patch    # 0.10.0 → 0.10.1
+npm run version:bump -- minor    # 0.10.1 → 0.11.0
+npm run version:bump -- major    # 0.11.0 → 1.0.0
+
+# Also update minimum compatible agent version (for breaking API changes):
+npm run version:bump -- 1.0.0 --min-agent 1.0.0
+```
+
+The script (`scripts/bump-version.mjs`) updates **all locations automatically**:
+
+- All 4 `package.json` files (root, client, server, shared) via `npm version`
+- `APP_VERSION` constant in `packages/shared/src/constants/index.ts`
+- Optionally `MIN_COMPATIBLE_AGENT_VERSION` via `--min-agent` flag
+
+**Compatibility checking:**
+
+- `MIN_COMPATIBLE_AGENT_VERSION` — the oldest agent version the dashboard can work with. Only bump when making breaking API changes
+- `isAgentCompatible(agentVersion)` — checks major match + `>= MIN_COMPATIBLE_AGENT_VERSION`
+- Dashboard shows a warning banner (soft-block) when connecting to an outdated agent
 
 **Release process**:
 
-1. Update version in both locations (must match exactly)
-2. Build installers:
-   - `npm run build:agent` → `dist/Game-Servum-Agent-v{version}.exe`
-   - `npm run build:dashboard` → `dist/Game-Servum-Dashboard-v{version}.exe`
-   - `npm run build:linux` → `dist/Game-Servum-Dashboard-v{version}.AppImage`
-   - Or use `npm run build:all` to build everything
-3. Test all installation scenarios (Agent + Dashboard on same or different machines)
-4. Create GitHub Release with tag `v{version}` (e.g., `v1.2.0`)
-5. Upload all installers as release assets
-6. Auto-updater polls GitHub Releases API every 4 hours (configurable)
+1. Run `npm run version:bump -- <version>` (e.g., `0.10.0`)
+2. Review changes, commit, and push
+3. Build Windows installers on Windows: `npm run build:agent && npm run build:dashboard`
+4. Build Linux AppImage on Linux: `npm run build:linux`
+5. Test all installation scenarios (Agent + Dashboard on same or different machines)
+6. Create GitHub Release with tag `v{version}` (e.g., `v0.10.0`)
+7. Upload all installers as release assets
+8. Auto-updater polls GitHub Releases API every 4 hours (configurable)
 
 **Platform-specific builds:**
 

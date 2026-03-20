@@ -18,6 +18,7 @@ import type {
   PlayerFileConfig,
   PlayerListResult,
   EditableFileConfig,
+  BrowsableRoot,
   ModCopyResult,
   LogPaths,
 } from "./types.js";
@@ -341,6 +342,20 @@ export abstract class BaseGameAdapter implements GameAdapter {
     return [];
   }
 
+  getBrowsableRoots(_server: GameServer): BrowsableRoot[] {
+    return [];
+  }
+
+  /**
+   * Default: no RCON-based shutdown commands.
+   */
+  getShutdownCommands(): {
+    commands: string[];
+    delayBetweenMs?: number;
+  } | null {
+    return null;
+  }
+
   /**
    * Default: no extra environment variables needed.
    */
@@ -352,7 +367,7 @@ export abstract class BaseGameAdapter implements GameAdapter {
    * Default: no startup detection (uses fixed delay).
    * Games override to provide pattern-based detection.
    */
-  getStartupDetector(): StartupDetector | null {
+  getStartupDetector(_server: GameServer): StartupDetector | null {
     return null;
   }
 

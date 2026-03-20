@@ -22,6 +22,7 @@ import type {
   RconConfig,
   PlayerFileConfig,
   EditableFileConfig,
+  BrowsableRoot,
   ModCopyResult,
   LogPaths,
   StartupDetector,
@@ -54,6 +55,31 @@ function resolveProfilesPath(server: GameServer): string {
     : path.join(server.installPath, server.profilesPath);
 }
 
+/**
+ * DayZ renames BEServer_x64.cfg to BEServer_x64_active_xxx.cfg at runtime.
+ * After a non-graceful shutdown the original filename is never restored.
+ * This helper finds the active variant so RCON config can still be read.
+ */
+function findActiveBEConfig(dir: string): string | null {
+  try {
+    const files = fs.readdirSync(dir);
+    const active = files.find(
+      (f) => f.startsWith("BEServer_x64") && f.endsWith(".cfg"),
+    );
+    return active ? path.join(dir, active) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check whether any BattlEye config file exists in the given directory
+ * (including the _active_ variant that DayZ creates at runtime).
+ */
+function hasBEConfig(dir: string): boolean {
+  return findActiveBEConfig(dir) !== null;
+}
+
 // ── DayZ Adapter ───────────────────────────────────────────────────
 
 export class DayZAdapter extends BaseGameAdapter {
@@ -71,7 +97,7 @@ export class DayZAdapter extends BaseGameAdapter {
       "-config=serverDZ.cfg -port={PORT} -profiles={PROFILES} -doLogs -adminLog -netLog -freezeCheck",
     description:
       "Post-apocalyptic survival game. Requires Steam login to download.",
-    configFiles: ["serverDZ.cfg", "profiles/"],
+    configFiles: ["serverDZ.cfg", "profiles/", "mpmissions/"],
     firewallRules: [
       { portOffset: 0, portCount: 3, protocol: "UDP", description: "Game" },
       {
@@ -168,24 +194,25 @@ export class DayZAdapter extends BaseGameAdapter {
       );
     }
 
-    // Ensure BattlEye directory exists, create if missing
+    // Ensure BattlEye directory and config exist
     const resolvedProfiles = resolveProfilesPath(server);
     const battleEyePath = path.join(resolvedProfiles, "BattlEye");
     if (!fs.existsSync(battleEyePath)) {
       fs.mkdirSync(battleEyePath, { recursive: true });
       logger.info(`[DayZ] Created BattlEye directory: ${battleEyePath}`);
+    }
 
-      // Create default BattlEye config
+    // Create default BattlEye config if no config file exists at all
+    // (including _active_ variants that DayZ creates at runtime)
+    if (!hasBEConfig(battleEyePath)) {
       const beConfigPath = path.join(battleEyePath, "BEServer_x64.cfg");
-      if (!fs.existsSync(beConfigPath)) {
-        const rconPort = server.port + 3;
-        fs.writeFileSync(
-          beConfigPath,
-          `RConPassword ${generatePassword(20)}\nRConPort ${rconPort}\nRestrictRCon 0\n`,
-          "utf-8",
-        );
-        logger.info(`[DayZ] Created default BattlEye config`);
-      }
+      const rconPort = server.port + 3;
+      fs.writeFileSync(
+        beConfigPath,
+        `RConPassword ${generatePassword(20)}\nRConPort ${rconPort}\nRestrictRCon 0\n`,
+        "utf-8",
+      );
+      logger.info(`[DayZ] Created default BattlEye config`);
     }
 
     return errors;
@@ -196,34 +223,47 @@ export class DayZAdapter extends BaseGameAdapter {
   readRconConfig(server: GameServer): RconConfig | null {
     const resolvedProfiles = resolveProfilesPath(server);
 
-    const possiblePaths = [
-      path.join(resolvedProfiles, "BattlEye", "BEServer_x64.cfg"),
-      path.join(server.installPath, "battleye", "BEServer_x64.cfg"),
-      path.join(server.installPath, "BattlEye", "BEServer_x64.cfg"),
+    // Directories to check for BattlEye config (in priority order)
+    const possibleDirs = [
+      path.join(resolvedProfiles, "BattlEye"),
+      path.join(server.installPath, "battleye"),
+      path.join(server.installPath, "BattlEye"),
     ];
 
-    for (const cfgPath of possiblePaths) {
-      if (fs.existsSync(cfgPath)) {
-        try {
-          const content = fs.readFileSync(cfgPath, "utf-8");
-          const passwordMatch = content.match(/^RConPassword\s+(.+)$/m);
-          const portMatch = content.match(/^RConPort\s+(\d+)$/m);
+    for (const dir of possibleDirs) {
+      if (!fs.existsSync(dir)) continue;
 
-          if (passwordMatch) {
-            return {
-              password: passwordMatch[1].trim(),
-              port: portMatch ? parseInt(portMatch[1].trim(), 10) : 2305,
-            };
-          }
-        } catch (error) {
-          logger.error(
-            `[DayZ] Error reading BattlEye config ${cfgPath}:`,
-            error,
-          );
+      // Try the standard filename first
+      const standardPath = path.join(dir, "BEServer_x64.cfg");
+      const configPath = fs.existsSync(standardPath)
+        ? standardPath
+        : findActiveBEConfig(dir);
+
+      if (!configPath) continue;
+
+      try {
+        const content = fs.readFileSync(configPath, "utf-8");
+        const passwordMatch = content.match(/^RConPassword\s+(.+)$/m);
+        const portMatch = content.match(/^RConPort\s+(\d+)$/m);
+
+        if (passwordMatch) {
+          logger.debug(`[DayZ] Found BattlEye config: ${configPath}`);
+          return {
+            password: passwordMatch[1].trim(),
+            port: portMatch ? parseInt(portMatch[1].trim(), 10) : 2305,
+          };
         }
+      } catch (error) {
+        logger.error(
+          `[DayZ] Error reading BattlEye config ${configPath}:`,
+          error,
+        );
       }
     }
 
+    logger.debug(
+      `[DayZ] No BattlEye config found in: ${possibleDirs.join(", ")}`,
+    );
     return null;
   }
 
@@ -255,23 +295,35 @@ export class DayZAdapter extends BaseGameAdapter {
       fs.writeFileSync(modCppPath, modCppContent);
     }
 
-    // DayZ-specific: Copy .bikey files to server keys folder
-    const keysSource = path.join(targetPath, "keys");
+    // DayZ-specific: Recursively find and copy .bikey files to server keys folder
     const keysTarget = path.join(serverInstallPath, "keys");
+    const bikeyFiles: string[] = [];
 
-    if (fs.existsSync(keysSource)) {
+    function findBikeys(dir: string): void {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          findBikeys(fullPath);
+        } else if (entry.name.endsWith(".bikey")) {
+          bikeyFiles.push(fullPath);
+        }
+      }
+    }
+
+    findBikeys(targetPath);
+
+    if (bikeyFiles.length > 0) {
       if (!fs.existsSync(keysTarget)) {
         fs.mkdirSync(keysTarget, { recursive: true });
       }
-      const keyFiles = fs.readdirSync(keysSource);
-      for (const keyFile of keyFiles) {
-        if (keyFile.endsWith(".bikey")) {
-          fs.copyFileSync(
-            path.join(keysSource, keyFile),
-            path.join(keysTarget, keyFile),
-          );
-        }
+      for (const bikeyPath of bikeyFiles) {
+        const fileName = path.basename(bikeyPath);
+        fs.copyFileSync(bikeyPath, path.join(keysTarget, fileName));
       }
+      logger.info(
+        `[DayZ] Copied ${bikeyFiles.length} .bikey file(s) to keys/ for mod "${mod.name}"`,
+      );
     }
 
     return result;
@@ -356,9 +408,24 @@ export class DayZAdapter extends BaseGameAdapter {
     return [".ADM", ".RPT", ".log"];
   }
 
-  getStartupDetector(): StartupDetector | null {
-    // DayZ does not have a reliable startup pattern — uses fixed delay
-    return null;
+  getShutdownCommands(): {
+    commands: string[];
+    delayBetweenMs?: number;
+  } | null {
+    return { commands: ["#shutdown"] };
+  }
+
+  getStartupDetector(server: GameServer): StartupDetector | null {
+    const profilesDir = resolveProfilesPath(server);
+    // DayZ writes script logs with timestamped filenames (script_YYYY-MM-DD_HH-MM-SS.log).
+    // Use a relative glob; the polling code resolves the newest matching file.
+    const relProfiles = path.relative(server.installPath, profilesDir);
+    return {
+      type: "logfile",
+      pattern: "\\[MissionServer\\] OnMissionStart",
+      logFile: path.join(relProfiles, "script_*.log"),
+      timeoutMs: 120_000,
+    };
   }
 
   getLogPaths(server: GameServer): LogPaths {
@@ -382,6 +449,21 @@ export class DayZAdapter extends BaseGameAdapter {
         name: "BEServer_x64.cfg",
         path: path.join(resolvedProfiles, "BattlEye", "BEServer_x64.cfg"),
         readonly: true,
+      },
+    ];
+  }
+
+  getBrowsableRoots(server: GameServer): BrowsableRoot[] {
+    return [
+      {
+        key: "profiles",
+        label: "Profiles",
+        resolvePath: (s: GameServer) => resolveProfilesPath(s),
+      },
+      {
+        key: "mpmissions",
+        label: "MPMissions",
+        resolvePath: (s: GameServer) => path.join(s.installPath, "mpmissions"),
       },
     ];
   }

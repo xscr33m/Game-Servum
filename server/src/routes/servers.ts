@@ -1,8 +1,11 @@
 import { Router, type Request, type Response } from "express";
 import path from "path";
+import os from "os";
 import fs from "fs";
 import fsPromises from "fs/promises";
 import { exec } from "child_process";
+import multer from "multer";
+import AdmZip from "adm-zip";
 import { logger, broadcast } from "../index.js";
 import {
   getAllServers,
@@ -95,7 +98,7 @@ import {
   removeFirewallRules,
   updateFirewallRules,
 } from "../services/firewallManager.js";
-import type { CreateServerRequest } from "../types/index.js";
+import type { CreateServerRequest, GameServer } from "../types/index.js";
 
 const router = Router();
 
@@ -1151,17 +1154,23 @@ router.get("/:id/config-status", (req: Request, res: Response) => {
       ? adapter.isConfigGenerated(server)
       : true; // Non-ARK games always have config generated after install
 
-  // Check which config files actually exist
-  const existingFiles = configFiles
+  // Check which config files actually exist (skip directory entries)
+  const fileEntries = configFiles.filter((f) => !f.endsWith("/"));
+  const existingFiles = fileEntries
     .map((f) => path.basename(f))
     .filter((basename) => {
-      const fullPath = configFiles.find((f) => path.basename(f) === basename);
+      const fullPath = fileEntries.find((f) => path.basename(f) === basename);
       return fullPath && fs.existsSync(path.join(server.installPath, fullPath));
     });
 
+  // Preserve trailing / for directory entries so the frontend can distinguish them
+  const configFileLabels = configFiles.map((f) =>
+    f.endsWith("/") ? f : path.basename(f),
+  );
+
   res.json({
     configGenerated,
-    configFiles: configFiles.map((f) => path.basename(f)),
+    configFiles: configFileLabels,
     existingFiles,
   });
 });
@@ -1260,13 +1269,16 @@ router.get("/:id/config", (req: Request, res: Response) => {
     });
   }
 
-  // Support ?file= query param for multi-file games (default: first file)
+  // Filter out directory entries — they are handled by the browse API
+  const editableConfigFiles = configFiles.filter((f) => !f.endsWith("/"));
+
+  // Support ?file= query param for multi-file games (default: first non-directory file)
   const requestedFile = req.query.file as string | undefined;
   const configFileName = requestedFile
-    ? configFiles.find(
+    ? editableConfigFiles.find(
         (f) => path.basename(f) === requestedFile || f === requestedFile,
       )
-    : configFiles[0];
+    : editableConfigFiles[0];
 
   if (!configFileName) {
     return res.status(400).json({
@@ -1300,11 +1312,15 @@ router.get("/:id/config", (req: Request, res: Response) => {
 
   try {
     const content = readGameFile(configPath);
+    // Preserve trailing / for directory entries so the frontend can distinguish them
+    const configFileLabels = configFiles.map((f) =>
+      f.endsWith("/") ? f : path.basename(f),
+    );
     res.json({
       fileName: path.basename(configFileName),
       path: configPath,
       content,
-      configFiles: configFiles.map((f) => path.basename(f)),
+      configFiles: configFileLabels,
     });
   } catch (err) {
     res.status(500).json({
@@ -1342,13 +1358,16 @@ router.put("/:id/config", (req: Request, res: Response) => {
     });
   }
 
-  // Support ?file= query param for multi-file games (default: first file)
+  // Filter out directory entries — they are handled by the browse API
+  const editableConfigFiles = configFiles.filter((f) => !f.endsWith("/"));
+
+  // Support ?file= query param for multi-file games (default: first non-directory file)
   const requestedFile = req.query.file as string | undefined;
   const configFileName = requestedFile
-    ? configFiles.find(
+    ? editableConfigFiles.find(
         (f) => path.basename(f) === requestedFile || f === requestedFile,
       )
-    : configFiles[0];
+    : editableConfigFiles[0];
 
   if (!configFileName) {
     return res.status(400).json({
@@ -2277,6 +2296,709 @@ router.delete("/:id/firewall", async (req: Request, res: Response) => {
     });
   }
 });
+
+// ── File Browser API ─────────────────────────────────────────────────
+// Allows browsing and editing files within adapter-defined root directories.
+// Security: User sends a rootKey (e.g., "profiles") — resolved to an absolute
+// path by the game adapter. Relative paths are validated against the root to
+// prevent path traversal.
+
+const TEXT_FILE_EXTENSIONS = new Set([
+  ".cfg",
+  ".xml",
+  ".json",
+  ".txt",
+  ".ini",
+  ".cpp",
+  ".properties",
+  ".log",
+  ".adm",
+  ".rpt",
+  ".dayzprofile",
+  ".md",
+  ".yaml",
+  ".yml",
+  ".conf",
+  ".config",
+  ".toml",
+  ".env",
+  ".bat",
+  ".sh",
+  ".ps1",
+  ".csv",
+  ".htm",
+  ".html",
+  ".sqf",
+  ".hpp",
+  ".c",
+  ".h",
+]);
+
+function isTextFile(filePath: string): boolean {
+  const ext = path.extname(filePath).toLowerCase();
+  return TEXT_FILE_EXTENSIONS.has(ext) || ext === "";
+}
+
+function resolveAndValidateBrowsePath(
+  server: GameServer,
+  rootKey: string,
+  relativePath: string,
+): { rootDir: string; absolutePath: string } | { error: string } {
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter) {
+    return { error: "No adapter found for this game" };
+  }
+
+  const roots = adapter.getBrowsableRoots(server);
+  const root = roots.find((r) => r.key === rootKey);
+  if (!root) {
+    return {
+      error: `Browsable root '${rootKey}' is not defined for this game`,
+    };
+  }
+
+  const rootDir = root.resolvePath(server);
+
+  // Normalize and validate the relative path
+  const normalized = path.normalize(relativePath).replace(/\\/g, "/");
+  if (
+    normalized.startsWith("..") ||
+    normalized.includes("/../") ||
+    normalized === ".."
+  ) {
+    return { error: "Path traversal is not allowed" };
+  }
+
+  const absolutePath = path.resolve(rootDir, normalized);
+
+  // Ensure resolved path is within the root
+  if (!absolutePath.startsWith(rootDir)) {
+    return { error: "Path traversal is not allowed" };
+  }
+
+  return { rootDir, absolutePath };
+}
+
+interface FileTreeEntry {
+  name: string;
+  type: "file" | "directory";
+  size?: number;
+  extension?: string;
+  editable?: boolean;
+  children?: FileTreeEntry[];
+}
+
+function buildFileTree(
+  dirPath: string,
+  depth: number,
+  maxDepth: number,
+): FileTreeEntry[] {
+  if (depth >= maxDepth || !fs.existsSync(dirPath)) {
+    return [];
+  }
+
+  try {
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    const result: FileTreeEntry[] = [];
+
+    // Sort: directories first, then files, alphabetically
+    const sorted = entries.sort((a, b) => {
+      if (a.isDirectory() && !b.isDirectory()) return -1;
+      if (!a.isDirectory() && b.isDirectory()) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    for (const entry of sorted) {
+      const fullPath = path.join(dirPath, entry.name);
+      if (entry.isDirectory()) {
+        result.push({
+          name: entry.name,
+          type: "directory",
+          children: buildFileTree(fullPath, depth + 1, maxDepth),
+        });
+      } else if (entry.isFile()) {
+        try {
+          const stats = fs.statSync(fullPath);
+          const ext = path.extname(entry.name).toLowerCase();
+          result.push({
+            name: entry.name,
+            type: "file",
+            size: stats.size,
+            extension: ext || undefined,
+            editable: isTextFile(entry.name),
+          });
+        } catch {
+          // Skip files we can't stat
+        }
+      }
+    }
+
+    return result;
+  } catch {
+    return [];
+  }
+}
+
+// GET /api/servers/:id/browse/roots - List available browsable roots for this server
+router.get("/:id/browse/roots", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  const adapter = getGameAdapter(server.gameId);
+  const roots = adapter?.getBrowsableRoots(server) ?? [];
+
+  res.json({
+    roots: roots.map((r) => ({ key: r.key, label: r.label })),
+  });
+});
+
+// GET /api/servers/:id/browse/tree - Get recursive directory tree
+router.get("/:id/browse/tree", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const rootKey = req.query.root as string;
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  if (!rootKey) {
+    return res
+      .status(400)
+      .json({ error: "Query parameter 'root' is required" });
+  }
+
+  const resolved = resolveAndValidateBrowsePath(server, rootKey, ".");
+  if ("error" in resolved) {
+    return res.status(400).json({ error: resolved.error });
+  }
+
+  const maxDepth = Math.min(parseInt(req.query.depth as string) || 10, 15);
+  const tree = buildFileTree(resolved.rootDir, 0, maxDepth);
+
+  res.json({ root: rootKey, tree });
+});
+
+// GET /api/servers/:id/browse/file - Read a file
+router.get("/:id/browse/file", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const rootKey = req.query.root as string;
+  const filePath = req.query.path as string;
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  if (!rootKey || !filePath) {
+    return res
+      .status(400)
+      .json({ error: "Query parameters 'root' and 'path' are required" });
+  }
+
+  const resolved = resolveAndValidateBrowsePath(server, rootKey, filePath);
+  if ("error" in resolved) {
+    return res.status(400).json({ error: resolved.error });
+  }
+
+  if (!fs.existsSync(resolved.absolutePath)) {
+    return res.status(404).json({ error: "File not found" });
+  }
+
+  try {
+    const stats = fs.statSync(resolved.absolutePath);
+    if (!stats.isFile()) {
+      return res.status(400).json({ error: "Path is not a file" });
+    }
+
+    if (!isTextFile(resolved.absolutePath)) {
+      return res
+        .status(400)
+        .json({ error: "Binary files cannot be opened in the editor" });
+    }
+
+    const content = readGameFile(resolved.absolutePath);
+    res.json({
+      content,
+      size: stats.size,
+      path: filePath,
+    });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ error: `Failed to read file: ${(err as Error).message}` });
+  }
+});
+
+// PUT /api/servers/:id/browse/file - Write/update a file
+router.put("/:id/browse/file", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const {
+    root: rootKey,
+    path: filePath,
+    content,
+  } = req.body as {
+    root: string;
+    path: string;
+    content: string;
+  };
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  if (!rootKey || !filePath || typeof content !== "string") {
+    return res
+      .status(400)
+      .json({ error: "Fields 'root', 'path', and 'content' are required" });
+  }
+
+  const resolved = resolveAndValidateBrowsePath(server, rootKey, filePath);
+  if ("error" in resolved) {
+    return res.status(400).json({ error: resolved.error });
+  }
+
+  if (!fs.existsSync(resolved.absolutePath)) {
+    return res.status(404).json({ error: "File not found" });
+  }
+
+  if (!isTextFile(resolved.absolutePath)) {
+    return res.status(400).json({ error: "Only text files can be edited" });
+  }
+
+  try {
+    fs.writeFileSync(resolved.absolutePath, content, "utf-8");
+    res.json({ success: true, message: "File saved" });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ error: `Failed to save file: ${(err as Error).message}` });
+  }
+});
+
+// POST /api/servers/:id/browse/file - Create a new file
+router.post("/:id/browse/file", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const {
+    root: rootKey,
+    path: filePath,
+    content,
+  } = req.body as {
+    root: string;
+    path: string;
+    content?: string;
+  };
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  if (!rootKey || !filePath) {
+    return res
+      .status(400)
+      .json({ error: "Fields 'root' and 'path' are required" });
+  }
+
+  if (!isTextFile(filePath)) {
+    return res.status(400).json({ error: "Only text files can be created" });
+  }
+
+  const resolved = resolveAndValidateBrowsePath(server, rootKey, filePath);
+  if ("error" in resolved) {
+    return res.status(400).json({ error: resolved.error });
+  }
+
+  if (fs.existsSync(resolved.absolutePath)) {
+    return res.status(409).json({ error: "File already exists" });
+  }
+
+  try {
+    // Ensure parent directory exists
+    const parentDir = path.dirname(resolved.absolutePath);
+    if (!fs.existsSync(parentDir)) {
+      fs.mkdirSync(parentDir, { recursive: true });
+    }
+    fs.writeFileSync(resolved.absolutePath, content ?? "", "utf-8");
+    res.json({ success: true, message: "File created" });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ error: `Failed to create file: ${(err as Error).message}` });
+  }
+});
+
+// DELETE /api/servers/:id/browse/file - Delete a file
+router.delete("/:id/browse/file", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const rootKey = req.query.root as string;
+  const filePath = req.query.path as string;
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  if (!rootKey || !filePath) {
+    return res
+      .status(400)
+      .json({ error: "Query parameters 'root' and 'path' are required" });
+  }
+
+  const resolved = resolveAndValidateBrowsePath(server, rootKey, filePath);
+  if ("error" in resolved) {
+    return res.status(400).json({ error: resolved.error });
+  }
+
+  if (!fs.existsSync(resolved.absolutePath)) {
+    return res.status(404).json({ error: "File not found" });
+  }
+
+  try {
+    const stats = fs.statSync(resolved.absolutePath);
+    if (!stats.isFile()) {
+      return res.status(400).json({ error: "Path is not a file" });
+    }
+    fs.unlinkSync(resolved.absolutePath);
+    res.json({ success: true, message: "File deleted" });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ error: `Failed to delete file: ${(err as Error).message}` });
+  }
+});
+
+// POST /api/servers/:id/browse/directory - Create a directory
+router.post("/:id/browse/directory", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const { root: rootKey, path: dirPath } = req.body as {
+    root: string;
+    path: string;
+  };
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  if (!rootKey || !dirPath) {
+    return res
+      .status(400)
+      .json({ error: "Fields 'root' and 'path' are required" });
+  }
+
+  const resolved = resolveAndValidateBrowsePath(server, rootKey, dirPath);
+  if ("error" in resolved) {
+    return res.status(400).json({ error: resolved.error });
+  }
+
+  if (fs.existsSync(resolved.absolutePath)) {
+    return res.status(409).json({ error: "Directory already exists" });
+  }
+
+  try {
+    fs.mkdirSync(resolved.absolutePath, { recursive: true });
+    res.json({ success: true, message: "Directory created" });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ error: `Failed to create directory: ${(err as Error).message}` });
+  }
+});
+
+// DELETE /api/servers/:id/browse/directory - Delete an empty directory
+router.delete("/:id/browse/directory", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const rootKey = req.query.root as string;
+  const dirPath = req.query.path as string;
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  if (!rootKey || !dirPath) {
+    return res
+      .status(400)
+      .json({ error: "Query parameters 'root' and 'path' are required" });
+  }
+
+  // Prevent deleting the root directory itself
+  const normalizedDir = path.normalize(dirPath).replace(/\\/g, "/");
+  if (normalizedDir === "." || normalizedDir === "/" || normalizedDir === "") {
+    return res.status(400).json({ error: "Cannot delete the root directory" });
+  }
+
+  const resolved = resolveAndValidateBrowsePath(server, rootKey, dirPath);
+  if ("error" in resolved) {
+    return res.status(400).json({ error: resolved.error });
+  }
+
+  if (!fs.existsSync(resolved.absolutePath)) {
+    return res.status(404).json({ error: "Directory not found" });
+  }
+
+  try {
+    const stats = fs.statSync(resolved.absolutePath);
+    if (!stats.isDirectory()) {
+      return res.status(400).json({ error: "Path is not a directory" });
+    }
+
+    const entries = fs.readdirSync(resolved.absolutePath);
+    if (entries.length > 0) {
+      return res.status(400).json({
+        error: "Directory is not empty. Only empty directories can be deleted.",
+      });
+    }
+
+    fs.rmdirSync(resolved.absolutePath);
+    res.json({ success: true, message: "Directory deleted" });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ error: `Failed to delete directory: ${(err as Error).message}` });
+  }
+});
+
+// POST /api/servers/:id/browse/rename - Rename a file or directory
+router.post("/:id/browse/rename", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const {
+    root: rootKey,
+    from,
+    to,
+  } = req.body as {
+    root: string;
+    from: string;
+    to: string;
+  };
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  if (!rootKey || !from || !to) {
+    return res
+      .status(400)
+      .json({ error: "Fields 'root', 'from', and 'to' are required" });
+  }
+
+  const resolvedFrom = resolveAndValidateBrowsePath(server, rootKey, from);
+  if ("error" in resolvedFrom) {
+    return res.status(400).json({ error: resolvedFrom.error });
+  }
+
+  const resolvedTo = resolveAndValidateBrowsePath(server, rootKey, to);
+  if ("error" in resolvedTo) {
+    return res.status(400).json({ error: resolvedTo.error });
+  }
+
+  if (!fs.existsSync(resolvedFrom.absolutePath)) {
+    return res.status(404).json({ error: "Source path not found" });
+  }
+
+  if (fs.existsSync(resolvedTo.absolutePath)) {
+    return res.status(409).json({ error: "Destination path already exists" });
+  }
+
+  try {
+    // Ensure parent directory of destination exists
+    const parentDir = path.dirname(resolvedTo.absolutePath);
+    if (!fs.existsSync(parentDir)) {
+      fs.mkdirSync(parentDir, { recursive: true });
+    }
+    fs.renameSync(resolvedFrom.absolutePath, resolvedTo.absolutePath);
+    res.json({ success: true, message: "Renamed successfully" });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ error: `Failed to rename: ${(err as Error).message}` });
+  }
+});
+
+// ── Download (single file or folder as ZIP) ───────────────────────────
+router.get("/:id/browse/download", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const rootKey = req.query.root as string;
+  const filePath = req.query.path as string;
+
+  const server = getServerById(id);
+  if (!server) return res.status(404).json({ error: "Server not found" });
+  if (!rootKey || !filePath) {
+    return res
+      .status(400)
+      .json({ error: "Query parameters 'root' and 'path' are required" });
+  }
+
+  const resolved = resolveAndValidateBrowsePath(server, rootKey, filePath);
+  if ("error" in resolved)
+    return res.status(400).json({ error: resolved.error });
+  if (!fs.existsSync(resolved.absolutePath)) {
+    return res.status(404).json({ error: "Path not found" });
+  }
+
+  try {
+    const stats = fs.statSync(resolved.absolutePath);
+
+    if (stats.isFile()) {
+      // Single file — stream directly
+      return res.download(resolved.absolutePath);
+    }
+
+    if (stats.isDirectory()) {
+      // Directory — create ZIP on-the-fly
+      const dirName = path.basename(resolved.absolutePath);
+      const zip = new AdmZip();
+      zip.addLocalFolder(resolved.absolutePath, dirName);
+      const zipBuffer = zip.toBuffer();
+
+      res.set("Content-Type", "application/zip");
+      res.set("Content-Disposition", `attachment; filename="${dirName}.zip"`);
+      res.set("Content-Length", String(zipBuffer.length));
+      return res.send(zipBuffer);
+    }
+
+    return res
+      .status(400)
+      .json({ error: "Path is neither a file nor a directory" });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ error: `Download failed: ${(err as Error).message}` });
+  }
+});
+
+// ── Upload (multiple files via multipart form-data) ───────────────────
+const upload = multer({
+  dest: os.tmpdir(),
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500 MB
+});
+
+router.post(
+  "/:id/browse/upload",
+  upload.array("files", 100),
+  async (req: Request, res: Response) => {
+    const id = parseInt(req.params.id, 10);
+    const rootKey = req.body.root as string;
+    const targetPath = req.body.path as string;
+    const files = req.files as Express.Multer.File[] | undefined;
+
+    const server = getServerById(id);
+    if (!server) return res.status(404).json({ error: "Server not found" });
+    if (!rootKey) {
+      return res.status(400).json({ error: "Field 'root' is required" });
+    }
+
+    // Resolve target directory (use "." for root if no path provided)
+    const resolved = resolveAndValidateBrowsePath(
+      server,
+      rootKey,
+      targetPath || ".",
+    );
+    if ("error" in resolved)
+      return res.status(400).json({ error: resolved.error });
+
+    // Ensure target is a directory (create if needed)
+    if (fs.existsSync(resolved.absolutePath)) {
+      const stats = fs.statSync(resolved.absolutePath);
+      if (!stats.isDirectory()) {
+        return res
+          .status(400)
+          .json({ error: "Target path is not a directory" });
+      }
+    } else {
+      fs.mkdirSync(resolved.absolutePath, { recursive: true });
+    }
+
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: "No files provided" });
+    }
+
+    const movedFiles: string[] = [];
+    const errors: string[] = [];
+
+    for (const file of files) {
+      // Sanitize filename — strip path separators, reject traversal attempts
+      const safeName = path.basename(file.originalname);
+      if (
+        !safeName ||
+        safeName === ".." ||
+        safeName === "." ||
+        safeName.includes("/") ||
+        safeName.includes("\\")
+      ) {
+        errors.push(`Rejected unsafe filename: ${file.originalname}`);
+        // Clean up temp file
+        try {
+          fs.unlinkSync(file.path);
+        } catch {
+          /* ignore */
+        }
+        continue;
+      }
+
+      const destPath = path.join(resolved.absolutePath, safeName);
+
+      // Verify destination is still within the root
+      if (!destPath.startsWith(resolved.rootDir)) {
+        errors.push(`Path traversal detected for: ${safeName}`);
+        try {
+          fs.unlinkSync(file.path);
+        } catch {
+          /* ignore */
+        }
+        continue;
+      }
+
+      try {
+        // Move from temp to target (rename is fast on same fs, otherwise copy+delete)
+        await fsPromises.rename(file.path, destPath).catch(async () => {
+          // Cross-device: copy then delete
+          await fsPromises.copyFile(file.path, destPath);
+          await fsPromises.unlink(file.path);
+        });
+        movedFiles.push(safeName);
+      } catch (err) {
+        errors.push(`Failed to save ${safeName}: ${(err as Error).message}`);
+        try {
+          fs.unlinkSync(file.path);
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+
+    if (movedFiles.length === 0) {
+      return res.status(400).json({
+        error: "No files were uploaded successfully",
+        details: errors,
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `${movedFiles.length} file(s) uploaded`,
+      files: movedFiles,
+      ...(errors.length > 0 ? { warnings: errors } : {}),
+    });
+  },
+);
+
+// Handle multer file-size errors
+router.use(
+  (err: any, _req: Request, res: Response, next: (err?: any) => void) => {
+    if (err && err.code === "LIMIT_FILE_SIZE") {
+      return res.status(413).json({ error: "File too large (max 500 MB)" });
+    }
+    next(err);
+  },
+);
 
 export { router as serversRouter };
 

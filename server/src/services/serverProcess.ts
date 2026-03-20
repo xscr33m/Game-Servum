@@ -31,6 +31,7 @@ import {
   startPlayerTracking,
   stopPlayerTracking,
   notifyServerReady,
+  getRconConnection,
 } from "./playerTracker.js";
 import { archiveLogsBeforeStart, cleanupOldArchives } from "./logManager.js";
 import { getLogSettings } from "../db/index.js";
@@ -45,6 +46,13 @@ import type { GameServer } from "../types/index.js";
 
 // Track running server processes
 const runningProcesses: Map<number, ChildProcess> = new Map();
+
+// Track process exit promises — created at spawn time so stopServer can
+// reliably detect process exit regardless of event-loop scheduling.
+const processExitPromises: Map<
+  number,
+  { promise: Promise<void>; resolve: () => void }
+> = new Map();
 
 // Track servers currently performing their first start (config not yet generated)
 const firstStartServers = new Set<number>();
@@ -104,6 +112,9 @@ export function startServer(serverId: number): StartResult {
   if (!server) {
     return { success: false, message: "Server not found" };
   }
+
+  // Capture name for use in closures (avoids TS null-narrowing issues)
+  const serverName = server.name;
 
   if (runningProcesses.has(serverId)) {
     return { success: false, message: "Server is already running" };
@@ -276,16 +287,28 @@ export function startServer(serverId: number): StartResult {
     // Store the process
     runningProcesses.set(serverId, child);
 
-    // Update database with running status, PID, and start timestamp
-    const startedAt = new Date().toISOString();
-    updateServerStatus(serverId, "running", child.pid, startedAt);
+    // Create exit promise at spawn time — resolved from the exit handler below.
+    // This guarantees stopServer can detect exit even if the process dies during RCON commands.
+    let resolveExit!: () => void;
+    const exitPromise = new Promise<void>((r) => {
+      resolveExit = r;
+    });
+    processExitPromises.set(serverId, {
+      promise: exitPromise,
+      resolve: resolveExit,
+    });
 
-    // Broadcast status update
+    // Record PID and start timestamp but keep status as "starting" until
+    // the game-specific startup detector fires (or the timeout expires).
+    const startedAt = new Date().toISOString();
+    updateServerStatus(serverId, "starting", child.pid, startedAt);
+
+    // Broadcast status update (still starting — PID is known)
     broadcast("server:status", {
       serverId,
-      status: "running",
+      status: "starting",
       pid: child.pid,
-      message: `Server ${server.name} started`,
+      message: `Server ${server.name} is starting...`,
     });
 
     // Start player tracking (RCON polling + log backfill)
@@ -326,7 +349,7 @@ export function startServer(serverId: number): StartResult {
 
     // Handle stdout
     let startupDetected = false;
-    const detector = adapter?.getStartupDetector() ?? null;
+    const detector = adapter?.getStartupDetector(server) ?? null;
     const startupPattern = detector ? new RegExp(detector.pattern) : null;
 
     child.stdout?.on("data", (data: Buffer) => {
@@ -339,14 +362,13 @@ export function startServer(serverId: number): StartResult {
         message: output,
       });
 
-      // Detect startup completion from stdout (for games without logfile-based detection)
+      // Detect startup completion from stdout
       if (
         !startupDetected &&
         startupPattern &&
         detector?.type === "stdout" &&
         startupPattern.test(output)
       ) {
-        startupDetected = true;
         onStartupComplete();
       }
     });
@@ -356,6 +378,10 @@ export function startServer(serverId: number): StartResult {
     let lastLogSize = 0;
 
     function onStartupComplete(): void {
+      // Guard against double-invocation (pattern match + timeout race)
+      if (startupDetected) return;
+      startupDetected = true;
+
       logger.info(
         `[ServerProcess] Startup complete detected for server ${serverId}`,
       );
@@ -368,6 +394,21 @@ export function startServer(serverId: number): StartResult {
         clearInterval(logWatchInterval);
         logWatchInterval = null;
       }
+
+      // Transition status from "starting" → "running"
+      updateServerStatus(serverId, "running", child.pid ?? null, startedAt);
+      broadcast("server:status", {
+        serverId,
+        status: "running",
+        pid: child.pid ?? null,
+        message: `Server ${serverName} started`,
+      });
+
+      // Activate scheduled restart, RCON messages, and update checker
+      // (deferred until actual startup so timers start from ready time)
+      startSchedule(serverId);
+      startMessageBroadcaster(serverId);
+      startUpdateChecker(serverId);
 
       // Re-validate adapter config after start (game may have overwritten config files)
       if (adapter) {
@@ -400,16 +441,54 @@ export function startServer(serverId: number): StartResult {
       notifyServerReady(serverId);
     }
 
-    if (startupPattern && detector?.type === "logfile" && detector.logFile) {
-      const logFilePath = path.join(server.installPath, detector.logFile);
-
-      // Initialize to current file size so we only read NEW content after spawn
+    /**
+     * Resolve a logFile spec to an absolute path.
+     * Supports glob wildcards (`*`) — returns the most recently modified match.
+     */
+    function resolveLogFilePath(logFileSpec: string): string | null {
+      if (!logFileSpec.includes("*")) {
+        return path.join(server!.installPath, logFileSpec);
+      }
+      const dir = path.dirname(path.join(server!.installPath, logFileSpec));
+      const baseName = path.basename(logFileSpec);
+      const globRegex = new RegExp(
+        "^" + baseName.replace(/\./g, "\\.").replace(/\*/g, ".*") + "$",
+      );
       try {
-        if (fs.existsSync(logFilePath)) {
-          lastLogSize = fs.statSync(logFilePath).size;
-        }
+        if (!fs.existsSync(dir)) return null;
+        const matches = fs
+          .readdirSync(dir)
+          .filter((f) => globRegex.test(f))
+          .map((f) => {
+            const full = path.join(dir, f);
+            try {
+              return { path: full, mtime: fs.statSync(full).mtimeMs };
+            } catch {
+              return null;
+            }
+          })
+          .filter(Boolean) as { path: string; mtime: number }[];
+        if (matches.length === 0) return null;
+        matches.sort((a, b) => b.mtime - a.mtime);
+        return matches[0].path;
       } catch {
-        // File doesn't exist yet — will be created by the game server
+        return null;
+      }
+    }
+
+    if (startupPattern && detector?.type === "logfile" && detector.logFile) {
+      let resolvedLogPath: string | null = null;
+
+      // For non-glob paths, initialize to current file size so we only read NEW content
+      if (!detector.logFile.includes("*")) {
+        resolvedLogPath = resolveLogFilePath(detector.logFile);
+        try {
+          if (resolvedLogPath && fs.existsSync(resolvedLogPath)) {
+            lastLogSize = fs.statSync(resolvedLogPath).size;
+          }
+        } catch {
+          // File doesn't exist yet — will be created by the game server
+        }
       }
 
       // Poll the log file every 3 seconds for the startup pattern
@@ -419,8 +498,17 @@ export function startServer(serverId: number): StartResult {
           return;
         }
         try {
-          if (!fs.existsSync(logFilePath)) return;
-          const stat = fs.statSync(logFilePath);
+          // Re-resolve glob patterns each iteration (file may appear mid-startup)
+          const currentPath = resolveLogFilePath(detector!.logFile!);
+          if (!currentPath || !fs.existsSync(currentPath)) return;
+
+          // If the resolved file changed (e.g. new timestamped log), reset position
+          if (currentPath !== resolvedLogPath) {
+            resolvedLogPath = currentPath;
+            lastLogSize = 0;
+          }
+
+          const stat = fs.statSync(currentPath);
           // If file was truncated/recreated, reset position
           if (stat.size < lastLogSize) {
             lastLogSize = 0;
@@ -428,7 +516,7 @@ export function startServer(serverId: number): StartResult {
           if (stat.size <= lastLogSize) return;
 
           // Read only the new portion of the file
-          const fd = fs.openSync(logFilePath, "r");
+          const fd = fs.openSync(currentPath, "r");
           const newBytes = stat.size - lastLogSize;
           const buf = Buffer.alloc(newBytes);
           fs.readSync(fd, buf, 0, newBytes, lastLogSize);
@@ -437,27 +525,26 @@ export function startServer(serverId: number): StartResult {
 
           const newContent = buf.toString("utf-8");
           if (startupPattern.test(newContent)) {
-            startupDetected = true;
             onStartupComplete();
           }
         } catch {
           // File may not exist yet or be locked — retry next interval
         }
       }, 3000);
-
-      // Timeout: give up on startup detection after configured timeout
-      if (detector.timeoutMs) {
-        setTimeout(() => {
-          if (!startupDetected) {
-            logger.warn(
-              `[ServerProcess] Startup detection timed out after ${detector.timeoutMs}ms for server ${serverId}, proceeding with RCON connect`,
-            );
-            startupDetected = true;
-            onStartupComplete();
-          }
-        }, detector.timeoutMs);
-      }
     }
+
+    // Startup timeout — applies to ALL detector types (stdout, logfile) and null fallback.
+    // Ensures the server always transitions from "starting" → "running".
+    const DEFAULT_STARTUP_TIMEOUT_MS = 120_000;
+    const startupTimeoutMs = detector?.timeoutMs ?? DEFAULT_STARTUP_TIMEOUT_MS;
+    setTimeout(() => {
+      if (!startupDetected) {
+        logger.warn(
+          `[ServerProcess] Startup detection timed out after ${startupTimeoutMs / 1000}s for server ${serverId}, marking as running`,
+        );
+        onStartupComplete();
+      }
+    }, startupTimeoutMs);
 
     // Handle stderr
     child.stderr?.on("data", (data: Buffer) => {
@@ -497,6 +584,13 @@ export function startServer(serverId: number): StartResult {
 
       // Remove from tracking
       runningProcesses.delete(serverId);
+
+      // Resolve the exit promise so stopServer detects exit immediately
+      const exitEntry = processExitPromises.get(serverId);
+      if (exitEntry) {
+        exitEntry.resolve();
+        processExitPromises.delete(serverId);
+      }
 
       // Stop player tracking
       stopPlayerTracking(serverId);
@@ -631,14 +725,9 @@ export function startServer(serverId: number): StartResult {
       });
     });
 
-    // Activate scheduled restart if configured
-    startSchedule(serverId);
-
-    // Activate scheduled RCON messages
-    startMessageBroadcaster(serverId);
-
-    // Activate update checker
-    startUpdateChecker(serverId);
+    // NOTE: startSchedule, startMessageBroadcaster, and startUpdateChecker
+    // are now called inside onStartupComplete() so that timers start from the
+    // actual server-ready time rather than from process spawn.
 
     return {
       success: true,
@@ -667,6 +756,16 @@ export function startServer(serverId: number): StartResult {
 
 /**
  * Stop a game server
+ *
+ * Shutdown sequence:
+ * 1. Send RCON shutdown commands (game-specific graceful shutdown)
+ * 2. Race RCON commands against the process exit promise (created at spawn time)
+ * 3. Wait for process exit with timeout
+ * 4. Force-kill as last resort if process doesn't exit
+ *
+ * The exit promise is created in startServer at spawn time and resolved from
+ * the startServer exit handler, which is proven to fire reliably. This avoids
+ * event-loop scheduling issues with listeners registered during async operations.
  */
 export async function stopServer(serverId: number): Promise<StopResult> {
   const server = getServerById(serverId);
@@ -697,47 +796,149 @@ export async function stopServer(serverId: number): Promise<StopResult> {
     message: `Server ${server.name} is stopping...`,
   });
 
-  return new Promise((resolve) => {
-    // Set a timeout for forceful termination
-    const forceKillTimeout = setTimeout(() => {
-      logger.warn(`[ServerProcess] Force killing server ${serverId}`);
-      if (process.platform === "win32") {
-        // Windows: Force kill with taskkill
-        exec(`taskkill /PID ${child.pid} /T /F`, (error) => {
-          if (error) {
-            logger.error(`[ServerProcess] Force kill error:`, error);
-          }
-        });
-      } else {
-        child.kill("SIGKILL");
-      }
-    }, 10000); // 10 second timeout for graceful shutdown
-
-    // Listen for exit to clear the timeout
-    child.once("exit", () => {
-      clearTimeout(forceKillTimeout);
-      resolve({
-        success: true,
-        message: `Server ${server.name} stopped`,
-      });
+  // Get the exit promise created at spawn time — guaranteed to resolve when
+  // the startServer exit handler runs (which the logs confirm fires reliably).
+  const exitEntry = processExitPromises.get(serverId);
+  const exitPromise =
+    exitEntry?.promise ??
+    new Promise<void>((resolve) => {
+      // Fallback: register listener directly if no spawn-time promise exists
+      // (e.g. for processes restored after restart)
+      child.once("exit", resolve);
     });
 
-    // Send graceful termination signal
+  // Helper: check if the process has already exited
+  const hasExited = () => !runningProcesses.has(serverId);
+
+  // Attempt RCON graceful shutdown before resorting to process termination
+  let rconShutdownSent = false;
+  const adapter = getGameAdapter(server.gameId);
+  const shutdownConfig = adapter?.getShutdownCommands();
+
+  if (shutdownConfig) {
+    const rcon = getRconConnection(serverId);
+    if (rcon?.isConnected()) {
+      try {
+        for (let i = 0; i < shutdownConfig.commands.length; i++) {
+          // If process already exited during earlier commands, stop sending more
+          if (hasExited()) {
+            logger.info(
+              `[ServerProcess] Server ${serverId} already exited during RCON shutdown sequence`,
+            );
+            break;
+          }
+
+          const cmd = shutdownConfig.commands[i];
+          logger.info(`[ServerProcess] Sending RCON shutdown command: ${cmd}`);
+
+          // Race each RCON command against the exit promise so we don't
+          // block on a command that will never return (server already dead).
+          const rconResult = await Promise.race([
+            rcon.sendCommand(cmd).then(() => "sent" as const),
+            exitPromise.then(() => "exited" as const),
+          ]);
+
+          if (rconResult === "exited") {
+            logger.info(
+              `[ServerProcess] Server ${serverId} exited while sending RCON command: ${cmd}`,
+            );
+            break;
+          }
+
+          // Delay between commands (e.g. saveworld → doexit)
+          if (
+            shutdownConfig.delayBetweenMs &&
+            i < shutdownConfig.commands.length - 1
+          ) {
+            // Also race delay against exit
+            const delayResult = await Promise.race([
+              new Promise<"delayed">((r) =>
+                setTimeout(() => r("delayed"), shutdownConfig.delayBetweenMs),
+              ),
+              exitPromise.then(() => "exited" as const),
+            ]);
+            if (delayResult === "exited") {
+              logger.info(
+                `[ServerProcess] Server ${serverId} exited during shutdown delay`,
+              );
+              break;
+            }
+          }
+        }
+        if (!hasExited()) {
+          rconShutdownSent = true;
+          logger.info(
+            `[ServerProcess] RCON shutdown commands sent for server ${serverId}`,
+          );
+        }
+      } catch (error) {
+        // RCON errors during shutdown are expected (connection closes when server exits)
+        if (!hasExited()) {
+          logger.warn(
+            `[ServerProcess] RCON shutdown failed for server ${serverId}, will force-kill:`,
+            (error as Error).message,
+          );
+        }
+      }
+    } else {
+      logger.warn(
+        `[ServerProcess] No active RCON connection for server ${serverId}, will force-kill`,
+      );
+    }
+  }
+
+  // If process already exited during RCON commands, we're done
+  if (hasExited()) {
+    logger.info(
+      `[ServerProcess] Server ${serverId} exited during shutdown sequence`,
+    );
+    return { success: true, message: `Server ${server.name} stopped` };
+  }
+
+  // If RCON shutdown was not sent, force-kill the process immediately
+  if (!rconShutdownSent) {
     if (process.platform === "win32") {
-      // Windows: Use taskkill for graceful termination
-      // /T kills child processes too
-      exec(`taskkill /PID ${child.pid} /T`, (error) => {
+      exec(`taskkill /PID ${child.pid} /T /F`, (error) => {
         if (error) {
           logger.error(`[ServerProcess] taskkill error:`, error);
-          // Fall back to process.kill
-          child.kill();
         }
       });
     } else {
-      // Linux/Mac: SIGTERM for graceful shutdown
       child.kill("SIGTERM");
     }
-  });
+  }
+
+  // Wait for process exit with a timeout
+  const GRACEFUL_TIMEOUT_MS = rconShutdownSent ? 60000 : 5000;
+
+  const timeoutPromise = new Promise<"timeout">((resolve) =>
+    setTimeout(() => resolve("timeout"), GRACEFUL_TIMEOUT_MS),
+  );
+
+  const result = await Promise.race([
+    exitPromise.then(() => "exited" as const),
+    timeoutPromise,
+  ]);
+
+  if (result === "timeout") {
+    logger.warn(
+      `[ServerProcess] Force killing server ${serverId} (graceful shutdown timed out after ${GRACEFUL_TIMEOUT_MS / 1000}s)`,
+    );
+    if (process.platform === "win32") {
+      exec(`taskkill /PID ${child.pid} /T /F`, (error) => {
+        if (error) {
+          logger.error(`[ServerProcess] Force kill error:`, error);
+        }
+      });
+    } else {
+      child.kill("SIGKILL");
+    }
+
+    // Wait for actual exit after force kill
+    await exitPromise;
+  }
+
+  return { success: true, message: `Server ${server.name} stopped` };
 }
 
 /**

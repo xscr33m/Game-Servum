@@ -20,6 +20,15 @@ import { getApiBase } from "./config";
 
 // ── Types for the API client ──
 
+export interface BrowseTreeEntry {
+  name: string;
+  type: "file" | "directory";
+  size?: number;
+  extension?: string;
+  editable?: boolean;
+  children?: BrowseTreeEntry[];
+}
+
 export type FetchApiFn = <T>(
   endpoint: string,
   options?: RequestInit,
@@ -328,6 +337,72 @@ export interface ServersApiClient {
   ) => Promise<{ success: boolean; message: string }>;
   getWhitelistContent: (serverId: number) => Promise<{ content: string }>;
   getBanContent: (serverId: number) => Promise<{ content: string }>;
+  // File browser
+  browseRoots: (
+    id: number,
+  ) => Promise<{ roots: Array<{ key: string; label: string }> }>;
+  browseTree: (
+    id: number,
+    rootKey: string,
+  ) => Promise<{
+    root: string;
+    tree: BrowseTreeEntry[];
+  }>;
+  browseReadFile: (
+    id: number,
+    rootKey: string,
+    filePath: string,
+  ) => Promise<{ content: string; size: number; path: string }>;
+  browseWriteFile: (
+    id: number,
+    rootKey: string,
+    filePath: string,
+    content: string,
+  ) => Promise<{ success: boolean; message: string }>;
+  browseCreateFile: (
+    id: number,
+    rootKey: string,
+    filePath: string,
+    content?: string,
+  ) => Promise<{ success: boolean; message: string }>;
+  browseDeleteFile: (
+    id: number,
+    rootKey: string,
+    filePath: string,
+  ) => Promise<{ success: boolean; message: string }>;
+  browseCreateDirectory: (
+    id: number,
+    rootKey: string,
+    dirPath: string,
+  ) => Promise<{ success: boolean; message: string }>;
+  browseDeleteDirectory: (
+    id: number,
+    rootKey: string,
+    dirPath: string,
+  ) => Promise<{ success: boolean; message: string }>;
+  browseRename: (
+    id: number,
+    rootKey: string,
+    from: string,
+    to: string,
+  ) => Promise<{ success: boolean; message: string }>;
+  browseDownloadUrl: (id: number, rootKey: string, filePath: string) => string;
+  browseDownload: (
+    id: number,
+    rootKey: string,
+    filePath: string,
+  ) => Promise<void>;
+  browseUpload: (
+    id: number,
+    rootKey: string,
+    targetPath: string,
+    files: File[],
+  ) => Promise<{
+    success: boolean;
+    message: string;
+    files: string[];
+    warnings?: string[];
+  }>;
 }
 
 export interface SystemApiClient {
@@ -489,7 +564,11 @@ function createSteamcmdApi(fetchApi: FetchApiFn): SteamcmdApiClient {
   };
 }
 
-function createServersApi(fetchApi: FetchApiFn): ServersApiClient {
+function createServersApi(
+  fetchApi: FetchApiFn,
+  baseUrl: string,
+  getToken?: () => string | undefined,
+): ServersApiClient {
   return {
     getAll: () => fetchApi<GameServer[]>("/servers"),
     getById: (id: number) => fetchApi<GameServer>(`/servers/${id}`),
@@ -919,6 +998,179 @@ function createServersApi(fetchApi: FetchApiFn): ServersApiClient {
       ),
     getBanContent: (serverId: number) =>
       fetchApi<{ content: string }>(`/servers/${serverId}/players/ban-content`),
+    // File browser
+    browseRoots: (id: number) =>
+      fetchApi<{ roots: Array<{ key: string; label: string }> }>(
+        `/servers/${id}/browse/roots`,
+      ),
+    browseTree: (id: number, rootKey: string) =>
+      fetchApi<{ root: string; tree: BrowseTreeEntry[] }>(
+        `/servers/${id}/browse/tree?root=${encodeURIComponent(rootKey)}`,
+      ),
+    browseReadFile: (id: number, rootKey: string, filePath: string) =>
+      fetchApi<{ content: string; size: number; path: string }>(
+        `/servers/${id}/browse/file?root=${encodeURIComponent(rootKey)}&path=${encodeURIComponent(filePath)}`,
+      ),
+    browseWriteFile: (
+      id: number,
+      rootKey: string,
+      filePath: string,
+      content: string,
+    ) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${id}/browse/file`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ root: rootKey, path: filePath, content }),
+        },
+      ),
+    browseCreateFile: (
+      id: number,
+      rootKey: string,
+      filePath: string,
+      content?: string,
+    ) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${id}/browse/file`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            root: rootKey,
+            path: filePath,
+            content: content ?? "",
+          }),
+        },
+      ),
+    browseDeleteFile: (id: number, rootKey: string, filePath: string) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${id}/browse/file?root=${encodeURIComponent(rootKey)}&path=${encodeURIComponent(filePath)}`,
+        { method: "DELETE" },
+      ),
+    browseCreateDirectory: (id: number, rootKey: string, dirPath: string) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${id}/browse/directory`,
+        {
+          method: "POST",
+          body: JSON.stringify({ root: rootKey, path: dirPath }),
+        },
+      ),
+    browseDeleteDirectory: (id: number, rootKey: string, dirPath: string) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${id}/browse/directory?root=${encodeURIComponent(rootKey)}&path=${encodeURIComponent(dirPath)}`,
+        { method: "DELETE" },
+      ),
+    browseRename: (id: number, rootKey: string, from: string, to: string) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${id}/browse/rename`,
+        {
+          method: "POST",
+          body: JSON.stringify({ root: rootKey, from, to }),
+        },
+      ),
+    browseDownloadUrl: (
+      id: number,
+      rootKey: string,
+      filePath: string,
+    ): string => {
+      const token = getToken?.();
+      const params = new URLSearchParams({
+        root: rootKey,
+        path: filePath,
+      });
+      if (token) params.set("token", token);
+      return `${baseUrl}/servers/${id}/browse/download?${params.toString()}`;
+    },
+    browseDownload: async (
+      id: number,
+      rootKey: string,
+      filePath: string,
+    ): Promise<void> => {
+      const url = `${baseUrl}/servers/${id}/browse/download`;
+      const params = new URLSearchParams({
+        root: rootKey,
+        path: filePath,
+      });
+
+      const headers: Record<string, string> = {};
+      const token = getToken?.();
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      let response: Response;
+      try {
+        response = await fetch(`${url}?${params.toString()}`, { headers });
+      } catch {
+        throw new Error("Agent not reachable \u2014 check connection");
+      }
+
+      if (response.status === 401) {
+        throw new ApiAuthError("Invalid or expired session token");
+      }
+
+      if (!response.ok) {
+        const error = await response
+          .json()
+          .catch(() => ({ error: "Unknown error" }));
+        throw new Error(error.error || `HTTP ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition");
+      let filename = filePath.split("/").pop() ?? "download";
+      if (disposition) {
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        if (match) filename = match[1];
+      }
+
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    },
+    browseUpload: async (
+      id: number,
+      rootKey: string,
+      targetPath: string,
+      files: File[],
+    ) => {
+      const formData = new FormData();
+      formData.append("root", rootKey);
+      formData.append("path", targetPath);
+      for (const file of files) {
+        formData.append("files", file);
+      }
+
+      const headers: Record<string, string> = {};
+      const token = getToken?.();
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      let response: Response;
+      try {
+        response = await fetch(`${baseUrl}/servers/${id}/browse/upload`, {
+          method: "POST",
+          headers,
+          body: formData,
+        });
+      } catch {
+        throw new Error("Agent not reachable — check connection");
+      }
+
+      if (response.status === 401) {
+        throw new ApiAuthError("Invalid or expired session token");
+      }
+
+      if (!response.ok) {
+        const error = await response
+          .json()
+          .catch(() => ({ error: "Unknown error" }));
+        throw new Error(error.error || `HTTP ${response.status}`);
+      }
+
+      return response.json();
+    },
   };
 }
 
@@ -1058,9 +1310,10 @@ export function createApiClient(
   getToken?: () => string | undefined,
 ): ApiClient {
   const fetchApi = createFetchApi(connection, getToken);
+  const baseUrl = getApiBase(connection);
   return {
     steamcmd: createSteamcmdApi(fetchApi),
-    servers: createServersApi(fetchApi),
+    servers: createServersApi(fetchApi, baseUrl, getToken),
     system: createSystemApi(fetchApi),
     health: createHealthApi(fetchApi),
     auth: createAuthApi(fetchApi),

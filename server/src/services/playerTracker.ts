@@ -61,7 +61,7 @@ const pollCounters = new Map<number, number>();
 
 const POLL_INTERVAL_MS = 30000; // 30 seconds
 const RCON_RECONNECT_DELAY_MS = 30000; // 30 seconds
-const RCON_CONNECT_DELAY_MS = 15000; // Fallback: wait 15s when no startup pattern defined
+const RCON_CONNECT_DELAY_MS = 30000; // Fallback: wait 30s when no startup pattern defined
 const CHARACTER_ID_SYNC_INTERVAL = 5; // Sync character IDs every N polls
 
 // Servers waiting for a startup-complete signal before connecting RCON
@@ -136,7 +136,9 @@ export function startPlayerTracking(
   // For freshly started servers with a startup pattern, wait for the log signal.
   // For restored servers (already running), always use the fixed delay.
   const hasStartupPattern =
-    !alreadyRunning && adapter?.getStartupDetector() !== null;
+    !alreadyRunning &&
+    server != null &&
+    adapter?.getStartupDetector(server) !== null;
   if (hasStartupPattern) {
     logger.info(
       `[PlayerTracker] Waiting for startup-complete signal before connecting RCON for server ${serverId}`,
@@ -270,7 +272,7 @@ async function connectRcon(
 
     // Start periodic polling
     const interval = setInterval(async () => {
-      if (rcon.isConnected()) {
+      if (rcon.isConnected() && serverInfo.has(serverId)) {
         await pollPlayers(serverId, rcon);
       }
     }, POLL_INTERVAL_MS);
@@ -386,9 +388,12 @@ async function pollPlayers(serverId: number, rcon: RconClient): Promise<void> {
       }
     }
   } catch (error) {
-    logger.error(
-      `[PlayerTracker] RCON poll failed for server ${serverId}:`,
-      (error as Error).message,
-    );
+    // Only log poll errors if the server is still being tracked (not during shutdown)
+    if (serverInfo.has(serverId)) {
+      logger.error(
+        `[PlayerTracker] RCON poll failed for server ${serverId}:`,
+        (error as Error).message,
+      );
+    }
   }
 }

@@ -352,6 +352,7 @@ export class SevenDaysAdapter extends BaseGameAdapter {
     return {
       directories: [server.installPath],
       extensions: [".txt"],
+      includeFiles: ["output_log.txt"],
       archiveDir: path.join(server.installPath, "log_archive"),
     };
   }
@@ -362,9 +363,20 @@ export class SevenDaysAdapter extends BaseGameAdapter {
     return { SteamAppId: "251570" };
   }
 
-  getStartupDetector(): StartupDetector | null {
-    // 7DTD does not have a reliable startup pattern — uses fixed delay
-    return null;
+  getShutdownCommands(): {
+    commands: string[];
+    delayBetweenMs?: number;
+  } | null {
+    return { commands: ["saveworld", "shutdown"], delayBetweenMs: 3000 };
+  }
+
+  getStartupDetector(_server: GameServer): StartupDetector | null {
+    return {
+      type: "logfile",
+      pattern: "StartGame done",
+      logFile: "output_log.txt",
+      timeoutMs: 120_000,
+    };
   }
 
   getEditableFiles(server: GameServer): EditableFileConfig[] {

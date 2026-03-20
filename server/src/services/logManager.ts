@@ -18,9 +18,17 @@ import { readGameFile } from "../games/encoding.js";
 import type { LogPaths } from "../games/index.js";
 
 /**
- * Check if a file is a log file based on its extension
+ * Check if a file is a log file based on its extension,
+ * or by exact filename match when includeFiles is set.
  */
-function isLogFile(filename: string, extensions: string[]): boolean {
+function isLogFile(
+  filename: string,
+  extensions: string[],
+  includeFiles?: string[],
+): boolean {
+  if (includeFiles && includeFiles.length > 0) {
+    return includeFiles.some((f) => f.toUpperCase() === filename.toUpperCase());
+  }
   return extensions.some((ext) =>
     filename.toUpperCase().endsWith(ext.toUpperCase()),
   );
@@ -33,7 +41,7 @@ function isLogFile(filename: string, extensions: string[]): boolean {
  * Returns the number of files archived.
  */
 export function archiveLogsBeforeStart(logPaths: LogPaths): number {
-  const { directories, extensions, archiveDir } = logPaths;
+  const { directories, extensions, archiveDir, includeFiles } = logPaths;
 
   // Collect log files from all source directories
   const filesToArchive: Array<{ src: string; name: string }> = [];
@@ -43,7 +51,10 @@ export function archiveLogsBeforeStart(logPaths: LogPaths): number {
       const entries = fs.readdirSync(dir);
       for (const file of entries) {
         const filePath = path.join(dir, file);
-        if (isLogFile(file, extensions) && fs.statSync(filePath).isFile()) {
+        if (
+          isLogFile(file, extensions, includeFiles) &&
+          fs.statSync(filePath).isFile()
+        ) {
           filesToArchive.push({ src: filePath, name: file });
         }
       }
@@ -127,7 +138,7 @@ export function getCurrentLogs(
     try {
       const files = fs.readdirSync(dir);
       for (const file of files) {
-        if (isLogFile(file, extensions)) {
+        if (isLogFile(file, extensions, logPaths.includeFiles)) {
           const filePath = path.join(dir, file);
           const stats = fs.statSync(filePath);
           if (stats.isFile()) {
@@ -284,8 +295,8 @@ export function readLogContent(
   maxLines: number,
   archiveSession?: string,
 ): { content: string; totalLines: number; returnedLines: number } | null {
-  // Security: Only allow files matching configured extensions
-  if (!isLogFile(filename, logPaths.extensions)) {
+  // Security: Only allow files matching configured log files/extensions
+  if (!isLogFile(filename, logPaths.extensions, logPaths.includeFiles)) {
     return null;
   }
 

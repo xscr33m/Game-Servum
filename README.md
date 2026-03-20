@@ -1,7 +1,29 @@
-# Game-Servum
+<p align="center">
+  <img src="client/public/dashboard-icon.png" alt="Game-Servum Logo" width="120" height="120">
+</p>
 
-Web-based game server management tool powered by SteamCMD.
-Manage DayZ, 7 Days to Die, ARK, and other dedicated game servers from a modern dashboard — locally or across multiple machines.
+<h1 align="center">Game-Servum</h1>
+
+<p align="center">
+  <strong>Professional Game Server Management</strong>
+  </br>
+  <strong>Manage DayZ, 7 Days to Die, ARK, and other dedicated game servers from a modern dashboard — locally or across multiple machines<strong>
+</p>
+
+<p align="center">
+  <a href="https://github.com/xscr33m/Game-Servum/releases/latest">
+    <img src="https://img.shields.io/github/v/release/xscr33m/Game-Servum?style=flat-square&color=red" alt="Latest Release">
+  </a>
+  <a href="https://github.com/xscr33m/Game-Servum/releases">
+    <img src="https://img.shields.io/github/downloads/xscr33m/Game-Servum/total?style=flat-square&color=brightgreen" alt="Downloads">
+  </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/github/license/xscr33m/Game-Servum?style=flat-square" alt="License">
+  </a>
+  <a href="https://github.com/xscr33m/Game-Servum/stargazers">
+    <img src="https://img.shields.io/github/stars/xscr33m/Game-Servum?style=flat-square" alt="Stars">
+  </a>
+</p>
 
 ---
 
@@ -11,15 +33,19 @@ Manage DayZ, 7 Days to Die, ARK, and other dedicated game servers from a modern 
 - **Multi-Server Management** — Install, start, stop, and configure multiple game server instances
 - **Workshop Mod Support** — Install, update, and manage Steam Workshop mods with automatic deployment
 - **Real-Time Monitoring** — Live server output, installation progress, and system metrics via WebSocket
-- **Player Tracking** — Monitor player connections with session history via BattlEye RCON + ADM log parsing
-- **Scheduled Restarts** — Configure automatic server restarts with pre-restart RCON warnings
-- **RCON Support** — Full BattlEye RCON protocol, send commands and scheduled broadcast messages
+- **RCON Support** — BattlEye (DayZ), Source (ARK), and Telnet (7DTD) protocols with scheduled broadcast messages
+- **Player Tracking** — Live player monitoring via RCON polling with log-based session backfill per game
+- **Game-Specific Config Editors** — INI, XML, and text-based editors tailored to each game's configuration format
+- **File Explorer** — Browse, edit, and upload server files directly from the Dashboard
+- **Scheduled Restarts** — Automatic server restarts with configurable pre-restart RCON warnings
 - **Auto-Update Detection** — Checks for game and mod updates, auto-restarts with configurable delays
+- **System Monitoring** — Real-time CPU, memory, disk, and network Agent metrics on the Dashboard
+- **Firewall Management** — Automatic Windows Firewall rules per server
 - **Log Management** — Automatic log archiving with configurable retention policies
 - **Template Variables** — Built-in and custom variables for launch params and broadcast messages
 - **Multi-Agent Architecture** — One dashboard, multiple agents on different machines
 - **Secure by Design** — API-Key + Password auth, JWT sessions, encrypted credential storage
-- **App Auto-Update** — Automatic updates via GitHub Releases with seamless upgrade (preserves all data)
+- **App Auto-Update** — Agent updates triggered from the Dashboard, Electron auto-updater for the Dashboard itself
 
 ## Architecture
 
@@ -47,7 +73,7 @@ cd Game-Servum
 # Install dependencies
 npm install
 
-# Start dev servers (shared watch + client :5173 + agent :3001)
+# Start dev servers on windows (shared watch + client :5173 + agent :3001)
 npm run dev
 ```
 
@@ -60,7 +86,7 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 **Build on Windows:**
 
 ```bash
-npm run build:agent        # Agent-only installer (~100 MB)
+npm run build:agent        # Agent-only installer (~40 MB)
 npm run build:dashboard    # Dashboard-only installer (~90 MB)
 ```
 
@@ -103,12 +129,12 @@ Both Agent and Dashboard include automatic updates via GitHub Releases:
 ## Build Commands
 
 ```bash
-npm run dev                # Dev servers (shared watch + client + agent)
+npm run dev                # Windows dev servers (shared watch + client + agent)
 npm run build              # Build all packages (shared → server → client)
 
-# Windows builds
+# Windows builds (requires Windows)
 npm run build:agent        # Build Agent installer (NSIS)
-npm run build:dashboard    # Build Dashboard installer (Squirrel.Windows)
+npm run build:dashboard    # Build Dashboard installer (NSIS)
 
 # Linux build (requires Linux)
 npm run build:linux        # Build Dashboard AppImage
@@ -120,7 +146,7 @@ npm run build:linux        # Build Dashboard AppImage
 | -------- | ----------------------------------------------------------- |
 | Frontend | React 19 · Vite 7 · TypeScript · Tailwind CSS 4 · shadcn/ui |
 | Backend  | Node.js · Express · TypeScript · sql.js (SQLite)            |
-| Desktop  | Electron 40 · electron-builder · Squirrel.Windows           |
+| Desktop  | Electron 40 · electron-builder · NSIS                       |
 | Shared   | `@game-servum/shared` TypeScript types package              |
 | Auth     | API-Key (SHA-256) + Password (PBKDF2) → JWT                 |
 
@@ -128,43 +154,46 @@ npm run build:linux        # Build Dashboard AppImage
 
 ```
 Game-Servum/
-├── packages/shared/     # @game-servum/shared — types & constants
 ├── client/              # React dashboard (Vite)
-├── server/              # Agent backend (Express)
-├── electron/            # Electron shell (main + preload)
-├── scripts/             # Build & NSIS installer scripts
 ├── docs/                # Documentation about the project
-├── data/                # SQLite DB (auto-created at runtime)
-├── servers/             # Game server installations (runtime)
-└── steamcmd/            # SteamCMD (auto-downloaded at runtime)
-```
-
-## Adding Game Server Support
-
-Add a new entry to `server/src/services/gameDefinitions.ts`:
-
-```typescript
-mygame: {
-  id: "mygame",
-  name: "My Game Server",
-  appId: 123456,
-  workshopAppId: 123456,       // Only if workshop uses different App ID
-  executable: "server.exe",
-  defaultPort: 27015,
-  portCount: 1,                // Number of consecutive ports used
-  portStride: 1,               // Increment between server instances (defaults to portCount)
-  queryPortOffset: 1,          // Query port = defaultPort + offset
-  requiresLogin: false,
-  defaultLaunchParams: "-port={PORT}",
-  description: "My game server description",
-  configFiles: ["config.cfg"], // Optional: important config files
-  postInstall: async (installPath, serverName) => { /* optional setup */ },
-}
+├── electron/            # Electron shell (main + preload)
+├── server/              # Agent backend (Express)
+├── packages/shared/     # @game-servum/shared — types & constants
+├── scripts/             # Build & NSIS installer scripts
+└── service/winsw/       # Windows Service Wrapper
 ```
 
 ## License
 
-MIT
+This project is licensed under the **GNU General Public License v3.0** — see the [LICENSE](LICENSE) file for details.
+
+### What this means:
+
+- ✅ You can use, modify, and distribute this software
+- ✅ You can create derivative works (forks)
+- ⚠️ Any derivative work must also be licensed under GPL v3
+- ⚠️ You must disclose the source code of derivative works
+- ⚠️ You must include the original copyright and license
+- ❌ You may NOT use the "Game-Servum" name or branding (see below)
+
+### Trademark Policy
+
+"Game-Servum", the Game-Servum logo, and associated branding are trademarks of xscr33mLabs and are **NOT** covered by the GPL license.
+
+| Allowed                                       | Not Allowed                                    |
+| --------------------------------------------- | ---------------------------------------------- |
+| ✅ Fork the code for personal use             | ❌ Distribute forks using "Game-Servum" name   |
+| ✅ Modify and redistribute under GPL          | ❌ Use Game-Servum logo in derivative products |
+| ✅ Reference "based on Game-Servum" with link | ❌ Sell software using Game-Servum branding    |
+| ✅ Contribute to this repository              | ❌ Imply official endorsement by xscr33mLabs   |
+
+If you create a derivative work, you must:
+
+1. Choose a different name for your project
+2. Create your own branding/logo
+3. Remove all references to "Game-Servum" except attribution (e.g., "Based on Game-Servum by xscr33mLabs")
+
+This policy protects users from confusion and prevents malicious actors from distributing modified versions under the original name. For the full trademark policy, see [TRADEMARK.md](TRADEMARK.md). For inquiries, contact: support@xscr33mlabs.com
 
 ---
 

@@ -9,6 +9,7 @@ import {
   FaChevronDown,
   FaCircleCheck,
   FaCircleExclamation,
+  FaCircleInfo,
   FaSpinner,
   FaServer,
   FaUsers,
@@ -270,12 +271,14 @@ export function ModsTab({ server }: ModsTabProps) {
       {/* Workshop mod management — only when workshop is supported */}
       {(!capabilities || capabilities.workshopMods) && (
         <>
-          {/* Warning if server is running */}
+          {/* Info hint when server is running */}
           {isRunning && (
-            <Alert variant="destructive">
-              <FaCircleExclamation className="h-4 w-4" />
+            <Alert>
+              <FaCircleInfo className="h-4 w-4" />
               <AlertDescription>
-                Server is running. Stop the server before modifying mods.
+                Server is running. New mods and load order changes will take
+                effect after the next restart. Disabling or removing mods
+                requires stopping the server.
               </AlertDescription>
             </Alert>
           )}
@@ -323,21 +326,15 @@ export function ModsTab({ server }: ModsTabProps) {
                     value={workshopInput}
                     onChange={(e) => setWorkshopInput(e.target.value)}
                     onKeyDown={(e) => {
-                      if (
-                        e.key === "Enter" &&
-                        isValidInput &&
-                        !adding &&
-                        !isRunning
-                      ) {
+                      if (e.key === "Enter" && isValidInput && !adding) {
                         handleAddMod();
                       }
                     }}
-                    disabled={isRunning}
                   />
                 </div>
                 <Button
                   onClick={handleAddMod}
-                  disabled={!isValidInput || adding || isRunning}
+                  disabled={!isValidInput || adding}
                 >
                   {adding ? (
                     <FaSpinner className="h-4 w-4 mr-2 animate-spin" />
@@ -355,7 +352,6 @@ export function ModsTab({ server }: ModsTabProps) {
                     checked={isServerMod}
                     onChange={(e) => setIsServerMod(e.target.checked)}
                     className="rounded border-input hover:cursor-pointer"
-                    disabled={isRunning}
                   />
                   <FaServer className="h-4 w-4 text-muted-foreground" />
                   Server-side only mod
@@ -424,7 +420,7 @@ export function ModsTab({ server }: ModsTabProps) {
                             size="icon"
                             className="h-5 w-5"
                             onClick={() => handleMoveMod(mod.id, "up")}
-                            disabled={index === 0 || isRunning}
+                            disabled={index === 0}
                             title="Move up"
                           >
                             <FaChevronUp className="h-3.5 w-3.5" />
@@ -437,7 +433,7 @@ export function ModsTab({ server }: ModsTabProps) {
                             size="icon"
                             className="h-5 w-5"
                             onClick={() => handleMoveMod(mod.id, "down")}
-                            disabled={index === mods.length - 1 || isRunning}
+                            disabled={index === mods.length - 1}
                             title="Move down"
                           >
                             <FaChevronDown className="h-3.5 w-3.5" />

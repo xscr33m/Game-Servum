@@ -197,12 +197,19 @@ export class ArkAdapter extends BaseGameAdapter {
   private nameCacheLastRefresh = 0;
   private static readonly NAME_CACHE_TTL_MS = 60_000; // Re-read log at most once per minute
 
-  getStartupDetector(): StartupDetector | null {
+  getShutdownCommands(): {
+    commands: string[];
+    delayBetweenMs?: number;
+  } | null {
+    return { commands: ["saveworld", "doexit"], delayBetweenMs: 3000 };
+  }
+
+  getStartupDetector(_server: GameServer): StartupDetector | null {
     return {
       type: "logfile",
-      pattern: "Full Startup: .+ seconds",
+      pattern: "has successfully started",
       logFile: "ShooterGame/Saved/Logs/ShooterGame.log",
-      timeoutMs: 300_000, // ARK can take 5 minutes to start
+      timeoutMs: 900_000, // ARK can take 10+ minutes to start
     };
   }
 

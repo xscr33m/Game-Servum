@@ -26,6 +26,7 @@ export interface BackendConnection {
     hostname: string;
     platform: string;
     serverCount: number;
+    compatibilityWarning?: string;
   };
 }
 

@@ -62,6 +62,17 @@ export interface PlayerFileConfig {
   idType: "battleye-guid" | "steam-id";
 }
 
+// ── Browsable Root Config ─────────────────────────────────────────────
+
+export interface BrowsableRoot {
+  /** Unique key used in API requests (e.g., "profiles") */
+  key: string;
+  /** Human-readable label for the UI */
+  label: string;
+  /** Resolve the absolute path on disk for a given server */
+  resolvePath: (server: GameServer) => string;
+}
+
 // ── Editable File Config ─────────────────────────────────────────────
 
 export interface EditableFileConfig {
@@ -82,6 +93,8 @@ export interface LogPaths {
   extensions: string[];
   /** Directory where archived log sessions are stored */
   archiveDir: string;
+  /** When set, only these specific filenames are treated as logs (overrides extension matching) */
+  includeFiles?: string[];
 }
 
 // ── Player List Operation Result ─────────────────────────────────────
@@ -241,6 +254,12 @@ export interface GameAdapter {
   getEditableFiles(server: GameServer): EditableFileConfig[];
 
   /**
+   * Directories the frontend may browse and edit files in via the browse API.
+   * Each root defines a key, label, and path resolver.
+   */
+  getBrowsableRoots(server: GameServer): BrowsableRoot[];
+
+  /**
    * Extra environment variables required when spawning the server process.
    * Merged into the parent environment before spawn.
    * Example: 7DTD needs SteamAppId=251570 for Steam networking.
@@ -250,8 +269,9 @@ export interface GameAdapter {
   /**
    * Return startup detection config, or null to use a fixed delay.
    * Replaces the hardcoded startupCompletePattern/startupLogFile in GameDefinition.
+   * Receives the server so adapters can compute per-server paths (e.g. profilesPath).
    */
-  getStartupDetector(): StartupDetector | null;
+  getStartupDetector(server: GameServer): StartupDetector | null;
 
   /**
    * Return game metadata for the frontend (name, logo, description).
@@ -264,6 +284,15 @@ export interface GameAdapter {
    * picks them up even if it overwrites config files on first start (e.g. ARK).
    */
   getAdditionalLaunchParams?(server: GameServer): string;
+
+  // ── Shutdown ─────────────────────────────────────────────────────
+
+  /**
+   * Return RCON commands to send for a graceful server shutdown.
+   * Commands are sent in order before the process is terminated.
+   * Returns null if no RCON-based shutdown is supported.
+   */
+  getShutdownCommands(): { commands: string[]; delayBetweenMs?: number } | null;
 
   // ── Optional: Game-Specific Features ─────────────────────────────
 
