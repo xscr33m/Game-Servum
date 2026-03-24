@@ -15,6 +15,7 @@ export interface BackupMetadata {
   gameId: string;
   serverName: string;
   timestamp: string;
+  name: string | null;
   tag: string | null;
   trigger: BackupTrigger;
   status: BackupStatus;

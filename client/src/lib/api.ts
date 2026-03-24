@@ -415,6 +415,11 @@ export interface ServersApiClient {
     serverId: number,
     backupId: string,
   ) => Promise<{ success: boolean; message: string }>;
+  updateBackup: (
+    serverId: number,
+    backupId: string,
+    updates: { name?: string | null; tag?: string | null },
+  ) => Promise<{ success: boolean }>;
   restoreBackup: (
     serverId: number,
     backupId: string,
@@ -1221,6 +1226,18 @@ function createServersApi(
       fetchApi<{ success: boolean; message: string }>(
         `/servers/${serverId}/backups/${backupId}`,
         { method: "DELETE" },
+      ),
+    updateBackup: (
+      serverId: number,
+      backupId: string,
+      updates: { name?: string | null; tag?: string | null },
+    ) =>
+      fetchApi<{ success: boolean }>(
+        `/servers/${serverId}/backups/${backupId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(updates),
+        },
       ),
     restoreBackup: (
       serverId: number,

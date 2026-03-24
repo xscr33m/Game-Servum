@@ -16,6 +16,7 @@ import {
   FaTriangleExclamation,
   FaXmark,
   FaDownload,
+  FaPen,
 } from "react-icons/fa6";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -82,6 +83,7 @@ function formatRelativeDate(isoString: string): string {
 
 const triggerLabels: Record<string, string> = {
   manual: "Manual",
+  "pre-start": "Pre-Start",
   "pre-restart": "Pre-Restart",
   "pre-update": "Pre-Update",
   "pre-restore": "Pre-Restore",
@@ -127,6 +129,12 @@ export function BackupsTab({ server }: BackupsTabProps) {
 
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState<BackupMetadata | null>(null);
+
+  // Edit backup dialog
+  const [editTarget, setEditTarget] = useState<BackupMetadata | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editTag, setEditTag] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
 
   // ── Data loading ──
 
@@ -257,6 +265,34 @@ export function BackupsTab({ server }: BackupsTabProps) {
       toastSuccess("Download started");
     } catch (err) {
       toastError((err as Error).message);
+    }
+  }
+
+  async function handleSaveEdit() {
+    if (!editTarget) return;
+    setEditSaving(true);
+    try {
+      await api.servers.updateBackup(server.id, editTarget.id, {
+        name: editName.trim() || null,
+        tag: editTag.trim() || null,
+      });
+      setBackups((prev) =>
+        prev.map((b) =>
+          b.id === editTarget.id
+            ? {
+                ...b,
+                name: editName.trim() || null,
+                tag: editTag.trim() || null,
+              }
+            : b,
+        ),
+      );
+      setEditTarget(null);
+      toastSuccess("Backup updated");
+    } catch (err) {
+      toastError((err as Error).message);
+    } finally {
+      setEditSaving(false);
     }
   }
 
@@ -634,12 +670,21 @@ export function BackupsTab({ server }: BackupsTabProps) {
                     {/* Info */}
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span
-                          className="text-sm font-medium truncate"
-                          title={formatDate(backup.timestamp)}
-                        >
-                          {formatDate(backup.timestamp)}
-                        </span>
+                        {backup.name ? (
+                          <span
+                            className="text-sm font-medium truncate"
+                            title={backup.name}
+                          >
+                            {backup.name}
+                          </span>
+                        ) : (
+                          <span
+                            className="text-sm font-medium truncate"
+                            title={formatDate(backup.timestamp)}
+                          >
+                            {formatDate(backup.timestamp)}
+                          </span>
+                        )}
                         <Badge variant="outline" className="text-xs">
                           {triggerLabels[backup.trigger] || backup.trigger}
                         </Badge>
@@ -651,6 +696,9 @@ export function BackupsTab({ server }: BackupsTabProps) {
                         )}
                       </div>
                       <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
+                        {backup.name && (
+                          <span>{formatDate(backup.timestamp)}</span>
+                        )}
                         <span className="flex items-center gap-1">
                           <FaClock className="h-3 w-3" />
                           {formatRelativeDate(backup.timestamp)}
@@ -726,6 +774,20 @@ export function BackupsTab({ server }: BackupsTabProps) {
                       <Button
                         variant="ghost"
                         size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                        onClick={() => {
+                          setEditTarget(backup);
+                          setEditName(backup.name ?? "");
+                          setEditTag(backup.tag ?? "");
+                        }}
+                        disabled={!isConnected}
+                        title="Edit name & tag"
+                      >
+                        <FaPen className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         className="h-8 w-8 text-muted-foreground hover:text-destructive"
                         onClick={() => setDeleteTarget(backup)}
                         disabled={!isConnected}
@@ -740,6 +802,64 @@ export function BackupsTab({ server }: BackupsTabProps) {
           ))}
         </div>
       )}
+
+      {/* ── Edit Backup Dialog ── */}
+      <Dialog
+        open={!!editTarget}
+        onOpenChange={(open) => {
+          if (!open) setEditTarget(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Backup</DialogTitle>
+            <DialogDescription>
+              Change the display name and tag for this backup.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Name</Label>
+              <Input
+                id="edit-name"
+                placeholder={editTarget ? formatDate(editTarget.timestamp) : ""}
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                maxLength={100}
+              />
+              <p className="text-xs text-muted-foreground">
+                A custom display name. Leave empty to show the timestamp.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-tag">Tag</Label>
+              <Input
+                id="edit-tag"
+                placeholder="e.g. before-wipe, stable-v2"
+                value={editTag}
+                onChange={(e) => setEditTag(e.target.value)}
+                maxLength={50}
+              />
+              <p className="text-xs text-muted-foreground">
+                A short label to categorize this backup.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditTarget(null)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveEdit} disabled={editSaving}>
+              {editSaving ? (
+                <FaSpinner className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <FaFloppyDisk className="h-4 w-4 mr-2" />
+              )}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Create Backup Dialog ── */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>

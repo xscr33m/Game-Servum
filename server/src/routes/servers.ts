@@ -48,6 +48,7 @@ import {
   getBackupsByServerId,
   getBackupSettings as getBackupSettingsFromDb,
   upsertBackupSettings,
+  updateBackupRecord,
 } from "../db/index.js";
 import {
   getAllGameDefinitions,
@@ -3081,6 +3082,30 @@ router.delete("/:id/backups/:backupId", (req: Request, res: Response) => {
     return res.status(400).json({ error: result.message });
   }
   res.json(result);
+});
+
+// Update a backup (name, tag)
+router.patch("/:id/backups/:backupId", (req: Request, res: Response) => {
+  const serverId = parseInt(req.params.id);
+  const server = getServerById(serverId);
+  if (!server) return res.status(404).json({ error: "Server not found" });
+
+  const { name, tag } = req.body || {};
+
+  const updates: { name?: string | null; tag?: string | null } = {};
+  if (name !== undefined) {
+    updates.name = typeof name === "string" && name.trim() ? name.trim() : null;
+  }
+  if (tag !== undefined) {
+    updates.tag = typeof tag === "string" && tag.trim() ? tag.trim() : null;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ error: "No fields to update" });
+  }
+
+  updateBackupRecord(req.params.backupId, updates);
+  res.json({ success: true });
 });
 
 // Restore a backup

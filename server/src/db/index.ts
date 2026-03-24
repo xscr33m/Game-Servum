@@ -1168,7 +1168,13 @@ export function updateBackupRecord(
   updates: Partial<
     Pick<
       BackupMetadata,
-      "status" | "sizeBytes" | "fileCount" | "durationMs" | "errorMessage"
+      | "status"
+      | "sizeBytes"
+      | "fileCount"
+      | "durationMs"
+      | "errorMessage"
+      | "name"
+      | "tag"
     >
   >,
 ): void {
@@ -1194,6 +1200,14 @@ export function updateBackupRecord(
     sets.push("error_message = ?");
     params.push(updates.errorMessage);
   }
+  if (updates.name !== undefined) {
+    sets.push("name = ?");
+    params.push(updates.name);
+  }
+  if (updates.tag !== undefined) {
+    sets.push("tag = ?");
+    params.push(updates.tag);
+  }
   if (sets.length === 0) return;
   params.push(id);
   getDb().run(
@@ -1210,7 +1224,7 @@ export function deleteBackupRecord(id: string): void {
 
 export function getBackupById(id: string): BackupMetadata | null {
   const result = getDb().exec(
-    `SELECT id, server_id, game_id, server_name, timestamp, tag, trigger_type, status, size_bytes, file_count, duration_ms, error_message, file_path
+    `SELECT id, server_id, game_id, server_name, timestamp, tag, trigger_type, status, size_bytes, file_count, duration_ms, error_message, file_path, name
      FROM server_backups WHERE id = ?`,
     [id],
   );
@@ -1220,7 +1234,7 @@ export function getBackupById(id: string): BackupMetadata | null {
 
 export function getBackupsByServerId(serverId: number): BackupMetadata[] {
   const result = getDb().exec(
-    `SELECT id, server_id, game_id, server_name, timestamp, tag, trigger_type, status, size_bytes, file_count, duration_ms, error_message, file_path
+    `SELECT id, server_id, game_id, server_name, timestamp, tag, trigger_type, status, size_bytes, file_count, duration_ms, error_message, file_path, name
      FROM server_backups WHERE server_id = ? ORDER BY timestamp DESC`,
     [serverId],
   );
@@ -1247,6 +1261,7 @@ function mapBackupRow(row: unknown[]): BackupMetadata {
     fileCount: row[9] as number | null,
     durationMs: row[10] as number | null,
     errorMessage: row[11] as string | null,
+    name: row[13] as string | null,
   };
 }
 

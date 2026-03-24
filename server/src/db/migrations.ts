@@ -234,6 +234,13 @@ const migrations: Migration[] = [
       );
     },
   },
+  {
+    version: 8,
+    name: "backup_name_column",
+    up: (db) => {
+      db.run(`ALTER TABLE server_backups ADD COLUMN name TEXT`);
+    },
+  },
 ];
 
 // ── Migration Runner ───────────────────────────────────────────────
