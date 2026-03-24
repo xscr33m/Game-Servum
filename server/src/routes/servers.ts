@@ -427,7 +427,7 @@ router.post("/:id/start", async (req: Request, res: Response) => {
 
   // Pre-start backup if enabled
   const backupSettings = getBackupSettingsFromDb(id);
-  if (backupSettings?.enabled && backupSettings.backupBeforeStart) {
+  if (backupSettings?.backupBeforeStart) {
     logger.info(`[Backup] Creating pre-start backup for server ${id}`);
     const backupResult = await createBackup(id, {
       trigger: "pre-start",
