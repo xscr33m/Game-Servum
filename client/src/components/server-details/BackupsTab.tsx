@@ -251,6 +251,7 @@ export function BackupsTab({ server }: BackupsTabProps) {
         setSettings(result.settings);
       }
       toastSuccess("Backup settings saved");
+      setShowSettings(false);
     } catch (err) {
       toastError((err as Error).message);
     } finally {
@@ -286,8 +287,8 @@ export function BackupsTab({ server }: BackupsTabProps) {
             variant="outline"
             size="sm"
             onClick={() => {
-              setShowSettings(true);
-              loadSettings();
+              setShowSettings((prev) => !prev);
+              if (!showSettings) loadSettings();
             }}
             disabled={!isConnected}
           >
@@ -312,6 +313,172 @@ export function BackupsTab({ server }: BackupsTabProps) {
           </Button>
         </div>
       </div>
+
+      {/* ── Inline Settings Panel ── */}
+      {showSettings && (
+        <Card>
+          <CardContent className="py-4 space-y-6">
+            {settingsLoading || !settings ? (
+              <div className="flex items-center justify-center py-6">
+                <FaSpinner className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <>
+                {/* Automatic Backups + Retention side by side */}
+                <div className="grid grid-cols-2 gap-6">
+                  {/* Automatic triggers */}
+                  <div className="space-y-3 rounded-lg border p-4">
+                    <h3 className="text-sm font-medium border-b pb-2">
+                      Automatic Backups
+                    </h3>
+                    <div className="flex items-center justify-between">
+                      <Label
+                        htmlFor="backup-before-restart"
+                        className="text-sm"
+                      >
+                        Before scheduled restart
+                      </Label>
+                      <Switch
+                        id="backup-before-restart"
+                        checked={settings.backupBeforeRestart}
+                        onCheckedChange={(checked) =>
+                          setSettings({
+                            ...settings,
+                            backupBeforeRestart: checked,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="backup-before-update" className="text-sm">
+                        Before auto-update
+                      </Label>
+                      <Switch
+                        id="backup-before-update"
+                        checked={settings.backupBeforeUpdate}
+                        onCheckedChange={(checked) =>
+                          setSettings({
+                            ...settings,
+                            backupBeforeUpdate: checked,
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  {/* Retention */}
+                  <div className="space-y-3 rounded-lg border p-4">
+                    <h3 className="text-sm font-medium border-b pb-2">
+                      Retention
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="retention-count" className="text-sm">
+                          Max backup count
+                        </Label>
+                        <Input
+                          id="retention-count"
+                          type="number"
+                          min={0}
+                          value={settings.retentionCount}
+                          onChange={(e) =>
+                            setSettings({
+                              ...settings,
+                              retentionCount: parseInt(e.target.value) || 0,
+                            })
+                          }
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          0 = unlimited
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="retention-days" className="text-sm">
+                          Max age (days)
+                        </Label>
+                        <Input
+                          id="retention-days"
+                          type="number"
+                          min={0}
+                          value={settings.retentionDays}
+                          onChange={(e) =>
+                            setSettings({
+                              ...settings,
+                              retentionDays: parseInt(e.target.value) || 0,
+                            })
+                          }
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          0 = keep forever
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Custom paths */}
+                <div className="space-y-3">
+                  <h3 className="text-sm font-medium">Custom Paths</h3>
+                  <div className="space-y-2">
+                    <Label className="text-sm">
+                      Additional include paths (one per line)
+                    </Label>
+                    <textarea
+                      className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      value={settings.customIncludePaths.join("\n")}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          customIncludePaths: e.target.value
+                            .split("\n")
+                            .filter((p) => p.trim()),
+                        })
+                      }
+                      placeholder="e.g. myCustomData/"
+                      rows={3}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">
+                      Additional exclude patterns (one per line)
+                    </Label>
+                    <textarea
+                      className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      value={settings.customExcludePaths.join("\n")}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          customExcludePaths: e.target.value
+                            .split("\n")
+                            .filter((p) => p.trim()),
+                        })
+                      }
+                      placeholder="e.g. **/*.tmp"
+                      rows={3}
+                    />
+                  </div>
+                </div>
+
+                {/* Save button */}
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    onClick={handleSaveSettings}
+                    disabled={settingsSaving}
+                  >
+                    {settingsSaving ? (
+                      <FaSpinner className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <FaFloppyDisk className="h-4 w-4 mr-2" />
+                    )}
+                    Save Settings
+                  </Button>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Active backup progress */}
       {activeProgress && (
@@ -617,160 +784,6 @@ export function BackupsTab({ server }: BackupsTabProps) {
             <Button variant="destructive" onClick={handleDeleteBackup}>
               <FaTrashCan className="h-4 w-4 mr-2" />
               Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Settings Dialog ── */}
-      <Dialog open={showSettings} onOpenChange={setShowSettings}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Backup Settings</DialogTitle>
-            <DialogDescription>
-              Configure automatic backup triggers and retention policies.
-            </DialogDescription>
-          </DialogHeader>
-          {settingsLoading || !settings ? (
-            <div className="flex items-center justify-center py-8">
-              <FaSpinner className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            <div className="space-y-6 py-2">
-              {/* Automatic triggers */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-medium">Automatic Backups</h3>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="backup-before-restart" className="text-sm">
-                    Backup before scheduled restart
-                  </Label>
-                  <Switch
-                    id="backup-before-restart"
-                    checked={settings.backupBeforeRestart}
-                    onCheckedChange={(checked) =>
-                      setSettings({ ...settings, backupBeforeRestart: checked })
-                    }
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="backup-before-update" className="text-sm">
-                    Backup before auto-update
-                  </Label>
-                  <Switch
-                    id="backup-before-update"
-                    checked={settings.backupBeforeUpdate}
-                    onCheckedChange={(checked) =>
-                      setSettings({ ...settings, backupBeforeUpdate: checked })
-                    }
-                  />
-                </div>
-              </div>
-
-              {/* Retention */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-medium">Retention</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="retention-count" className="text-sm">
-                      Max backup count
-                    </Label>
-                    <Input
-                      id="retention-count"
-                      type="number"
-                      min={0}
-                      value={settings.retentionCount}
-                      onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          retentionCount: parseInt(e.target.value) || 0,
-                        })
-                      }
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      0 = unlimited
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="retention-days" className="text-sm">
-                      Max age (days)
-                    </Label>
-                    <Input
-                      id="retention-days"
-                      type="number"
-                      min={0}
-                      value={settings.retentionDays}
-                      onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          retentionDays: parseInt(e.target.value) || 0,
-                        })
-                      }
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      0 = keep forever
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Custom paths */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-medium">Custom Paths</h3>
-                <div className="space-y-2">
-                  <Label className="text-sm">
-                    Additional include paths (one per line)
-                  </Label>
-                  <textarea
-                    className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    value={settings.customIncludePaths.join("\n")}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        customIncludePaths: e.target.value
-                          .split("\n")
-                          .filter((p) => p.trim()),
-                      })
-                    }
-                    placeholder="e.g. myCustomData/"
-                    rows={3}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm">
-                    Additional exclude patterns (one per line)
-                  </Label>
-                  <textarea
-                    className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    value={settings.customExcludePaths.join("\n")}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        customExcludePaths: e.target.value
-                          .split("\n")
-                          .filter((p) => p.trim()),
-                      })
-                    }
-                    placeholder="e.g. **/*.tmp"
-                    rows={3}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSettings(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSaveSettings}
-              disabled={settingsSaving || settingsLoading}
-            >
-              {settingsSaving ? (
-                <FaSpinner className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <FaFloppyDisk className="h-4 w-4 mr-2" />
-              )}
-              Save Settings
             </Button>
           </DialogFooter>
         </DialogContent>
