@@ -1,6 +1,6 @@
 {
   "name": "@game-servum/shared",
-  "version": "0.9.8",
+  "version": "0.9.9",
   "type": "module",
   "license": "GPL-3.0-only",
   "description": "Shared types and constants for Game-Servum",
