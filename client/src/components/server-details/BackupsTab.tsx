@@ -14,6 +14,7 @@ import {
   FaCircleCheck,
   FaCircleXmark,
   FaTriangleExclamation,
+  FaXmark,
 } from "react-icons/fa6";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -102,6 +103,9 @@ export function BackupsTab({ server }: BackupsTabProps) {
   const [settings, setSettings] = useState<BackupSettings | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [savedSettings, setSavedSettings] = useState<BackupSettings | null>(
+    null,
+  );
   const [defaultPaths, setDefaultPaths] = useState<{
     savePaths: string[];
     configPaths: string[];
@@ -141,6 +145,7 @@ export function BackupsTab({ server }: BackupsTabProps) {
     try {
       const data = await api.servers.getBackupSettings(server.id);
       setSettings(data.settings);
+      setSavedSettings(data.settings);
       setDefaultPaths(data.defaultPaths);
     } catch (err) {
       logger.error("Failed to load backup settings", err);
@@ -255,6 +260,7 @@ export function BackupsTab({ server }: BackupsTabProps) {
       );
       if (result.settings) {
         setSettings(result.settings);
+        setSavedSettings(result.settings);
       }
       toastSuccess("Backup settings saved");
       setShowSettings(false);
@@ -298,7 +304,11 @@ export function BackupsTab({ server }: BackupsTabProps) {
             }}
             disabled={!isConnected}
           >
-            <FaGear className="h-4 w-4 mr-2" />
+            {showSettings ? (
+              <FaXmark className="h-4 w-4 mr-2" />
+            ) : (
+              <FaGear className="h-4 w-4 mr-2" />
+            )}
             Settings
           </Button>
           <Button
@@ -523,7 +533,10 @@ export function BackupsTab({ server }: BackupsTabProps) {
                   <Button
                     size="sm"
                     onClick={handleSaveSettings}
-                    disabled={settingsSaving}
+                    disabled={
+                      settingsSaving ||
+                      JSON.stringify(settings) === JSON.stringify(savedSettings)
+                    }
                   >
                     {settingsSaving ? (
                       <FaSpinner className="h-4 w-4 mr-2 animate-spin" />
