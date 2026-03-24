@@ -21,6 +21,11 @@ export type {
   SystemMetrics,
   SystemSettings,
   ApiResponse,
+  BackupMetadata,
+  BackupSettings,
+  BackupProgress,
+  BackupStatus,
+  BackupTrigger,
 } from "@game-servum/shared";
 
 // Server-only types (not exposed to client)

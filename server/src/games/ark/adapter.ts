@@ -27,6 +27,7 @@ import type {
   ModCopyResult,
   LogPaths,
   StartupDetector,
+  BackupPathConfig,
 } from "../types.js";
 import type { GameServer } from "../../types/index.js";
 import type { ServerMod } from "../../types/index.js";
@@ -1015,6 +1016,16 @@ export class ArkAdapter extends BaseGameAdapter {
         ),
       },
     ];
+  }
+
+  // ── Backup ──────────────────────────────────────────────────────
+
+  getBackupPaths(_server: GameServer): BackupPathConfig {
+    return {
+      savePaths: ["ShooterGame/Saved/SavedArks"],
+      configPaths: ["ShooterGame/Saved/Config"],
+      excludePatterns: ["ShooterGame/Saved/Logs/**"],
+    };
   }
 }
 

@@ -15,6 +15,8 @@ import type {
   ServerMessage,
   ServerVariable,
   UpdateRestartSettings,
+  BackupMetadata,
+  BackupSettings,
 } from "../types/index.js";
 
 let db: SqlJsDatabase;
@@ -401,6 +403,8 @@ export function deleteServer(id: number): void {
   db.run("DELETE FROM log_settings WHERE server_id = ?", [id]);
   db.run("DELETE FROM player_sessions WHERE server_id = ?", [id]);
   db.run("DELETE FROM server_mods WHERE server_id = ?", [id]);
+  db.run("DELETE FROM server_backups WHERE server_id = ?", [id]);
+  db.run("DELETE FROM backup_settings WHERE server_id = ?", [id]);
   db.run("DELETE FROM game_servers WHERE id = ?", [id]);
   saveDatabase();
 }
@@ -1123,5 +1127,209 @@ export function clearModUpdateStatus(modId: number): void {
     "UPDATE server_mods SET status = 'installed' WHERE id = ? AND status = 'update_available'",
     [modId],
   );
+  saveDatabase();
+}
+
+// ─── Backup Records ────────────────────────────────────────────────────
+
+export function createBackupRecord(
+  backup: Pick<
+    BackupMetadata,
+    | "id"
+    | "serverId"
+    | "gameId"
+    | "serverName"
+    | "timestamp"
+    | "tag"
+    | "trigger"
+    | "status"
+  > & { filePath?: string },
+): void {
+  getDb().run(
+    `INSERT INTO server_backups (id, server_id, game_id, server_name, timestamp, tag, trigger_type, status, file_path)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      backup.id,
+      backup.serverId,
+      backup.gameId,
+      backup.serverName,
+      backup.timestamp,
+      backup.tag ?? null,
+      backup.trigger,
+      backup.status,
+      backup.filePath ?? null,
+    ],
+  );
+  saveDatabase();
+}
+
+export function updateBackupRecord(
+  id: string,
+  updates: Partial<
+    Pick<
+      BackupMetadata,
+      "status" | "sizeBytes" | "fileCount" | "durationMs" | "errorMessage"
+    >
+  >,
+): void {
+  const sets: string[] = [];
+  const params: unknown[] = [];
+  if (updates.status !== undefined) {
+    sets.push("status = ?");
+    params.push(updates.status);
+  }
+  if (updates.sizeBytes !== undefined) {
+    sets.push("size_bytes = ?");
+    params.push(updates.sizeBytes);
+  }
+  if (updates.fileCount !== undefined) {
+    sets.push("file_count = ?");
+    params.push(updates.fileCount);
+  }
+  if (updates.durationMs !== undefined) {
+    sets.push("duration_ms = ?");
+    params.push(updates.durationMs);
+  }
+  if (updates.errorMessage !== undefined) {
+    sets.push("error_message = ?");
+    params.push(updates.errorMessage);
+  }
+  if (sets.length === 0) return;
+  params.push(id);
+  getDb().run(
+    `UPDATE server_backups SET ${sets.join(", ")} WHERE id = ?`,
+    params,
+  );
+  saveDatabase();
+}
+
+export function deleteBackupRecord(id: string): void {
+  getDb().run("DELETE FROM server_backups WHERE id = ?", [id]);
+  saveDatabase();
+}
+
+export function getBackupById(id: string): BackupMetadata | null {
+  const result = getDb().exec(
+    `SELECT id, server_id, game_id, server_name, timestamp, tag, trigger_type, status, size_bytes, file_count, duration_ms, error_message, file_path
+     FROM server_backups WHERE id = ?`,
+    [id],
+  );
+  if (result.length === 0 || result[0].values.length === 0) return null;
+  return mapBackupRow(result[0].values[0]);
+}
+
+export function getBackupsByServerId(serverId: number): BackupMetadata[] {
+  const result = getDb().exec(
+    `SELECT id, server_id, game_id, server_name, timestamp, tag, trigger_type, status, size_bytes, file_count, duration_ms, error_message, file_path
+     FROM server_backups WHERE server_id = ? ORDER BY timestamp DESC`,
+    [serverId],
+  );
+  if (result.length === 0) return [];
+  return result[0].values.map(mapBackupRow);
+}
+
+export function deleteBackupsByServerId(serverId: number): void {
+  getDb().run("DELETE FROM server_backups WHERE server_id = ?", [serverId]);
+  saveDatabase();
+}
+
+function mapBackupRow(row: unknown[]): BackupMetadata {
+  return {
+    id: row[0] as string,
+    serverId: row[1] as number,
+    gameId: row[2] as string,
+    serverName: row[3] as string,
+    timestamp: row[4] as string,
+    tag: row[5] as string | null,
+    trigger: row[6] as BackupMetadata["trigger"],
+    status: row[7] as BackupMetadata["status"],
+    sizeBytes: row[8] as number | null,
+    fileCount: row[9] as number | null,
+    durationMs: row[10] as number | null,
+    errorMessage: row[11] as string | null,
+  };
+}
+
+// ─── Backup Settings ───────────────────────────────────────────────────
+
+export function getBackupSettings(serverId: number): BackupSettings | null {
+  const result = getDb().exec(
+    `SELECT server_id, enabled, backup_before_restart, backup_before_update, retention_count, retention_days, custom_include_paths, custom_exclude_paths
+     FROM backup_settings WHERE server_id = ?`,
+    [serverId],
+  );
+  if (result.length === 0 || result[0].values.length === 0) return null;
+  const row = result[0].values[0];
+  return {
+    serverId: row[0] as number,
+    enabled: row[1] === 1,
+    backupBeforeRestart: row[2] === 1,
+    backupBeforeUpdate: row[3] === 1,
+    retentionCount: row[4] as number,
+    retentionDays: row[5] as number,
+    customIncludePaths: JSON.parse((row[6] as string) || "[]"),
+    customExcludePaths: JSON.parse((row[7] as string) || "[]"),
+  };
+}
+
+export function upsertBackupSettings(
+  serverId: number,
+  settings: Partial<Omit<BackupSettings, "serverId">>,
+): void {
+  const existing = getBackupSettings(serverId);
+  if (!existing) {
+    getDb().run(
+      `INSERT INTO backup_settings (server_id, enabled, backup_before_restart, backup_before_update, retention_count, retention_days, custom_include_paths, custom_exclude_paths)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        serverId,
+        settings.enabled ? 1 : 0,
+        settings.backupBeforeRestart ? 1 : 0,
+        settings.backupBeforeUpdate ? 1 : 0,
+        settings.retentionCount ?? 5,
+        settings.retentionDays ?? 30,
+        JSON.stringify(settings.customIncludePaths ?? []),
+        JSON.stringify(settings.customExcludePaths ?? []),
+      ],
+    );
+  } else {
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    if (settings.enabled !== undefined) {
+      sets.push("enabled = ?");
+      params.push(settings.enabled ? 1 : 0);
+    }
+    if (settings.backupBeforeRestart !== undefined) {
+      sets.push("backup_before_restart = ?");
+      params.push(settings.backupBeforeRestart ? 1 : 0);
+    }
+    if (settings.backupBeforeUpdate !== undefined) {
+      sets.push("backup_before_update = ?");
+      params.push(settings.backupBeforeUpdate ? 1 : 0);
+    }
+    if (settings.retentionCount !== undefined) {
+      sets.push("retention_count = ?");
+      params.push(settings.retentionCount);
+    }
+    if (settings.retentionDays !== undefined) {
+      sets.push("retention_days = ?");
+      params.push(settings.retentionDays);
+    }
+    if (settings.customIncludePaths !== undefined) {
+      sets.push("custom_include_paths = ?");
+      params.push(JSON.stringify(settings.customIncludePaths));
+    }
+    if (settings.customExcludePaths !== undefined) {
+      sets.push("custom_exclude_paths = ?");
+      params.push(JSON.stringify(settings.customExcludePaths));
+    }
+    if (sets.length > 0) {
+      params.push(serverId);
+      getDb().run(
+        `UPDATE backup_settings SET ${sets.join(", ")} WHERE server_id = ?`,
+        params,
+      );
+    }
+  }
   saveDatabase();
 }

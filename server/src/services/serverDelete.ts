@@ -21,6 +21,7 @@ import { clearSchedule } from "./scheduler.js";
 import { stopMessageBroadcaster } from "./messageBroadcaster.js";
 import { stopUpdateChecker } from "./updateChecker.js";
 import { removeFirewallRules } from "./firewallManager.js";
+import { cancelActiveBackup } from "./backupManager.js";
 
 /**
  * Performs the actual server deletion in the background without blocking the event loop.
@@ -48,6 +49,7 @@ export async function performBackgroundDeletion(
     clearSchedule(id);
     stopMessageBroadcaster(id);
     stopUpdateChecker(id);
+    cancelActiveBackup(id);
 
     // Remove firewall rules (non-blocking, don't fail deletion)
     try {
@@ -62,6 +64,10 @@ export async function performBackgroundDeletion(
       await fsPromises.rm(installPath, { recursive: true, force: true });
       logger.info(`[Delete] Removed server files: ${installPath}`);
     }
+
+    // Note: Backup files in data/backups/{serverId}/ are intentionally
+    // preserved so the user can still access them externally after deletion.
+    // They can be removed manually via the file system if no longer needed.
 
     // Delete database entry
     deleteServer(id);

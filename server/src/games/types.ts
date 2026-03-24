@@ -97,6 +97,17 @@ export interface LogPaths {
   includeFiles?: string[];
 }
 
+// ── Backup Path Config ───────────────────────────────────────────────
+
+export interface BackupPathConfig {
+  /** Directories/files containing world/save data (relative to installPath) */
+  savePaths: string[];
+  /** Directories/files containing config data (relative to installPath) */
+  configPaths: string[];
+  /** Glob patterns to exclude from backup (e.g., logs, temp files) */
+  excludePatterns: string[];
+}
+
 // ── Player List Operation Result ─────────────────────────────────────
 
 export interface PlayerListResult {
@@ -347,4 +358,14 @@ export interface GameAdapter {
    * Called after the first successful server start once configs exist.
    */
   writeInitialSettingsToConfig?(server: GameServer): void;
+
+  // ── Backup ──────────────────────────────────────────────────────
+
+  /**
+   * Return paths to include in server backups.
+   * savePaths: world/save data, configPaths: configuration files.
+   * All paths are relative to the server's installPath.
+   * excludePatterns: glob patterns to skip (logs, temp files).
+   */
+  getBackupPaths(server: GameServer): BackupPathConfig;
 }

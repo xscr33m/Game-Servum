@@ -26,6 +26,7 @@ import type {
   ModCopyResult,
   LogPaths,
   StartupDetector,
+  BackupPathConfig,
 } from "../types.js";
 import type { GameServer } from "../../types/index.js";
 import type { ServerMod } from "../../types/index.js";
@@ -612,6 +613,25 @@ export class DayZAdapter extends BaseGameAdapter {
       logger.error("[DayZ] Error reading crash logs:", error);
       return null;
     }
+  }
+
+  // ── Backup ──────────────────────────────────────────────────────
+
+  getBackupPaths(server: GameServer): BackupPathConfig {
+    const profilesRel = path.isAbsolute(server.profilesPath)
+      ? path.relative(server.installPath, server.profilesPath)
+      : server.profilesPath;
+    return {
+      savePaths: ["mpmissions"],
+      configPaths: [profilesRel, "serverDZ.cfg"],
+      excludePatterns: [
+        "**/*.ADM",
+        "**/*.RPT",
+        "**/*.log",
+        "**/log_archive/**",
+        "**/BattlEye/BEServer_x64_active_*",
+      ],
+    };
   }
 
   // ── Private Helpers ──────────────────────────────────────────────

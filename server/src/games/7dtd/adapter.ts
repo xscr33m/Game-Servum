@@ -21,6 +21,7 @@ import type {
   EditableFileConfig,
   LogPaths,
   StartupDetector,
+  BackupPathConfig,
 } from "../types.js";
 import type { GameServer } from "../../types/index.js";
 
@@ -390,6 +391,16 @@ export class SevenDaysAdapter extends BaseGameAdapter {
         path: path.join(server.installPath, "serverconfig.xml"),
       },
     ];
+  }
+
+  // ── Backup ──────────────────────────────────────────────────────
+
+  getBackupPaths(_server: GameServer): BackupPathConfig {
+    return {
+      savePaths: ["Data/Saves"],
+      configPaths: ["serverconfig.xml", "serveradmin.xml"],
+      excludePatterns: ["**/*.log", "**/output_log*.txt"],
+    };
   }
 }
 

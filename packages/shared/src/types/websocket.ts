@@ -29,7 +29,13 @@ export type WSMessageType =
   | "update:applied"
   | "update-check:complete"
   | "firewall:updated"
-  | "server:config-ready";
+  | "server:config-ready"
+  | "backup:started"
+  | "backup:progress"
+  | "backup:complete"
+  | "backup:failed"
+  | "restore:started"
+  | "restore:complete";
 
 export interface WSMessage {
   type: WSMessageType;

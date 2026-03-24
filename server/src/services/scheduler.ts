@@ -17,10 +17,12 @@ import {
   updateScheduleNextRestart,
   getAllEnabledSchedules,
   getServerById,
+  getBackupSettings,
 } from "../db/index.js";
 import { stopServer, startServer } from "./serverProcess.js";
 import { getRconConnection } from "./playerTracker.js";
 import { resolveVariables } from "./variableResolver.js";
+import { createBackup } from "./backupManager.js";
 import type { ServerSchedule } from "../types/index.js";
 
 // Active timers per server
@@ -172,6 +174,23 @@ async function performRestart(serverId: number): Promise<void> {
     serverId,
     message: `Scheduled restart for ${server.name}`,
   });
+
+  // Pre-restart backup if enabled
+  const backupSettings = getBackupSettings(serverId);
+  if (backupSettings?.backupBeforeRestart) {
+    logger.info(`[Scheduler] Server ${serverId}: creating pre-restart backup`);
+    try {
+      await createBackup(serverId, {
+        trigger: "pre-restart",
+        skipServerLifecycle: true,
+      });
+    } catch (err) {
+      logger.error(
+        `[Scheduler] Pre-restart backup failed for server ${serverId}: ${(err as Error).message}`,
+      );
+      // Continue with restart even if backup fails
+    }
+  }
 
   // Stop the server
   if (server.status === "running") {

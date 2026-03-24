@@ -179,6 +179,43 @@ const migrations: Migration[] = [
       );
     },
   },
+  {
+    version: 5,
+    name: "backup_system",
+    up: (db) => {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS server_backups (
+          id TEXT PRIMARY KEY,
+          server_id INTEGER NOT NULL,
+          game_id TEXT NOT NULL,
+          server_name TEXT NOT NULL,
+          timestamp TEXT NOT NULL,
+          tag TEXT,
+          trigger_type TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'running',
+          size_bytes INTEGER,
+          file_count INTEGER,
+          duration_ms INTEGER,
+          error_message TEXT,
+          file_path TEXT,
+          FOREIGN KEY (server_id) REFERENCES game_servers(id) ON DELETE CASCADE
+        )
+      `);
+      db.run(`
+        CREATE TABLE IF NOT EXISTS backup_settings (
+          server_id INTEGER PRIMARY KEY,
+          enabled INTEGER DEFAULT 0,
+          backup_before_restart INTEGER DEFAULT 0,
+          backup_before_update INTEGER DEFAULT 0,
+          retention_count INTEGER DEFAULT 5,
+          retention_days INTEGER DEFAULT 30,
+          custom_include_paths TEXT DEFAULT '[]',
+          custom_exclude_paths TEXT DEFAULT '[]',
+          FOREIGN KEY (server_id) REFERENCES game_servers(id) ON DELETE CASCADE
+        )
+      `);
+    },
+  },
 ];
 
 // ── Migration Runner ───────────────────────────────────────────────

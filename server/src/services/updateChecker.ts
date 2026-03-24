@@ -20,6 +20,7 @@ import {
   getServerById,
   setModUpdateAvailable,
   getSteamConfig,
+  getBackupSettings,
 } from "../db/index.js";
 import { checkModsForUpdates, installMod } from "./modManager.js";
 import { stopServer, startServer, isServerRunning } from "./serverProcess.js";
@@ -28,6 +29,7 @@ import { resolveVariables } from "./variableResolver.js";
 import { getGameDefinition } from "../games/index.js";
 import { getConfig, getSteamCMDExecutable } from "./config.js";
 import { updateServer } from "./serverInstall.js";
+import { createBackup } from "./backupManager.js";
 
 // Active check intervals per server
 const checkIntervals = new Map<number, ReturnType<typeof setInterval>>();
@@ -618,6 +620,25 @@ async function performUpdateRestart(
     mods: updatedMods,
     gameUpdateAvailable,
   });
+
+  // Pre-update backup if enabled
+  const backupSettings = getBackupSettings(serverId);
+  if (backupSettings?.backupBeforeUpdate) {
+    logger.info(
+      `[UpdateChecker] Server ${serverId}: creating pre-update backup`,
+    );
+    try {
+      await createBackup(serverId, {
+        trigger: "pre-update",
+        skipServerLifecycle: true,
+      });
+    } catch (err) {
+      logger.error(
+        `[UpdateChecker] Pre-update backup failed for server ${serverId}: ${(err as Error).message}`,
+      );
+      // Continue with update even if backup fails
+    }
+  }
 
   // Stop the server
   if (isServerRunning(serverId)) {

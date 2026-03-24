@@ -15,6 +15,7 @@ import {
   FaTerminal,
   FaTrashCan,
   FaXmark,
+  FaBoxArchive,
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +27,7 @@ import { publicAsset } from "@/lib/assets";
 import { PlayersTab } from "@/components/server-details/PlayersTab";
 import { LogsTab } from "@/components/server-details/LogsTab";
 import { SettingsTab } from "@/components/server-details/SettingsTab";
+import { BackupsTab } from "@/components/server-details/BackupsTab";
 import { useBackend } from "@/hooks/useBackend";
 import { useGameCapabilities } from "@/hooks/useGameCapabilities";
 import { AgentControlPanel } from "@/components/agent/AgentControlPanel";
@@ -53,7 +55,15 @@ const statusConfig = {
   error: { label: "Error", variant: "destructive" as const },
 };
 
-const validTabs = ["overview", "config", "mods", "players", "logs", "settings"];
+const validTabs = [
+  "overview",
+  "config",
+  "mods",
+  "players",
+  "logs",
+  "backups",
+  "settings",
+];
 
 export function ServerDetail() {
   const { id, tab } = useParams<{ id: string; tab?: string }>();
@@ -519,7 +529,7 @@ export function ServerDetail() {
               className="space-y-6"
             >
               <TabsList
-                className={`grid w-full ${hasPlayers ? "grid-cols-6" : "grid-cols-5"}`}
+                className={`grid w-full ${hasPlayers ? "grid-cols-7" : "grid-cols-6"}`}
               >
                 <TabsTrigger value="overview" className="gap-2">
                   <FaGauge className="h-4 w-4 text-ring/70" />
@@ -542,6 +552,10 @@ export function ServerDetail() {
                 <TabsTrigger value="logs" className="gap-2">
                   <FaFileLines className="h-4 w-4 text-ring/70" />
                   <span className="hidden sm:inline">Logs</span>
+                </TabsTrigger>
+                <TabsTrigger value="backups" className="gap-2">
+                  <FaBoxArchive className="h-4 w-4 text-ring/70" />
+                  <span className="hidden sm:inline">Backups</span>
                 </TabsTrigger>
                 <TabsTrigger value="settings" className="gap-2">
                   <FaWrench className="h-4 w-4 text-ring/70" />
@@ -569,6 +583,10 @@ export function ServerDetail() {
 
               <TabsContent value="logs">
                 <LogsTab server={server} />
+              </TabsContent>
+
+              <TabsContent value="backups">
+                <BackupsTab server={server} />
               </TabsContent>
 
               <TabsContent value="settings">

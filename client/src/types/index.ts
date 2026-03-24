@@ -29,6 +29,11 @@ export type {
   FirewallResult,
   GameCapabilities,
   RconProtocol,
+  BackupMetadata,
+  BackupSettings,
+  BackupProgress,
+  BackupStatus,
+  BackupTrigger,
 } from "@game-servum/shared";
 
 // Client-only types

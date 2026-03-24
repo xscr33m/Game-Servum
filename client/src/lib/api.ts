@@ -403,6 +403,33 @@ export interface ServersApiClient {
     files: string[];
     warnings?: string[];
   }>;
+  // Backups
+  getBackups: (
+    id: number,
+  ) => Promise<{ backups: import("@/types").BackupMetadata[] }>;
+  createBackup: (
+    id: number,
+    tag?: string,
+  ) => Promise<{ success: boolean; message: string }>;
+  deleteBackup: (
+    serverId: number,
+    backupId: string,
+  ) => Promise<{ success: boolean; message: string }>;
+  restoreBackup: (
+    serverId: number,
+    backupId: string,
+    preRestoreBackup?: boolean,
+  ) => Promise<{ success: boolean; message: string }>;
+  getBackupSettings: (
+    id: number,
+  ) => Promise<{ settings: import("@/types").BackupSettings }>;
+  updateBackupSettings: (
+    id: number,
+    settings: Partial<import("@/types").BackupSettings>,
+  ) => Promise<{
+    success: boolean;
+    settings: import("@/types").BackupSettings;
+  }>;
 }
 
 export interface SystemApiClient {
@@ -1171,6 +1198,51 @@ function createServersApi(
 
       return response.json();
     },
+    // Backups
+    getBackups: (id: number) =>
+      fetchApi<{ backups: import("@/types").BackupMetadata[] }>(
+        `/servers/${id}/backups`,
+      ),
+    createBackup: (id: number, tag?: string) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${id}/backups`,
+        {
+          method: "POST",
+          body: JSON.stringify({ tag }),
+        },
+      ),
+    deleteBackup: (serverId: number, backupId: string) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${serverId}/backups/${backupId}`,
+        { method: "DELETE" },
+      ),
+    restoreBackup: (
+      serverId: number,
+      backupId: string,
+      preRestoreBackup?: boolean,
+    ) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${serverId}/backups/${backupId}/restore`,
+        {
+          method: "POST",
+          body: JSON.stringify({ preRestoreBackup }),
+        },
+      ),
+    getBackupSettings: (id: number) =>
+      fetchApi<{ settings: import("@/types").BackupSettings }>(
+        `/servers/${id}/backup-settings`,
+      ),
+    updateBackupSettings: (
+      id: number,
+      settings: Partial<import("@/types").BackupSettings>,
+    ) =>
+      fetchApi<{
+        success: boolean;
+        settings: import("@/types").BackupSettings;
+      }>(`/servers/${id}/backup-settings`, {
+        method: "PUT",
+        body: JSON.stringify(settings),
+      }),
   };
 }
 

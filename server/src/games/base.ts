@@ -21,6 +21,7 @@ import type {
   BrowsableRoot,
   ModCopyResult,
   LogPaths,
+  BackupPathConfig,
 } from "./types.js";
 
 // ── Port Helper Functions ──────────────────────────────────────────
@@ -382,6 +383,15 @@ export abstract class BaseGameAdapter implements GameAdapter {
       logo: this.definition.logo,
       description: this.definition.description,
     };
+  }
+
+  // ── Backup ─────────────────────────────────────────────────────────
+
+  /**
+   * Default: no backup paths defined — subclasses must override.
+   */
+  getBackupPaths(_server: GameServer): BackupPathConfig {
+    return { savePaths: [], configPaths: [], excludePatterns: [] };
   }
 }
 

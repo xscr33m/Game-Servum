@@ -42,7 +42,13 @@ import {
   upsertUpdateRestartSettings,
 } from "../db/index.js";
 import { getConfig } from "../services/config.js";
-import { getSteamConfig, getUsedPorts } from "../db/index.js";
+import {
+  getSteamConfig,
+  getUsedPorts,
+  getBackupsByServerId,
+  getBackupSettings as getBackupSettingsFromDb,
+  upsertBackupSettings,
+} from "../db/index.js";
 import {
   getAllGameDefinitions,
   getGameDefinition,
@@ -78,6 +84,13 @@ import {
   startUpdateChecker,
 } from "../services/updateChecker.js";
 import { performBackgroundDeletion } from "../services/serverDelete.js";
+import {
+  createBackup,
+  restoreBackup,
+  deleteBackup,
+  isBackupRunning,
+  getBackupStoragePath,
+} from "../services/backupManager.js";
 import {
   parseWorkshopId,
   getWorkshopModInfo,
@@ -2999,6 +3012,149 @@ router.use(
     next(err);
   },
 );
+
+// ── Backup Endpoints ─────────────────────────────────────────────────
+
+// List backups for a server
+router.get("/:id/backups", (req: Request, res: Response) => {
+  const serverId = parseInt(req.params.id);
+  const server = getServerById(serverId);
+  if (!server) return res.status(404).json({ error: "Server not found" });
+
+  const backups = getBackupsByServerId(serverId);
+  res.json({ backups });
+});
+
+// Create a new backup
+router.post("/:id/backups", async (req: Request, res: Response) => {
+  const serverId = parseInt(req.params.id);
+  const server = getServerById(serverId);
+  if (!server) return res.status(404).json({ error: "Server not found" });
+
+  if (isBackupRunning(serverId)) {
+    return res
+      .status(409)
+      .json({ error: "A backup is already running for this server" });
+  }
+
+  const { tag } = req.body || {};
+
+  // Start backup in background (non-blocking)
+  createBackup(serverId, { tag: tag || undefined, trigger: "manual" }).catch(
+    (err) =>
+      logger.error(`[Backup] Unhandled error: ${(err as Error).message}`),
+  );
+
+  res.json({ success: true, message: "Backup started" });
+});
+
+// Delete a backup
+router.delete("/:id/backups/:backupId", (req: Request, res: Response) => {
+  const serverId = parseInt(req.params.id);
+  const server = getServerById(serverId);
+  if (!server) return res.status(404).json({ error: "Server not found" });
+
+  const result = deleteBackup(serverId, req.params.backupId);
+  if (!result.success) {
+    return res.status(400).json({ error: result.message });
+  }
+  res.json(result);
+});
+
+// Restore a backup
+router.post(
+  "/:id/backups/:backupId/restore",
+  async (req: Request, res: Response) => {
+    const serverId = parseInt(req.params.id);
+    const server = getServerById(serverId);
+    if (!server) return res.status(404).json({ error: "Server not found" });
+
+    if (isServerRunning(serverId)) {
+      return res
+        .status(400)
+        .json({ error: "Server must be stopped before restoring" });
+    }
+
+    const { preRestoreBackup } = req.body || {};
+    const result = await restoreBackup(serverId, req.params.backupId, {
+      preRestoreBackup: !!preRestoreBackup,
+    });
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.message });
+    }
+    res.json(result);
+  },
+);
+
+// Get backup settings
+router.get("/:id/backup-settings", (req: Request, res: Response) => {
+  const serverId = parseInt(req.params.id);
+  const server = getServerById(serverId);
+  if (!server) return res.status(404).json({ error: "Server not found" });
+
+  const settings = getBackupSettingsFromDb(serverId) ?? {
+    serverId,
+    enabled: false,
+    backupBeforeRestart: false,
+    backupBeforeUpdate: false,
+    retentionCount: 5,
+    retentionDays: 30,
+    customIncludePaths: [],
+    customExcludePaths: [],
+  };
+  res.json({ settings });
+});
+
+// Update backup settings
+router.put("/:id/backup-settings", (req: Request, res: Response) => {
+  const serverId = parseInt(req.params.id);
+  const server = getServerById(serverId);
+  if (!server) return res.status(404).json({ error: "Server not found" });
+
+  const body = req.body || {};
+
+  // Validate numeric fields
+  if (
+    body.retentionCount !== undefined &&
+    (typeof body.retentionCount !== "number" || body.retentionCount < 0)
+  ) {
+    return res
+      .status(400)
+      .json({ error: "retentionCount must be a non-negative number" });
+  }
+  if (
+    body.retentionDays !== undefined &&
+    (typeof body.retentionDays !== "number" || body.retentionDays < 0)
+  ) {
+    return res
+      .status(400)
+      .json({ error: "retentionDays must be a non-negative number" });
+  }
+
+  // Validate array fields
+  if (
+    body.customIncludePaths !== undefined &&
+    !Array.isArray(body.customIncludePaths)
+  ) {
+    return res
+      .status(400)
+      .json({ error: "customIncludePaths must be an array" });
+  }
+  if (
+    body.customExcludePaths !== undefined &&
+    !Array.isArray(body.customExcludePaths)
+  ) {
+    return res
+      .status(400)
+      .json({ error: "customExcludePaths must be an array" });
+  }
+
+  upsertBackupSettings(serverId, body);
+
+  const settings = getBackupSettingsFromDb(serverId);
+  res.json({ success: true, settings });
+});
 
 export { router as serversRouter };
 
