@@ -90,6 +90,7 @@ import {
   deleteBackup,
   isBackupRunning,
   getBackupStoragePath,
+  backupFileExists,
 } from "../services/backupManager.js";
 import {
   parseWorkshopId,
@@ -3022,7 +3023,12 @@ router.get("/:id/backups", (req: Request, res: Response) => {
   if (!server) return res.status(404).json({ error: "Server not found" });
 
   const backups = getBackupsByServerId(serverId);
-  res.json({ backups });
+  const enriched = backups.map((b) => ({
+    ...b,
+    fileExists:
+      b.status === "success" ? backupFileExists(serverId, b.id) : undefined,
+  }));
+  res.json({ backups: enriched });
 });
 
 // Create a new backup

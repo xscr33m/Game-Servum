@@ -463,6 +463,19 @@ function getStoredFilePath(backupId: string): string | null {
 }
 
 /**
+ * Check whether a backup's zip file still exists on disk.
+ */
+export function backupFileExists(serverId: number, backupId: string): boolean {
+  const storedFileName = getStoredFilePath(backupId);
+  if (!storedFileName) return false;
+  const filePath = path.join(
+    getBackupStoragePath(serverId),
+    path.basename(storedFileName),
+  );
+  return fs.existsSync(filePath);
+}
+
+/**
  * Create a zip archive from specified paths within a root directory.
  * Uses streaming to handle large files without excessive memory.
  */

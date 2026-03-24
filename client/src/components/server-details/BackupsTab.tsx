@@ -13,6 +13,7 @@ import {
   FaTag,
   FaCircleCheck,
   FaCircleXmark,
+  FaTriangleExclamation,
 } from "react-icons/fa6";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -355,7 +356,10 @@ export function BackupsTab({ server }: BackupsTabProps) {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4 min-w-0">
                     {/* Status icon */}
-                    {backup.status === "success" ? (
+                    {backup.status === "success" &&
+                    backup.fileExists === false ? (
+                      <FaTriangleExclamation className="h-5 w-5 text-yellow-500 shrink-0" />
+                    ) : backup.status === "success" ? (
                       <FaCircleCheck className="h-5 w-5 text-green-500 shrink-0" />
                     ) : backup.status === "running" ? (
                       <FaSpinner className="h-5 w-5 text-primary animate-spin shrink-0" />
@@ -405,6 +409,12 @@ export function BackupsTab({ server }: BackupsTabProps) {
                           {backup.errorMessage}
                         </p>
                       )}
+                      {backup.status === "success" &&
+                        backup.fileExists === false && (
+                          <p className="text-xs text-yellow-500 mt-1">
+                            Backup file missing from disk — deleted externally?
+                          </p>
+                        )}
                     </div>
                   </div>
 
@@ -421,12 +431,15 @@ export function BackupsTab({ server }: BackupsTabProps) {
                         disabled={
                           !isConnected ||
                           server.status === "running" ||
-                          !!activeProgress
+                          !!activeProgress ||
+                          backup.fileExists === false
                         }
                         title={
-                          server.status === "running"
-                            ? "Stop the server before restoring"
-                            : "Restore this backup"
+                          backup.fileExists === false
+                            ? "Backup file missing from disk"
+                            : server.status === "running"
+                              ? "Stop the server before restoring"
+                              : "Restore this backup"
                         }
                       >
                         <FaRotateLeft className="h-4 w-4 mr-2" />

@@ -21,6 +21,8 @@ export interface BackupMetadata {
   fileCount: number | null;
   durationMs: number | null;
   errorMessage: string | null;
+  /** Whether the backup zip file still exists on disk (set by API, not stored in DB) */
+  fileExists?: boolean;
 }
 
 export interface BackupSettings {
