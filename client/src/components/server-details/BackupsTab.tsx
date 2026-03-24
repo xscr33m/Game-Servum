@@ -102,6 +102,11 @@ export function BackupsTab({ server }: BackupsTabProps) {
   const [settings, setSettings] = useState<BackupSettings | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [defaultPaths, setDefaultPaths] = useState<{
+    savePaths: string[];
+    configPaths: string[];
+    excludePatterns: string[];
+  } | null>(null);
 
   // Create backup dialog
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -136,6 +141,7 @@ export function BackupsTab({ server }: BackupsTabProps) {
     try {
       const data = await api.servers.getBackupSettings(server.id);
       setSettings(data.settings);
+      setDefaultPaths(data.defaultPaths);
     } catch (err) {
       logger.error("Failed to load backup settings", err);
     } finally {
@@ -418,44 +424,115 @@ export function BackupsTab({ server }: BackupsTabProps) {
 
                 {/* Custom paths */}
                 <div className="space-y-3">
-                  <h3 className="text-sm font-medium">Custom Paths</h3>
-                  <div className="space-y-2">
-                    <Label className="text-sm">
-                      Additional include paths (one per line)
-                    </Label>
-                    <textarea
-                      className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                      value={settings.customIncludePaths.join("\n")}
-                      onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          customIncludePaths: e.target.value
-                            .split("\n")
-                            .filter((p) => p.trim()),
-                        })
-                      }
-                      placeholder="e.g. myCustomData/"
-                      rows={3}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm">
-                      Additional exclude patterns (one per line)
-                    </Label>
-                    <textarea
-                      className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                      value={settings.customExcludePaths.join("\n")}
-                      onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          customExcludePaths: e.target.value
-                            .split("\n")
-                            .filter((p) => p.trim()),
-                        })
-                      }
-                      placeholder="e.g. **/*.tmp"
-                      rows={3}
-                    />
+                  <h3 className="text-sm font-medium">Backup Paths</h3>
+                  <div className="grid grid-cols-2 gap-6">
+                    {/* Left column: User inputs */}
+                    <div className="space-y-4 rounded-lg border p-4">
+                      <h4 className="text-sm font-medium border-b pb-2">
+                        Custom Paths
+                      </h4>
+                      <div className="space-y-2">
+                        <Label className="text-sm">
+                          Additional include paths
+                        </Label>
+                        <textarea
+                          className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          value={settings.customIncludePaths.join("\n")}
+                          onChange={(e) =>
+                            setSettings({
+                              ...settings,
+                              customIncludePaths: e.target.value
+                                .split("\n")
+                                .filter((p) => p.trim()),
+                            })
+                          }
+                          placeholder="e.g. myCustomData/"
+                          rows={3}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          One path per line, relative to the server directory
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-sm">
+                          Additional exclude patterns
+                        </Label>
+                        <textarea
+                          className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          value={settings.customExcludePaths.join("\n")}
+                          onChange={(e) =>
+                            setSettings({
+                              ...settings,
+                              customExcludePaths: e.target.value
+                                .split("\n")
+                                .filter((p) => p.trim()),
+                            })
+                          }
+                          placeholder="e.g. **/*.tmp"
+                          rows={3}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Glob patterns — use ** for any depth, * for single
+                          segment
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Right column: Default paths info */}
+                    <div className="space-y-4 rounded-lg border p-4 bg-muted/30">
+                      <h4 className="text-sm font-medium border-b pb-2">
+                        Default Paths (included automatically)
+                      </h4>
+                      {defaultPaths && (
+                        <div className="space-y-4 text-sm">
+                          {defaultPaths.savePaths.length > 0 && (
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                Save Data
+                              </p>
+                              {defaultPaths.savePaths.map((p) => (
+                                <p
+                                  key={p}
+                                  className="font-mono text-xs bg-background rounded px-2 py-1 border"
+                                >
+                                  {p}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                          {defaultPaths.configPaths.length > 0 && (
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                Configuration
+                              </p>
+                              {defaultPaths.configPaths.map((p) => (
+                                <p
+                                  key={p}
+                                  className="font-mono text-xs bg-background rounded px-2 py-1 border"
+                                >
+                                  {p}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                          {defaultPaths.excludePatterns.length > 0 && (
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                Excluded by Default
+                              </p>
+                              {defaultPaths.excludePatterns.map((p) => (
+                                <p
+                                  key={p}
+                                  className="font-mono text-xs bg-background rounded px-2 py-1 border text-muted-foreground"
+                                >
+                                  {p}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 

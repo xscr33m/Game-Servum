@@ -3109,7 +3109,13 @@ router.get("/:id/backup-settings", (req: Request, res: Response) => {
     customIncludePaths: [],
     customExcludePaths: [],
   };
-  res.json({ settings });
+
+  const adapter = getGameAdapter(server.gameId);
+  const defaultPaths = adapter
+    ? adapter.getBackupPaths(server)
+    : { savePaths: [], configPaths: [], excludePatterns: [] };
+
+  res.json({ settings, defaultPaths });
 });
 
 // Update backup settings

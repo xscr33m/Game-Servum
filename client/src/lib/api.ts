@@ -420,9 +420,14 @@ export interface ServersApiClient {
     backupId: string,
     preRestoreBackup?: boolean,
   ) => Promise<{ success: boolean; message: string }>;
-  getBackupSettings: (
-    id: number,
-  ) => Promise<{ settings: import("@/types").BackupSettings }>;
+  getBackupSettings: (id: number) => Promise<{
+    settings: import("@/types").BackupSettings;
+    defaultPaths: {
+      savePaths: string[];
+      configPaths: string[];
+      excludePatterns: string[];
+    };
+  }>;
   updateBackupSettings: (
     id: number,
     settings: Partial<import("@/types").BackupSettings>,
@@ -1229,9 +1234,14 @@ function createServersApi(
         },
       ),
     getBackupSettings: (id: number) =>
-      fetchApi<{ settings: import("@/types").BackupSettings }>(
-        `/servers/${id}/backup-settings`,
-      ),
+      fetchApi<{
+        settings: import("@/types").BackupSettings;
+        defaultPaths: {
+          savePaths: string[];
+          configPaths: string[];
+          excludePatterns: string[];
+        };
+      }>(`/servers/${id}/backup-settings`),
     updateBackupSettings: (
       id: number,
       settings: Partial<import("@/types").BackupSettings>,
