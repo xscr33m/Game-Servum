@@ -55,6 +55,7 @@ BrandingText "${PRODUCT_NAME} v${PRODUCT_VERSION}"
 ; ──────────────────────────────────────────────────────────
 Var DataDir
 Var DataDirField
+Var IsUpgrade
 
 ; ──────────────────────────────────────────────────────────
 ;  Modern UI
@@ -142,16 +143,30 @@ Function .onInit
 
   ; Use existing install location for upgrade (may differ from new default)
   StrCpy $INSTDIR $0
+  StrCpy $IsUpgrade "1"
 
+  ; Check if the service is currently running
+  nsExec::ExecToStack 'cmd /c sc query ${SERVICE_NAME} | find "RUNNING"'
+  Pop $0
+  Pop $1
+  StrCmp $0 "0" service_is_running
+
+  ; Service is not running — simple upgrade dialog
   MessageBox MB_OKCANCEL|MB_ICONINFORMATION \
-    "${PRODUCT_NAME} is already installed.$\n$\nThe installer will stop the service, upgrade files, and restart the service." \
+    "${PRODUCT_NAME} is already installed.$\n$\nThe installer will upgrade files and restart the service." \
+    IDOK done_init
+  Abort
+
+  service_is_running:
+  ; Service is running — warn about active game servers
+  MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION \
+    "${PRODUCT_NAME} is currently running and may be managing active game servers.$\n$\nAll running game servers will be gracefully stopped during the upgrade.$\n$\nDo you want to continue?" \
     IDOK do_upgrade
   Abort
 
   do_upgrade:
-    ; Stop existing service before overwriting files
+    ; Send stop signal now — the Install section will wait for completion
     nsExec::ExecToLog 'sc stop ${SERVICE_NAME}'
-    Sleep 3000
     Goto done_init
 
   check_legacy:
@@ -178,6 +193,39 @@ FunctionEnd
 ;  Install section
 ; ──────────────────────────────────────────────────────────
 Section "Install"
+  ; --- Upgrade: wait for service to fully stop before overwriting files ---
+  StrCmp $IsUpgrade "1" 0 skip_service_wait
+
+    StrCpy $2 0
+    service_wait_loop:
+      ; Check if service has reached STOPPED state
+      nsExec::ExecToStack 'cmd /c sc query ${SERVICE_NAME} | find "STOPPED"'
+      Pop $0
+      Pop $1
+      StrCmp $0 "0" service_wait_done
+
+      ; Not stopped yet — wait and retry
+      IntOp $2 $2 + 1
+      DetailPrint "Waiting for service to stop... ($2s)"
+      Sleep 1000
+      IntCmp $2 45 service_wait_timeout service_wait_loop service_wait_timeout
+
+    service_wait_timeout:
+      MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION \
+        "The ${PRODUCT_NAME} service did not stop within 45 seconds.$\n$\nPlease close any programs that may be using the Agent, then click Retry.$\n$\nClick Cancel to abort the installation." \
+        IDRETRY service_wait_retry
+      Abort
+
+    service_wait_retry:
+      ; Re-send stop signal and reset counter
+      nsExec::ExecToLog 'sc stop ${SERVICE_NAME}'
+      StrCpy $2 0
+      Goto service_wait_loop
+
+    service_wait_done:
+      DetailPrint "Service stopped successfully."
+
+  skip_service_wait:
   SetOutPath "$INSTDIR"
 
   ; Copy application files
@@ -216,10 +264,19 @@ Section "Install"
 
   ; Set system environment variable GAME_SERVUM_ROOT
   ; Useful for external tools/scripts; WinSW config is already patched with the actual path
-  DetailPrint "Setting GAME_SERVUM_ROOT = $DataDir"
-  WriteRegExpandStr HKLM "${ENV_REG_KEY}" "GAME_SERVUM_ROOT" "$DataDir"
-  ; Broadcast change so running processes pick it up
-  SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=5000
+  ReadRegStr $0 HKLM "${ENV_REG_KEY}" "GAME_SERVUM_ROOT"
+  StrCmp $0 $DataDir env_unchanged
+
+    DetailPrint "Setting GAME_SERVUM_ROOT = $DataDir"
+    WriteRegExpandStr HKLM "${ENV_REG_KEY}" "GAME_SERVUM_ROOT" "$DataDir"
+    ; Broadcast change so running processes pick it up (reduced timeout)
+    SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=1000
+    Goto env_done
+
+  env_unchanged:
+    DetailPrint "GAME_SERVUM_ROOT unchanged, skipping environment broadcast."
+
+  env_done:
 
   ; Install Windows Service via WinSW
   DetailPrint "Installing Windows Service..."
@@ -273,7 +330,21 @@ Section "Uninstall"
   ; Stop and uninstall the service
   DetailPrint "Stopping ${PRODUCT_NAME} service..."
   nsExec::ExecToLog 'sc stop ${SERVICE_NAME}'
-  Sleep 5000
+
+  ; Wait for service to fully stop (max 45 seconds)
+  StrCpy $2 0
+  uninst_wait_loop:
+    nsExec::ExecToStack 'cmd /c sc query ${SERVICE_NAME} | find "STOPPED"'
+    Pop $0
+    Pop $1
+    StrCmp $0 "0" uninst_wait_done
+
+    DetailPrint "Waiting for service to stop... ($2s)"
+    Sleep 1000
+    IntOp $2 $2 + 1
+    IntCmp $2 45 uninst_wait_done uninst_wait_loop uninst_wait_done
+
+  uninst_wait_done:
 
   DetailPrint "Uninstalling Windows Service..."
   nsExec::ExecToLog '"$INSTDIR\GameServumAgent.exe" uninstall'
@@ -285,7 +356,7 @@ Section "Uninstall"
 
   ; Remove system environment variable
   DeleteRegValue HKLM "${ENV_REG_KEY}" "GAME_SERVUM_ROOT"
-  SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=5000
+  SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=1000
 
   ; Remove installation directory
   RMDir /r "$INSTDIR"
