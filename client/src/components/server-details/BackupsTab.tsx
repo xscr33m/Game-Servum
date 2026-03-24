@@ -15,6 +15,7 @@ import {
   FaCircleXmark,
   FaTriangleExclamation,
   FaXmark,
+  FaDownload,
 } from "react-icons/fa6";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -247,6 +248,15 @@ export function BackupsTab({ server }: BackupsTabProps) {
       toastError((err as Error).message);
     } finally {
       setRestoring(false);
+    }
+  }
+
+  async function handleDownloadBackup(backup: BackupMetadata) {
+    try {
+      await api.servers.downloadBackup(server.id, backup.id);
+      toastSuccess("Download started");
+    } catch (err) {
+      toastError((err as Error).message);
     }
   }
 
@@ -683,6 +693,20 @@ export function BackupsTab({ server }: BackupsTabProps) {
                       >
                         <FaRotateLeft className="h-4 w-4 mr-2" />
                         Restore
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => handleDownloadBackup(backup)}
+                        disabled={!isConnected || backup.fileExists === false}
+                        title={
+                          backup.fileExists === false
+                            ? "Backup file missing from disk"
+                            : "Download backup"
+                        }
+                      >
+                        <FaDownload className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"

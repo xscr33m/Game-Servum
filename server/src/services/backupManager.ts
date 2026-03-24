@@ -484,6 +484,23 @@ export function backupFileExists(serverId: number, backupId: string): boolean {
 }
 
 /**
+ * Resolve the absolute file path for a backup zip.
+ * Returns null if the backup record or file doesn't exist.
+ */
+export function getBackupFilePath(
+  serverId: number,
+  backupId: string,
+): string | null {
+  const storedFileName = getStoredFilePath(backupId);
+  if (!storedFileName) return null;
+  const filePath = path.join(
+    getBackupStoragePath(serverId),
+    path.basename(storedFileName),
+  );
+  return fs.existsSync(filePath) ? filePath : null;
+}
+
+/**
  * Create a zip archive from specified paths within a root directory.
  * Uses streaming to handle large files without excessive memory.
  */

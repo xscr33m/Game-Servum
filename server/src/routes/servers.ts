@@ -91,6 +91,7 @@ import {
   isBackupRunning,
   getBackupStoragePath,
   backupFileExists,
+  getBackupFilePath,
 } from "../services/backupManager.js";
 import {
   parseWorkshopId,
@@ -3092,6 +3093,20 @@ router.post(
     res.json(result);
   },
 );
+
+// Download a backup zip
+router.get("/:id/backups/:backupId/download", (req: Request, res: Response) => {
+  const serverId = parseInt(req.params.id);
+  const server = getServerById(serverId);
+  if (!server) return res.status(404).json({ error: "Server not found" });
+
+  const filePath = getBackupFilePath(serverId, req.params.backupId);
+  if (!filePath) {
+    return res.status(404).json({ error: "Backup file not found" });
+  }
+
+  res.download(filePath);
+});
 
 // Get backup settings
 router.get("/:id/backup-settings", (req: Request, res: Response) => {
