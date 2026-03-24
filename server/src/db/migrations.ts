@@ -225,6 +225,15 @@ const migrations: Migration[] = [
       );
     },
   },
+  {
+    version: 7,
+    name: "backup_before_start_flag",
+    up: (db) => {
+      db.run(
+        `ALTER TABLE backup_settings ADD COLUMN backup_before_start INTEGER DEFAULT 0`,
+      );
+    },
+  },
 ];
 
 // ── Migration Runner ───────────────────────────────────────────────

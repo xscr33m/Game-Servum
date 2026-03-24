@@ -425,6 +425,21 @@ router.post("/:id/start", async (req: Request, res: Response) => {
     return res.status(400).json({ error: "Server is being deleted" });
   }
 
+  // Pre-start backup if enabled
+  const backupSettings = getBackupSettingsFromDb(id);
+  if (backupSettings?.enabled && backupSettings.backupBeforeStart) {
+    logger.info(`[Backup] Creating pre-start backup for server ${id}`);
+    const backupResult = await createBackup(id, {
+      trigger: "pre-start",
+      skipServerLifecycle: true,
+    });
+    if (!backupResult.success) {
+      logger.warn(
+        `[Backup] Pre-start backup failed for server ${id}: ${backupResult.message}`,
+      );
+    }
+  }
+
   const result = startServer(id);
 
   if (result.success) {
@@ -3123,6 +3138,7 @@ router.get("/:id/backup-settings", (req: Request, res: Response) => {
     serverId,
     enabled: false,
     fullBackup: false,
+    backupBeforeStart: false,
     backupBeforeRestart: false,
     backupBeforeUpdate: false,
     retentionCount: 5,

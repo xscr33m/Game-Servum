@@ -358,6 +358,21 @@ export function BackupsTab({ server }: BackupsTabProps) {
                       Automatic Backups
                     </h3>
                     <div className="flex items-center justify-between">
+                      <Label htmlFor="backup-before-start" className="text-sm">
+                        Before server start
+                      </Label>
+                      <Switch
+                        id="backup-before-start"
+                        checked={settings.backupBeforeStart}
+                        onCheckedChange={(checked) =>
+                          setSettings({
+                            ...settings,
+                            backupBeforeStart: checked,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
                       <Label
                         htmlFor="backup-before-restart"
                         className="text-sm"

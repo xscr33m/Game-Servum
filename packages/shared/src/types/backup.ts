@@ -4,6 +4,7 @@ export type BackupStatus = "running" | "success" | "failed";
 
 export type BackupTrigger =
   | "manual"
+  | "pre-start"
   | "pre-restart"
   | "pre-update"
   | "pre-restore";
@@ -29,6 +30,7 @@ export interface BackupSettings {
   serverId: number;
   enabled: boolean;
   fullBackup: boolean;
+  backupBeforeStart: boolean;
   backupBeforeRestart: boolean;
   backupBeforeUpdate: boolean;
   retentionCount: number;
