@@ -216,6 +216,15 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 6,
+    name: "backup_full_backup_flag",
+    up: (db) => {
+      db.run(
+        `ALTER TABLE backup_settings ADD COLUMN full_backup INTEGER DEFAULT 0`,
+      );
+    },
+  },
 ];
 
 // ── Migration Runner ───────────────────────────────────────────────

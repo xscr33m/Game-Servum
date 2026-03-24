@@ -28,6 +28,7 @@ export interface BackupMetadata {
 export interface BackupSettings {
   serverId: number;
   enabled: boolean;
+  fullBackup: boolean;
   backupBeforeRestart: boolean;
   backupBeforeUpdate: boolean;
   retentionCount: number;

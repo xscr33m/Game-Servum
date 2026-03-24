@@ -3099,21 +3099,37 @@ router.get("/:id/backup-settings", (req: Request, res: Response) => {
   const server = getServerById(serverId);
   if (!server) return res.status(404).json({ error: "Server not found" });
 
-  const settings = getBackupSettingsFromDb(serverId) ?? {
-    serverId,
-    enabled: false,
-    backupBeforeRestart: false,
-    backupBeforeUpdate: false,
-    retentionCount: 5,
-    retentionDays: 30,
-    customIncludePaths: [],
-    customExcludePaths: [],
-  };
-
   const adapter = getGameAdapter(server.gameId);
   const defaultPaths = adapter
     ? adapter.getBackupPaths(server)
     : { savePaths: [], configPaths: [], excludePatterns: [] };
+
+  const settings = getBackupSettingsFromDb(serverId) ?? {
+    serverId,
+    enabled: false,
+    fullBackup: false,
+    backupBeforeRestart: false,
+    backupBeforeUpdate: false,
+    retentionCount: 5,
+    retentionDays: 30,
+    customIncludePaths: [
+      ...defaultPaths.savePaths,
+      ...defaultPaths.configPaths,
+    ],
+    customExcludePaths: [...defaultPaths.excludePatterns],
+  };
+
+  // Auto-populate custom paths with defaults when empty (first load or legacy data)
+  if (
+    settings.customIncludePaths.length === 0 &&
+    settings.customExcludePaths.length === 0
+  ) {
+    settings.customIncludePaths = [
+      ...defaultPaths.savePaths,
+      ...defaultPaths.configPaths,
+    ];
+    settings.customExcludePaths = [...defaultPaths.excludePatterns];
+  }
 
   res.json({ settings, defaultPaths });
 });

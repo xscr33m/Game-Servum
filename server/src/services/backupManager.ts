@@ -150,15 +150,23 @@ export async function createBackup(
     const customIncludes = settings?.customIncludePaths ?? [];
     const customExcludes = settings?.customExcludePaths ?? [];
 
-    const allPaths = [
-      ...backupPaths.savePaths,
-      ...backupPaths.configPaths,
-      ...customIncludes,
-    ];
+    // If fullBackup, include entire server directory; otherwise use custom paths
+    // (which already contain adapter defaults from first-load population)
+    const allPaths = settings?.fullBackup
+      ? ["/"]
+      : customIncludes.length > 0
+        ? [...customIncludes]
+        : [...backupPaths.savePaths, ...backupPaths.configPaths];
 
     if (allPaths.length === 0) {
       throw new Error("No backup paths configured for this game");
     }
+
+    // Merge exclude patterns: custom excludes (which include defaults) + adapter excludes as fallback
+    const allExcludes =
+      customExcludes.length > 0
+        ? [...customExcludes]
+        : [...backupPaths.excludePatterns];
 
     // Ensure backup directory exists
     fs.mkdirSync(backupDir, { recursive: true });
@@ -168,7 +176,7 @@ export async function createBackup(
       server.installPath,
       filePath,
       allPaths,
-      [...backupPaths.excludePatterns, ...customExcludes],
+      allExcludes,
       (percent, msg) => {
         broadcast("backup:progress", {
           serverId,

@@ -1254,7 +1254,7 @@ function mapBackupRow(row: unknown[]): BackupMetadata {
 
 export function getBackupSettings(serverId: number): BackupSettings | null {
   const result = getDb().exec(
-    `SELECT server_id, enabled, backup_before_restart, backup_before_update, retention_count, retention_days, custom_include_paths, custom_exclude_paths
+    `SELECT server_id, enabled, backup_before_restart, backup_before_update, retention_count, retention_days, custom_include_paths, custom_exclude_paths, full_backup
      FROM backup_settings WHERE server_id = ?`,
     [serverId],
   );
@@ -1269,6 +1269,7 @@ export function getBackupSettings(serverId: number): BackupSettings | null {
     retentionDays: row[5] as number,
     customIncludePaths: JSON.parse((row[6] as string) || "[]"),
     customExcludePaths: JSON.parse((row[7] as string) || "[]"),
+    fullBackup: row[8] === 1,
   };
 }
 
@@ -1279,11 +1280,12 @@ export function upsertBackupSettings(
   const existing = getBackupSettings(serverId);
   if (!existing) {
     getDb().run(
-      `INSERT INTO backup_settings (server_id, enabled, backup_before_restart, backup_before_update, retention_count, retention_days, custom_include_paths, custom_exclude_paths)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO backup_settings (server_id, enabled, full_backup, backup_before_restart, backup_before_update, retention_count, retention_days, custom_include_paths, custom_exclude_paths)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         serverId,
         settings.enabled ? 1 : 0,
+        settings.fullBackup ? 1 : 0,
         settings.backupBeforeRestart ? 1 : 0,
         settings.backupBeforeUpdate ? 1 : 0,
         settings.retentionCount ?? 5,
@@ -1298,6 +1300,10 @@ export function upsertBackupSettings(
     if (settings.enabled !== undefined) {
       sets.push("enabled = ?");
       params.push(settings.enabled ? 1 : 0);
+    }
+    if (settings.fullBackup !== undefined) {
+      sets.push("full_backup = ?");
+      params.push(settings.fullBackup ? 1 : 0);
     }
     if (settings.backupBeforeRestart !== undefined) {
       sets.push("backup_before_restart = ?");
