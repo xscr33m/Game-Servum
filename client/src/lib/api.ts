@@ -409,6 +409,7 @@ export interface ServersApiClient {
   ) => Promise<{ backups: import("@/types").BackupMetadata[] }>;
   createBackup: (
     id: number,
+    name?: string,
     tag?: string,
   ) => Promise<{ success: boolean; message: string }>;
   deleteBackup: (
@@ -1214,12 +1215,12 @@ function createServersApi(
       fetchApi<{ backups: import("@/types").BackupMetadata[] }>(
         `/servers/${id}/backups`,
       ),
-    createBackup: (id: number, tag?: string) =>
+    createBackup: (id: number, name?: string, tag?: string) =>
       fetchApi<{ success: boolean; message: string }>(
         `/servers/${id}/backups`,
         {
           method: "POST",
-          body: JSON.stringify({ tag }),
+          body: JSON.stringify({ name, tag }),
         },
       ),
     deleteBackup: (serverId: number, backupId: string) =>

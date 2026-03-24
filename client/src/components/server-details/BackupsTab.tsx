@@ -117,6 +117,7 @@ export function BackupsTab({ server }: BackupsTabProps) {
 
   // Create backup dialog
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [createName, setCreateName] = useState("");
   const [createTag, setCreateTag] = useState("");
   const [creating, setCreating] = useState(false);
 
@@ -217,8 +218,13 @@ export function BackupsTab({ server }: BackupsTabProps) {
   async function handleCreateBackup() {
     setCreating(true);
     try {
-      await api.servers.createBackup(server.id, createTag || undefined);
+      await api.servers.createBackup(
+        server.id,
+        createName || undefined,
+        createTag || undefined,
+      );
       setShowCreateDialog(false);
+      setCreateName("");
       setCreateTag("");
     } catch (err) {
       toastError((err as Error).message);
@@ -873,6 +879,19 @@ export function BackupsTab({ server }: BackupsTabProps) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="backup-name">Name (optional)</Label>
+              <Input
+                id="backup-name"
+                placeholder="e.g. Before mod update"
+                value={createName}
+                onChange={(e) => setCreateName(e.target.value)}
+                maxLength={100}
+              />
+              <p className="text-xs text-muted-foreground">
+                A descriptive name for this backup.
+              </p>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="backup-tag">Tag (optional)</Label>
               <Input

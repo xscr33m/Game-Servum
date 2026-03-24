@@ -3060,12 +3060,15 @@ router.post("/:id/backups", async (req: Request, res: Response) => {
       .json({ error: "A backup is already running for this server" });
   }
 
-  const { tag } = req.body || {};
+  const { name, tag } = req.body || {};
 
   // Start backup in background (non-blocking)
-  createBackup(serverId, { tag: tag || undefined, trigger: "manual" }).catch(
-    (err) =>
-      logger.error(`[Backup] Unhandled error: ${(err as Error).message}`),
+  createBackup(serverId, {
+    name: name || undefined,
+    tag: tag || undefined,
+    trigger: "manual",
+  }).catch((err) =>
+    logger.error(`[Backup] Unhandled error: ${(err as Error).message}`),
   );
 
   res.json({ success: true, message: "Backup started" });

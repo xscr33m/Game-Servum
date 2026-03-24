@@ -38,6 +38,7 @@ export function isBackupRunning(serverId: number): boolean {
 // ── Public API ─────────────────────────────────────────────────────
 
 export interface CreateBackupOptions {
+  name?: string;
   tag?: string;
   trigger?: BackupTrigger;
   /** Skip stop/start — caller manages server lifecycle (e.g., scheduler) */
@@ -99,6 +100,7 @@ export async function createBackup(
     gameId: server.gameId,
     serverName: server.name,
     timestamp,
+    name: options.name ?? null,
     tag: options.tag ?? null,
     trigger,
     status: "running",

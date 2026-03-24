@@ -1140,20 +1140,22 @@ export function createBackupRecord(
     | "gameId"
     | "serverName"
     | "timestamp"
+    | "name"
     | "tag"
     | "trigger"
     | "status"
   > & { filePath?: string },
 ): void {
   getDb().run(
-    `INSERT INTO server_backups (id, server_id, game_id, server_name, timestamp, tag, trigger_type, status, file_path)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO server_backups (id, server_id, game_id, server_name, timestamp, name, tag, trigger_type, status, file_path)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       backup.id,
       backup.serverId,
       backup.gameId,
       backup.serverName,
       backup.timestamp,
+      backup.name ?? null,
       backup.tag ?? null,
       backup.trigger,
       backup.status,
