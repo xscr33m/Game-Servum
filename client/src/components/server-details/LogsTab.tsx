@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   FaFileLines,
   FaArrowsRotate,
@@ -11,6 +11,10 @@ import {
   FaChevronRight,
   FaChevronDown,
   FaArrowLeft,
+  FaMagnifyingGlass,
+  FaDownload,
+  FaTextSlash,
+  FaTextWidth,
 } from "react-icons/fa6";
 import {
   Select,
@@ -26,10 +30,19 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { useBackend } from "@/hooks/useBackend";
 import { toastSuccess } from "@/lib/toast";
 import { logger } from "@/lib/logger";
@@ -47,6 +60,11 @@ function formatFileSize(bytes: number): string {
 
 function formatDate(isoString: string): string {
   return new Date(isoString).toLocaleString();
+}
+
+function formatShortDateTime(isoString: string): string {
+  const d = new Date(isoString);
+  return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 }
 
 function formatRelativeDate(isoString: string): string {
@@ -82,6 +100,7 @@ export function LogsTab({ server }: LogsTabProps) {
   const [selectedArchive, setSelectedArchive] = useState<string | null>(null);
   const [archiveFiles, setArchiveFiles] = useState<LogFile[]>([]);
   const [logContent, setLogContent] = useState<string>("");
+  const [totalLines, setTotalLines] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [loadingContent, setLoadingContent] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
@@ -98,9 +117,43 @@ export function LogsTab({ server }: LogsTabProps) {
   const [viewingSource, setViewingSource] = useState<
     "current" | { archive: string }
   >("current");
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [wordWrap, setWordWrap] = useState(true);
 
   const logContentRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<number | null>(null);
+
+  // Filter log content by search query
+  const filteredContent = useMemo(() => {
+    if (!searchQuery.trim() || !logContent) return logContent;
+    const query = searchQuery.toLowerCase();
+    return logContent
+      .split("\n")
+      .filter((line) => line.toLowerCase().includes(query))
+      .join("\n");
+  }, [logContent, searchQuery]);
+
+  const matchCount = useMemo(() => {
+    if (!searchQuery.trim() || !logContent) return 0;
+    const query = searchQuery.toLowerCase();
+    return logContent
+      .split("\n")
+      .filter((line) => line.toLowerCase().includes(query)).length;
+  }, [logContent, searchQuery]);
+
+  // Get selected file metadata
+  const selectedFileMeta = useMemo(() => {
+    if (!selectedLog) return null;
+    if (viewingSource === "current") {
+      return currentLogs.find((l) => l.name === selectedLog) ?? null;
+    }
+    return (
+      archiveFiles.find(
+        (f) => f.name === selectedLog && f.path.includes(viewingSource.archive),
+      ) ?? null
+    );
+  }, [selectedLog, viewingSource, currentLogs, archiveFiles]);
 
   // Load current log content
   const loadLogContent = useCallback(
@@ -113,6 +166,8 @@ export function LogsTab({ server }: LogsTabProps) {
       try {
         let data: {
           content: string;
+          totalLines: number;
+          returnedLines: number;
         };
         if (source === "current") {
           data = await api.servers.getLogContent(server.id, filename);
@@ -124,9 +179,11 @@ export function LogsTab({ server }: LogsTabProps) {
           );
         }
         setLogContent(data.content);
+        setTotalLines(data.totalLines);
       } catch (err) {
         logger.error("Failed to load log content", err);
         setLogContent("");
+        setTotalLines(0);
       } finally {
         setLoadingContent(false);
       }
@@ -204,6 +261,7 @@ export function LogsTab({ server }: LogsTabProps) {
     setSelectedArchive(null);
     setViewingSource("current");
     setAutoRefresh(false);
+    setSearchQuery("");
     loadLogContent(filename, "current");
   }
 
@@ -232,10 +290,11 @@ export function LogsTab({ server }: LogsTabProps) {
     setSelectedArchive(sessionName);
     setViewingSource({ archive: sessionName });
     setAutoRefresh(false);
+    setSearchQuery("");
     loadLogContent(filename, { archive: sessionName });
   }
 
-  async function handleDeleteArchive(sessionName: string) {
+  async function executeDeleteArchive(sessionName: string) {
     try {
       await api.servers.deleteArchive(server.id, sessionName);
       toastSuccess("Archive deleted");
@@ -246,6 +305,7 @@ export function LogsTab({ server }: LogsTabProps) {
       ) {
         setSelectedLog(null);
         setLogContent("");
+        setTotalLines(0);
         setViewingSource("current");
       }
     } catch (err) {
@@ -268,8 +328,49 @@ export function LogsTab({ server }: LogsTabProps) {
     }
   }
 
+  function handleDownload() {
+    if (!selectedLog || !logContent) return;
+    const blob = new Blob([logContent], {
+      type: "text/plain;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = selectedLog;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toastSuccess("Log file downloaded");
+  }
+
   function getArchiveFilesForSession(sessionName: string): LogFile[] {
     return archiveFiles.filter((f) => f.path.includes(sessionName));
+  }
+
+  // Build viewer description
+  function getViewerDescription(): string {
+    if (!selectedLog) return "Choose a log file from the list";
+    const parts: string[] = [];
+    if (selectedFileMeta) {
+      parts.push(formatFileSize(selectedFileMeta.size));
+    }
+    if (totalLines > 0) {
+      parts.push(`${totalLines.toLocaleString()} lines`);
+    }
+    if (selectedFileMeta) {
+      parts.push(`Modified ${formatRelativeDate(selectedFileMeta.modified)}`);
+    }
+    if (viewingSource !== "current") {
+      const archiveDate = archives.find(
+        (a) =>
+          typeof viewingSource !== "string" && a.name === viewingSource.archive,
+      )?.date;
+      if (archiveDate) {
+        parts.push(`Archived ${formatDate(archiveDate)}`);
+      }
+    }
+    return parts.length > 0 ? parts.join(" · ") : "Showing full file contents";
   }
 
   if (loading) {
@@ -293,7 +394,7 @@ export function LogsTab({ server }: LogsTabProps) {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setShowSettings(!showSettings)}
+                onClick={() => setShowSettings(true)}
                 title="Log settings"
               >
                 <FaGear className="h-4 w-4" />
@@ -304,51 +405,6 @@ export function LogsTab({ server }: LogsTabProps) {
             </div>
           </div>
         </CardHeader>
-
-        {/* Settings panel */}
-        {showSettings && (
-          <div className="px-4 pb-3 border-b space-y-3">
-            <div className="flex items-center justify-between">
-              <Label
-                htmlFor="archive-on-start"
-                className="text-sm cursor-pointer"
-              >
-                Archive logs on server start
-              </Label>
-              <Switch
-                id="archive-on-start"
-                checked={logSettings.archiveOnStart}
-                disabled={settingsLoading}
-                onCheckedChange={(checked: boolean) =>
-                  handleUpdateSettings({ archiveOnStart: checked })
-                }
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-sm">Auto-delete archives after</Label>
-              <Select
-                value={String(logSettings.retentionDays)}
-                disabled={settingsLoading}
-                onValueChange={(val) =>
-                  handleUpdateSettings({
-                    retentionDays: parseInt(val, 10),
-                  })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {RETENTION_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={String(opt.value)}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        )}
 
         <CardContent className="p-0 flex-1 overflow-y-auto min-h-0">
           {/* Current logs section */}
@@ -370,7 +426,10 @@ export function LogsTab({ server }: LogsTabProps) {
                   >
                     <div className="flex items-center gap-2">
                       <FaFileLines className="h-4 w-4 text-ring/70 flex-shrink-0" />
-                      <span className="text-sm font-medium truncate">
+                      <span
+                        className="text-sm font-medium truncate"
+                        title={log.name}
+                      >
                         {log.name}
                       </span>
                     </div>
@@ -405,7 +464,7 @@ export function LogsTab({ server }: LogsTabProps) {
                   </Badge>
                 </div>
               </div>
-              <div className="divide-y max-h-[300px] overflow-y-auto">
+              <div className="divide-y">
                 {archives.map((archive) => (
                   <div key={archive.name}>
                     {/* Archive session header */}
@@ -421,8 +480,11 @@ export function LogsTab({ server }: LogsTabProps) {
                             <FaChevronRight className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                           )}
                           <FaFolderOpen className="h-4 w-4 text-ring/70 flex-shrink-0" />
-                          <span className="text-sm font-medium truncate">
-                            {formatDate(archive.date).split(",")[0]}
+                          <span
+                            className="text-sm font-medium truncate"
+                            title={formatDate(archive.date)}
+                          >
+                            {formatShortDateTime(archive.date)}
                           </span>
                         </div>
                         <div className="flex items-center gap-3 mt-1 ml-[3.25rem] text-xs text-muted-foreground">
@@ -437,7 +499,7 @@ export function LogsTab({ server }: LogsTabProps) {
                         variant="ghost"
                         size="sm"
                         className="mr-2 text-muted-foreground hover:text-destructive"
-                        onClick={() => handleDeleteArchive(archive.name)}
+                        onClick={() => setDeleteTarget(archive.name)}
                         title="Delete archive"
                       >
                         <FaTrashCan className="h-3.5 w-3.5" />
@@ -473,7 +535,10 @@ export function LogsTab({ server }: LogsTabProps) {
                               >
                                 <div className="flex items-center gap-2">
                                   <FaFileLines className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                                  <span className="text-xs font-medium truncate">
+                                  <span
+                                    className="text-xs font-medium truncate"
+                                    title={file.name}
+                                  >
                                     {file.name}
                                   </span>
                                 </div>
@@ -503,38 +568,27 @@ export function LogsTab({ server }: LogsTabProps) {
 
       {/* Main: Log content viewer */}
       <Card className="lg:col-span-3 flex flex-col overflow-hidden">
-        <CardHeader className="shrink-0">
+        <CardHeader className="shrink-0 pb-3">
           <div className="flex items-center justify-between">
-            <div>
+            <div className="min-w-0 flex-1">
               <CardTitle className="flex items-center gap-2">
-                <FaFileLines className="h-5 w-5 text-ring" />
-                {selectedLog || "Select a log file"}
+                <FaFileLines className="h-5 w-5 text-ring flex-shrink-0" />
+                <span className="truncate">
+                  {selectedLog || "Select a log file"}
+                </span>
                 {viewingSource !== "current" && (
-                  <Badge variant="secondary" className="text-xs">
+                  <Badge variant="secondary" className="text-xs flex-shrink-0">
                     <FaBoxArchive className="h-3 w-3 mr-1" />
                     Archived
                   </Badge>
                 )}
               </CardTitle>
-              <CardDescription>
-                {selectedLog
-                  ? viewingSource === "current"
-                    ? "Showing full file contents"
-                    : `Archived session: ${formatDate(
-                        archives.find(
-                          (a) =>
-                            typeof viewingSource !== "string" &&
-                            a.name === viewingSource.archive,
-                        )?.date ||
-                          (typeof viewingSource !== "string"
-                            ? viewingSource.archive
-                            : ""),
-                      )}`
-                  : "Choose a log file from the list"}
+              <CardDescription className="truncate">
+                {getViewerDescription()}
               </CardDescription>
             </div>
             {selectedLog && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-shrink-0">
                 {viewingSource !== "current" && (
                   <Button
                     variant="outline"
@@ -545,6 +599,7 @@ export function LogsTab({ server }: LogsTabProps) {
                       } else {
                         setSelectedLog(null);
                         setLogContent("");
+                        setTotalLines(0);
                         setViewingSource("current");
                       }
                     }}
@@ -568,14 +623,57 @@ export function LogsTab({ server }: LogsTabProps) {
                 <Button
                   variant="outline"
                   size="sm"
+                  onClick={handleDownload}
+                  disabled={!logContent}
+                  title="Download log file"
+                >
+                  <FaDownload className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => loadLogContent(selectedLog, viewingSource)}
                   disabled={loadingContent}
+                  title="Refresh"
                 >
                   <FaArrowsRotate className="h-4 w-4" />
                 </Button>
               </div>
             )}
           </div>
+
+          {/* Search + Word Wrap toolbar */}
+          {selectedLog && (
+            <div className="flex items-center gap-2 mt-3">
+              <div className="relative flex-1">
+                <FaMagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Search in log..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-8 pl-9 text-sm"
+                />
+              </div>
+              {searchQuery.trim() && (
+                <Badge variant="secondary" className="text-xs flex-shrink-0">
+                  {matchCount} {matchCount === 1 ? "match" : "matches"}
+                </Badge>
+              )}
+              <Button
+                variant={wordWrap ? "default" : "outline"}
+                size="sm"
+                className="h-8 flex-shrink-0"
+                onClick={() => setWordWrap(!wordWrap)}
+                title={wordWrap ? "Disable word wrap" : "Enable word wrap"}
+              >
+                {wordWrap ? (
+                  <FaTextWidth className="h-3.5 w-3.5" />
+                ) : (
+                  <FaTextSlash className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </div>
+          )}
         </CardHeader>
         <CardContent className="flex-1 flex flex-col min-h-0">
           {loadingContent ? (
@@ -585,10 +683,18 @@ export function LogsTab({ server }: LogsTabProps) {
           ) : selectedLog ? (
             <div
               ref={logContentRef}
-              className="bg-terminal rounded-md p-3 flex-1 min-h-[200px] overflow-auto font-mono text-xs text-green-400 whitespace-pre-wrap"
+              className={`bg-terminal rounded-md p-3 flex-1 min-h-[200px] font-mono text-xs text-green-400 ${
+                wordWrap
+                  ? "whitespace-pre-wrap break-words overflow-y-auto overflow-x-hidden"
+                  : "whitespace-pre overflow-auto"
+              }`}
             >
-              {logContent || (
-                <span className="text-muted-foreground">Log file is empty</span>
+              {filteredContent || (
+                <span className="text-muted-foreground">
+                  {searchQuery.trim()
+                    ? "No matching lines"
+                    : "Log file is empty"}
+                </span>
               )}
             </div>
           ) : (
@@ -598,6 +704,113 @@ export function LogsTab({ server }: LogsTabProps) {
           )}
         </CardContent>
       </Card>
+
+      {/* Settings Dialog */}
+      <Dialog open={showSettings} onOpenChange={setShowSettings}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FaGear className="h-5 w-5 text-ring" />
+              Log Settings
+            </DialogTitle>
+            <DialogDescription>
+              Configure log archiving and retention for this server.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="flex items-center justify-between">
+              <Label
+                htmlFor="archive-on-start"
+                className="text-sm cursor-pointer"
+              >
+                Archive logs on server start
+              </Label>
+              <Switch
+                id="archive-on-start"
+                checked={logSettings.archiveOnStart}
+                disabled={settingsLoading}
+                onCheckedChange={(checked: boolean) =>
+                  handleUpdateSettings({
+                    archiveOnStart: checked,
+                  })
+                }
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm">Auto-delete archives after</Label>
+              <Select
+                value={String(logSettings.retentionDays)}
+                disabled={settingsLoading}
+                onValueChange={(val) =>
+                  handleUpdateSettings({
+                    retentionDays: parseInt(val, 10),
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {RETENTION_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={String(opt.value)}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Archive Confirmation Dialog */}
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FaTrashCan className="h-5 w-5 text-destructive" />
+              Delete Archive
+            </DialogTitle>
+            <DialogDescription>This action cannot be undone.</DialogDescription>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete the archive{" "}
+            <span className="font-semibold text-foreground">
+              {deleteTarget
+                ? formatShortDateTime(
+                    archives.find((a) => a.name === deleteTarget)?.date ??
+                      deleteTarget,
+                  )
+                : ""}
+            </span>
+            ?
+          </p>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteTarget(null)}
+              className="w-full sm:w-auto"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (deleteTarget) {
+                  executeDeleteArchive(deleteTarget);
+                  setDeleteTarget(null);
+                }
+              }}
+              className="w-full sm:w-auto"
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
