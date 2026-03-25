@@ -133,30 +133,36 @@ export function Dashboard() {
     }
   }, [loadSteamCMD, loadServers, api.system]);
 
-  // Fetch initial data (skip before connection is ready)
+  // Fetch initial data (skip before connection is ready or when no agents)
   const hasData = servers.length > 0 || steamcmd !== null;
   useEffect(() => {
-    if (isConnected) {
+    if (isConnected && connections.length > 0) {
       loadData();
     }
-  }, [loadData, isConnected]);
+  }, [loadData, isConnected, connections.length]);
 
   // Reload data when connection is (re-)established
   const prevConnected = useRef(isConnected);
   useEffect(() => {
-    if (isConnected && !prevConnected.current) {
+    if (isConnected && !prevConnected.current && connections.length > 0) {
       // Connection just came back — reload everything
       logger.info("[Dashboard] Connection restored, reloading data...");
       loadData();
     }
     prevConnected.current = isConnected;
-  }, [isConnected, loadData]);
+  }, [isConnected, loadData, connections.length]);
 
   // When all agents are removed, clear stale dashboard state
   useEffect(() => {
     if (connections.length === 0) {
       setServers([]);
       setSteamcmd(null);
+      setInstallProgress(new Map());
+      setLoading(false);
+      // Clear navigation cache
+      _cachedServers = [];
+      _cachedSteamcmd = null;
+      _cacheAgentId = null;
     }
   }, [connections.length]);
 
@@ -396,7 +402,7 @@ export function Dashboard() {
               variant="outline"
               size="icon"
               title="Refresh Data"
-              disabled={!isConnected}
+              disabled={!isConnected || noAgents}
             >
               <FaArrowsRotate className="h-4 w-4" />
             </Button>
