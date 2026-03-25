@@ -3,16 +3,12 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   FaPlus,
   FaArrowsRotate,
-  FaArrowUpRightFromSquare,
-  FaHeart,
-  FaGlobe,
-  FaGithub,
   FaGear,
   FaUser,
   FaUserSlash,
-  FaCircleInfo,
   FaPlugCircleXmark,
   FaFileLines,
+  FaCircleQuestion,
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -57,7 +53,6 @@ export function Dashboard() {
   );
   const [showAddServer, setShowAddServer] = useState(false);
   const [showSteamAccount, setShowSteamAccount] = useState(false);
-  const [showInfo, setShowInfo] = useState(false);
   const [showNoAgents, setShowNoAgents] = useState(false);
   const [onboardingInitialStep, setOnboardingInitialStep] = useState<
     "connect" | undefined
@@ -432,76 +427,14 @@ export function Dashboard() {
             >
               <FaArrowsRotate className="h-4 w-4" />
             </Button>
-            <div className="relative">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setShowInfo(!showInfo)}
-                title="About Game-Servum"
-              >
-                <FaCircleInfo className="h-4 w-4" />
-              </Button>
-              {showInfo && (
-                <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setShowInfo(false)}
-                  />
-                  <div className="absolute right-0 top-full mt-1.5 z-50 w-64 rounded-lg border bg-popover p-4 shadow-lg animate-in fade-in-0 zoom-in-95">
-                    <div className="flex items-center gap-2.5 mb-3">
-                      <img
-                        src={publicAsset("dashboard-icon.png")}
-                        alt=""
-                        className="h-6 w-auto"
-                      />
-                      <div>
-                        <p className="text-sm font-semibold leading-tight">
-                          Game-Servum
-                        </p>
-                        <p className="text-[11px] text-muted-foreground">
-                          v{APP_VERSION}
-                        </p>
-                      </div>
-                    </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-                      Open Source Game Server Manager powered by SteamCMD.
-                    </p>
-                    <div className="border-t border-border/50 pt-2.5 space-y-0.5">
-                      <a
-                        href="https://github.com/xscr33m/Game-Servum"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                      >
-                        <FaGithub className="h-3.5 w-3.5" />
-                        GitHub
-                        <FaArrowUpRightFromSquare className="h-2.5 w-2.5 ml-auto opacity-40" />
-                      </a>
-                      <a
-                        href="https://xscr33mlabs.com"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                      >
-                        <FaGlobe className="h-3.5 w-3.5" />
-                        Website
-                        <FaArrowUpRightFromSquare className="h-2.5 w-2.5 ml-auto opacity-40" />
-                      </a>
-                      <a
-                        href="https://ko-fi.com/xscr33m"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                      >
-                        <FaHeart className="h-3.5 w-3.5" />
-                        Donate
-                        <FaArrowUpRightFromSquare className="h-2.5 w-2.5 ml-auto opacity-40" />
-                      </a>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => navigate("/help")}
+              title="Help & Info"
+            >
+              <FaCircleQuestion className="h-4 w-4" />
+            </Button>
             <Button
               variant="outline"
               size="icon"
