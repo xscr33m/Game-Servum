@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FaArrowLeft,
@@ -12,6 +12,9 @@ import {
   FaServer,
   FaDesktop,
   FaCircle,
+  FaPalette,
+  FaTextWidth,
+  FaTextSlash,
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -89,6 +92,8 @@ export function Logs() {
   const [refreshing, setRefreshing] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [colorize, setColorize] = useState(false);
+  const [wordWrap, setWordWrap] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<{
     agentId: string;
     fileName: string;
@@ -622,6 +627,46 @@ export function Logs() {
     return lines.join("\n");
   }
 
+  // Get CSS class for a log level
+  function getLogLevelClass(line: string): string {
+    if (line.includes(" ERROR ")) return "text-red-400";
+    if (line.includes(" WARN ")) return "text-yellow-400";
+    if (line.includes(" DEBUG ")) return "text-zinc-500";
+    return "text-foreground";
+  }
+
+  // Render colorized log content
+  const colorizedContent = useMemo(() => {
+    let lines = currentLogs.content.split("\n");
+
+    if (levelFilter !== "all") {
+      const level = levelFilter.toUpperCase();
+      lines = lines.filter((line) => line.includes(` ${level} `));
+    }
+
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      lines = lines.filter((line) => line.toLowerCase().includes(query));
+    }
+
+    const filtered = lines.join("\n");
+    if (!filtered) return null;
+    return filtered.split("\n").map((line, i) => (
+      <div key={i} className={getLogLevelClass(line)}>
+        {line || "\n"}
+      </div>
+    ));
+  }, [currentLogs.content, levelFilter, searchQuery]);
+
+  // Match count for search
+  const searchMatchCount = useMemo(() => {
+    if (!searchQuery.trim() || !currentLogs.content) return 0;
+    const query = searchQuery.toLowerCase();
+    return currentLogs.content
+      .split("\n")
+      .filter((line) => line.toLowerCase().includes(query)).length;
+  }, [currentLogs.content, searchQuery]);
+
   // Format helpers
   function formatFileSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
@@ -979,8 +1024,43 @@ export function Logs() {
               {/* Spacer */}
               <div className="flex-1 hidden md:block" />
 
+              {/* Search match count */}
+              {searchQuery.trim() && (
+                <Badge variant="secondary" className="text-xs shrink-0">
+                  {searchMatchCount}{" "}
+                  {searchMatchCount === 1 ? "match" : "matches"}
+                </Badge>
+              )}
+
               {/* Actions */}
               <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  variant={colorize ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setColorize(!colorize)}
+                  title={
+                    colorize
+                      ? "Disable log level colors"
+                      : "Enable log level colors"
+                  }
+                  className="h-9 gap-2"
+                >
+                  <FaPalette className="h-4 w-4" />
+                  <span className="hidden sm:inline">Colors</span>
+                </Button>
+                <Button
+                  variant={wordWrap ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setWordWrap(!wordWrap)}
+                  title={wordWrap ? "Disable word wrap" : "Enable word wrap"}
+                  className="h-9"
+                >
+                  {wordWrap ? (
+                    <FaTextWidth className="h-4 w-4" />
+                  ) : (
+                    <FaTextSlash className="h-4 w-4" />
+                  )}
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
@@ -1020,7 +1100,7 @@ export function Logs() {
           </div>
 
           {/* Log Content */}
-          <div className="flex-1 overflow-auto p-5 min-h-0 bg-muted/5">
+          <div className="flex-1 overflow-auto p-5 min-h-0 bg-terminal">
             {(() => {
               // Check if agent is disconnected
               if (activeTab !== "dashboard") {
@@ -1066,8 +1146,16 @@ export function Logs() {
 
               if (currentLogs.content) {
                 return (
-                  <pre className="text-[13px] font-mono leading-relaxed whitespace-pre-wrap break-all">
-                    {filterLogs(currentLogs.content)}
+                  <pre
+                    className={`text-[13px] font-mono leading-relaxed ${
+                      wordWrap
+                        ? "whitespace-pre-wrap break-words"
+                        : "whitespace-pre"
+                    } ${!colorize ? "text-green-400" : ""}`}
+                  >
+                    {colorize
+                      ? colorizedContent
+                      : filterLogs(currentLogs.content)}
                   </pre>
                 );
               }
@@ -1098,14 +1186,15 @@ export function Logs() {
               <FaTrash className="h-5 w-5 text-destructive" />
               Delete Log File
             </DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete{" "}
-              <span className="font-semibold text-foreground">
-                {deleteTarget?.fileName}
-              </span>
-              ? This action cannot be undone.
-            </DialogDescription>
+            <DialogDescription>This action cannot be undone.</DialogDescription>
           </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete{" "}
+            <span className="font-semibold text-foreground">
+              {deleteTarget?.fileName}
+            </span>
+            ?
+          </p>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
               variant="outline"
