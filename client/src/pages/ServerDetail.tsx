@@ -81,7 +81,15 @@ export function ServerDetail() {
   const terminalRef = useRef<HTMLDivElement>(null);
   const hasFetchedInstallOutput = useRef(false);
 
-  const { api, subscribe, isConnected, activeConnection } = useBackend();
+  const { api, subscribe, isConnected, activeConnection, connections } =
+    useBackend();
+
+  // Redirect to Dashboard when no agents are configured
+  useEffect(() => {
+    if (connections.length === 0) {
+      navigate("/", { replace: true });
+    }
+  }, [connections.length, navigate]);
 
   const loadServer = useCallback(
     async (showToast = false) => {

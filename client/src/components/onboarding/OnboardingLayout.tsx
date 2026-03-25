@@ -13,6 +13,8 @@ interface OnboardingLayoutProps {
   children: ReactNode;
   /** Whether the terminal / extra content is visible — widens the card */
   wide?: boolean;
+  /** Called when the user closes the wizard via the X button */
+  onClose?: () => void;
 }
 
 /**
@@ -24,11 +26,12 @@ export function OnboardingLayout({
   currentStepKey,
   children,
   wide,
+  onClose,
 }: OnboardingLayoutProps) {
   const currentIndex = steps.findIndex((s) => s.key === currentStepKey);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex flex-col items-center justify-center p-4">
       {/* Branding */}
       <div className="flex items-center gap-3 mb-8">
         <img
@@ -86,6 +89,16 @@ export function OnboardingLayout({
       <div className={`w-full ${wide ? "max-w-2xl" : "max-w-md"} space-y-4`}>
         {children}
       </div>
+
+      {/* Close link */}
+      {onClose && (
+        <button
+          onClick={onClose}
+          className="mt-4 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          Close and continue later
+        </button>
+      )}
     </div>
   );
 }

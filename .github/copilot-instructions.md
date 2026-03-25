@@ -186,8 +186,8 @@ npm run clean                # Clear build caches and dist folders
 - **Server detail tabs**: `components/server/` — `OverviewTab`, `ConfigTab`, `LogsTab`, `ModsTab`, `PlayersTab`, `SettingsTab`, `UpdateCheckDialog`
 - **Game plugins**: `games/` — Per-game UI modules (`dayz/`, `ark/`, `7dtd/`) with config editors. Central `registry.ts` provides `getGamePlugin()`, `getGameName()`, `getGameLogo()`, `getConfigEditor()`
 - **UI primitives**: `components/ui/` (shadcn/ui — don't modify directly)
-- **Dialogs**: `AddServerDialog.tsx`, `DeleteServerDialog.tsx`, `AddAgentDialog.tsx`, `UpdateNotification.tsx`
-- **Onboarding**: `components/onboarding/` — `OnboardingWizard.tsx` with step components (`WelcomeStep`, `ConnectAgentStep`, `SteamCmdInstallStep`, `SteamLoginStep`, `SteamGuardStep`, `CompleteStep`). Dashboard flow includes agent connection step
+- **Dialogs**: `AddServerDialog.tsx`, `DeleteServerDialog.tsx`, `UpdateNotification.tsx`
+- **Onboarding/Wizard**: `components/onboarding/` — `OnboardingWizard.tsx` with step components (`WelcomeStep`, `ConnectAgentStep`, `SteamCmdInstallStep`, `SteamLoginStep`, `SteamGuardStep`, `CompleteStep`). Wizard is triggered by user ("Connect Agent" button), shown as overlay. Welcome step only on first launch; subsequent opens skip to Connect step. Closeable via X button on any step.
 - **Multi-agent**: `AgentSelector.tsx` for switching between connected agents, `AppSettingsPanel.tsx` for global settings
 
 ### Multi-Agent Architecture (`client/src/contexts/BackendContext.tsx`)

@@ -14,10 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ServerCard } from "@/components/server-details/ServerCard";
 import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
-import {
-  isOnboardingComplete,
-  resetOnboarding,
-} from "@/components/onboarding/onboardingState";
+import { hasSeenWelcome } from "@/components/onboarding/onboardingState";
 import { AddServerDialog } from "@/components/server-details/dialogs/AddServerDialog";
 import { DeleteServerDialog } from "@/components/server-details/dialogs/DeleteServerDialog";
 import { CancelInstallDialog } from "@/components/server-details/dialogs/CancelInstallDialog";
@@ -48,15 +45,9 @@ export function Dashboard() {
   const [servers, setServers] = useState<GameServer[]>([]);
   const [steamcmd, setSteamcmd] = useState<SteamCMDStatus | null>(null);
   const [loading, setLoading] = useState(false); // Start with false, set true when actually loading
-  const [showOnboarding, setShowOnboarding] = useState(
-    () => !isOnboardingComplete(),
-  );
+  const [showWizard, setShowWizard] = useState(false);
   const [showAddServer, setShowAddServer] = useState(false);
   const [showSteamAccount, setShowSteamAccount] = useState(false);
-  const [showNoAgents, setShowNoAgents] = useState(false);
-  const [onboardingInitialStep, setOnboardingInitialStep] = useState<
-    "connect" | undefined
-  >(undefined);
   const [serverToDelete, setServerToDelete] = useState<GameServer | null>(null);
   const [serverToCancel, setServerToCancel] = useState<GameServer | null>(null);
   const [installProgress, setInstallProgress] = useState<
@@ -142,44 +133,51 @@ export function Dashboard() {
     }
   }, [loadSteamCMD, loadServers, api.system]);
 
-  // Fetch initial data (skip during onboarding and before connection is ready)
-  // Also skip if we already have cached data — it will be refreshed once connected
+  // Fetch initial data (skip before connection is ready)
   const hasData = servers.length > 0 || steamcmd !== null;
   useEffect(() => {
-    if (!showOnboarding && isConnected) {
+    if (isConnected) {
       loadData();
     }
-  }, [loadData, showOnboarding, isConnected]);
+  }, [loadData, isConnected]);
 
   // Reload data when connection is (re-)established
   const prevConnected = useRef(isConnected);
   useEffect(() => {
-    if (isConnected && !prevConnected.current && !showOnboarding) {
+    if (isConnected && !prevConnected.current) {
       // Connection just came back — reload everything
       logger.info("[Dashboard] Connection restored, reloading data...");
       loadData();
     }
     prevConnected.current = isConnected;
-  }, [isConnected, loadData, showOnboarding]);
+  }, [isConnected, loadData]);
 
-  // When all agents are removed, show intermediate screen
+  // When all agents are removed, clear stale dashboard state
   useEffect(() => {
-    if (connections.length === 0 && !showOnboarding) {
-      setShowNoAgents(true);
-      // Clear stale dashboard state
+    if (connections.length === 0) {
       setServers([]);
       setSteamcmd(null);
-      setLoading(true);
-    } else {
-      setShowNoAgents(false);
     }
-  }, [connections.length, showOnboarding]);
+  }, [connections.length]);
 
-  // Handle ?setup= query param to re-open onboarding
+  // Auto-open wizard on first launch (no agents, never seen welcome)
+  const hasAutoOpened = useRef(false);
+  useEffect(() => {
+    if (
+      !hasAutoOpened.current &&
+      connections.length === 0 &&
+      !hasSeenWelcome()
+    ) {
+      hasAutoOpened.current = true;
+      setShowWizard(true);
+    }
+  }, [connections.length]);
+
+  // Handle ?setup= query param to open wizard
   useEffect(() => {
     const setupStep = searchParams.get("setup");
     if (setupStep) {
-      setShowOnboarding(true);
+      setShowWizard(true);
     }
   }, [searchParams]);
 
@@ -320,53 +318,14 @@ export function Dashboard() {
     }
   }
 
-  // No agents connected — show intermediate screen before onboarding
-  if (showNoAgents) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-        <div className="w-full max-w-sm mx-4 rounded-xl border bg-card p-8 shadow-lg text-center space-y-4 animate-in fade-in-0 zoom-in-95 duration-200">
-          <div className="mx-auto w-14 h-14 rounded-full bg-muted flex items-center justify-center">
-            <FaPlugCircleXmark className="h-6 w-6 text-muted-foreground" />
-          </div>
-          <div className="space-y-1.5">
-            <h2 className="text-lg font-semibold">No Agent Connected</h2>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              There are no agents configured. Connect an agent to start managing
-              your game servers.
-            </p>
-          </div>
-          <Button
-            className="w-full"
-            onClick={() => {
-              resetOnboarding();
-              setShowNoAgents(false);
-              setOnboardingInitialStep("connect");
-              setShowOnboarding(true);
-            }}
-          >
-            Connect Agent
-          </Button>
-        </div>
-      </div>
-    );
+  // Callback for AgentControlPanel "Add Agent" button
+  function handleAddAgent() {
+    setShowWizard(true);
   }
 
-  // Show onboarding wizard for first-time users
-  if (showOnboarding) {
-    return (
-      <OnboardingWizard
-        initialStep={onboardingInitialStep}
-        onComplete={() => {
-          setShowOnboarding(false);
-          setOnboardingInitialStep(undefined);
-          setSearchParams({}, { replace: true });
-          loadData();
-        }}
-      />
-    );
-  }
+  const noAgents = connections.length === 0;
 
-  if (loading && !hasData) {
+  if (loading && !hasData && !noAgents && !showWizard) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <FaArrowsRotate className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -376,6 +335,20 @@ export function Dashboard() {
 
   return (
     <div className="h-screen flex flex-col bg-background">
+      {/* Wizard overlay */}
+      {showWizard && (
+        <OnboardingWizard
+          onClose={() => {
+            setShowWizard(false);
+            setSearchParams({}, { replace: true });
+          }}
+          onComplete={() => {
+            setShowWizard(false);
+            setSearchParams({}, { replace: true });
+            loadData();
+          }}
+        />
+      )}
       {/* Header */}
       <AppHeader
         left={
@@ -392,7 +365,7 @@ export function Dashboard() {
               </span>
             </div>
             <div className="h-7 w-px bg-ring/30" />
-            <AgentControlPanel />
+            <AgentControlPanel onAddAgent={handleAddAgent} />
           </>
         }
         right={
@@ -461,73 +434,104 @@ export function Dashboard() {
         <main className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
           <div className="container mx-auto px-4 py-4 space-y-8">
             {/* System Monitoring */}
-            {monitoringEnabled && <SystemMonitor key={activeConnection?.id} />}
+            {monitoringEnabled && !noAgents && (
+              <SystemMonitor key={activeConnection?.id} />
+            )}
 
-            {/* Servers */}
-            <div>
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-xl font-semibold">Game Servers</h2>
-                  <p className="text-sm text-muted-foreground mt-0.5">
-                    {servers.length === 0
-                      ? "No servers installed yet"
-                      : `${servers.length} server${servers.length !== 1 ? "s" : ""} configured`}
-                  </p>
+            {/* No agents connected — inline empty state */}
+            {noAgents ? (
+              <div className="flex flex-col items-center justify-center py-24 text-center">
+                <div className="mx-auto w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-5">
+                  <FaPlugCircleXmark className="h-7 w-7 text-muted-foreground" />
                 </div>
-                <Button
-                  disabled={!steamcmd?.installed || !isConnected}
-                  onClick={() => setShowAddServer(true)}
-                >
-                  <FaPlus className="h-4 w-4 mr-2" />
-                  Add Server
-                </Button>
+                <h2 className="text-xl font-semibold mb-2">
+                  No Agent Connected
+                </h2>
+                <p className="text-sm text-muted-foreground max-w-sm mb-6 leading-relaxed">
+                  Connect a Game-Servum Agent to start managing your game
+                  servers. The agent runs on the machine hosting your servers.
+                </p>
+                <div className="flex gap-3">
+                  <Button onClick={handleAddAgent} size="lg">
+                    <FaPlus className="h-4 w-4 mr-2" />
+                    Connect Agent
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={() => navigate("/help")}
+                  >
+                    <FaCircleQuestion className="h-4 w-4 mr-2" />
+                    Learn More
+                  </Button>
+                </div>
               </div>
-
-              {servers.length === 0 ? (
-                !isConnected && connections.length > 0 ? (
-                  <div className="flex flex-col items-center justify-center py-20 text-center">
-                    <div className="rounded-full bg-muted p-6 mb-4">
-                      <FaArrowsRotate className="h-8 w-8 text-muted-foreground animate-spin" />
-                    </div>
-                    <h3 className="text-lg font-medium mb-1">
-                      Waiting for agent connection…
-                    </h3>
-                    <p className="text-sm text-muted-foreground max-w-sm">
-                      The agent is currently unreachable. Server list will load
-                      automatically once the connection is restored.
+            ) : (
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h2 className="text-xl font-semibold">Game Servers</h2>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      {servers.length === 0
+                        ? "No servers installed yet"
+                        : `${servers.length} server${servers.length !== 1 ? "s" : ""} configured`}
                     </p>
                   </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-20 text-center">
-                    <div className="rounded-full bg-muted p-6 mb-4">
-                      <FaPlus className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                    <h3 className="text-lg font-medium mb-1">
-                      No servers installed
-                    </h3>
-                    <p className="text-sm text-muted-foreground max-w-sm">
-                      Get started by adding your first game server. SteamCMD
-                      will handle the download and installation.
-                    </p>
-                  </div>
-                )
-              ) : (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {servers.map((server) => (
-                    <ServerCard
-                      key={server.id}
-                      server={server}
-                      onStart={handleStartServer}
-                      onStop={handleStopServer}
-                      onDelete={handleDeleteServer}
-                      onCancelInstall={handleCancelInstall}
-                      disabled={!isConnected}
-                      installProgress={installProgress.get(server.id)}
-                    />
-                  ))}
+                  <Button
+                    disabled={!steamcmd?.installed || !isConnected}
+                    onClick={() => setShowAddServer(true)}
+                  >
+                    <FaPlus className="h-4 w-4 mr-2" />
+                    Add Server
+                  </Button>
                 </div>
-              )}
-            </div>
+
+                {servers.length === 0 ? (
+                  !isConnected && connections.length > 0 ? (
+                    <div className="flex flex-col items-center justify-center py-20 text-center">
+                      <div className="rounded-full bg-muted p-6 mb-4">
+                        <FaArrowsRotate className="h-8 w-8 text-muted-foreground animate-spin" />
+                      </div>
+                      <h3 className="text-lg font-medium mb-1">
+                        Waiting for agent connection…
+                      </h3>
+                      <p className="text-sm text-muted-foreground max-w-sm">
+                        The agent is currently unreachable. Server list will
+                        load automatically once the connection is restored.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-20 text-center">
+                      <div className="rounded-full bg-muted p-6 mb-4">
+                        <FaPlus className="h-8 w-8 text-muted-foreground" />
+                      </div>
+                      <h3 className="text-lg font-medium mb-1">
+                        No servers installed
+                      </h3>
+                      <p className="text-sm text-muted-foreground max-w-sm">
+                        Get started by adding your first game server. SteamCMD
+                        will handle the download and installation.
+                      </p>
+                    </div>
+                  )
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {servers.map((server) => (
+                      <ServerCard
+                        key={server.id}
+                        server={server}
+                        onStart={handleStartServer}
+                        onStop={handleStopServer}
+                        onDelete={handleDeleteServer}
+                        onCancelInstall={handleCancelInstall}
+                        disabled={!isConnected}
+                        installProgress={installProgress.get(server.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </main>
       </div>

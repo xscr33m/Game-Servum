@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -6,7 +7,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { FaArrowRight, FaServer, FaGamepad } from "react-icons/fa6";
+import {
+  FaArrowRight,
+  FaServer,
+  FaGamepad,
+  FaCircleQuestion,
+} from "react-icons/fa6";
 import { publicAsset } from "@/lib/assets";
 
 interface WelcomeStepProps {
@@ -17,6 +23,8 @@ interface WelcomeStepProps {
  * First step of onboarding — compact welcome with branding.
  */
 export function WelcomeStep({ onNext }: WelcomeStepProps) {
+  const navigate = useNavigate();
+
   return (
     <Card>
       <CardHeader className="text-center pb-4">
@@ -58,6 +66,16 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
         <Button onClick={onNext} className="w-full group" size="lg">
           Get Started
           <FaArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+        </Button>
+
+        <Button
+          variant="outline"
+          className="w-full"
+          size="lg"
+          onClick={() => navigate("/help")}
+        >
+          <FaCircleQuestion className="mr-2 h-4 w-4" />
+          Learn More
         </Button>
 
         <p className="text-xs text-center text-muted-foreground/60">

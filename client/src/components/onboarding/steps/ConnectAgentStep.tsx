@@ -14,7 +14,7 @@ import { FaSpinner, FaCircleExclamation, FaPlug } from "react-icons/fa6";
 import { useBackend } from "@/hooks/useBackend";
 
 interface ConnectAgentStepProps {
-  onNext: () => void;
+  onNext: (agentUrl: string, sessionToken: string) => Promise<void>;
 }
 
 /**
@@ -58,13 +58,13 @@ export function ConnectAgentStep({ onNext }: ConnectAgentStepProps) {
         normalizedUrl = `http://${normalizedUrl}`;
       }
 
-      await addConnection(
+      const conn = await addConnection(
         normalizedUrl,
         apiKey.trim(),
         password,
         name.trim() || "Agent",
       );
-      onNext();
+      await onNext(conn.url, conn.sessionToken!);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Connection failed";
       setError(msg);

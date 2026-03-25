@@ -12,7 +12,7 @@ export interface BackendContextValue {
     apiKey: string,
     password: string,
     name: string,
-  ) => Promise<void>;
+  ) => Promise<BackendConnection>;
   removeConnection: (id: string) => void;
   setActiveConnection: (id: string) => void;
   updateConnectionStatus: (

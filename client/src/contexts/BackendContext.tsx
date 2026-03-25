@@ -712,6 +712,8 @@ export function BackendProvider({ children }: { children: ReactNode }) {
         if (connections.length === 0) {
           setActiveId(id);
         }
+
+        return newConn;
       } catch (err) {
         newConn.status = "error";
         throw err;

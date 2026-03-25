@@ -23,7 +23,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AddAgentDialog } from "@/components/agent/AddAgentDialog";
 import { RemoveAgentDialog } from "@/components/agent/RemoveAgentDialog";
 import { EditAgentDialog } from "@/components/agent/EditAgentDialog";
 import { AgentUpdateNotification } from "@/components/agent/AgentUpdateNotification";
@@ -42,11 +41,16 @@ const STATUS_COLORS = {
   error: "text-red-500",
 } as const;
 
+interface AgentControlPanelProps {
+  /** Called when the user wants to add a new agent (opens the wizard) */
+  onAddAgent?: () => void;
+}
+
 /**
  * Unified agent control panel for the Dashboard header.
  * Combines agent selection, actions, and management in one component.
  */
-export function AgentControlPanel() {
+export function AgentControlPanel({ onAddAgent }: AgentControlPanelProps) {
   const {
     connections,
     activeConnection,
@@ -67,7 +71,6 @@ export function AgentControlPanel() {
   const [reconnecting, setReconnecting] = useState(false);
 
   // Agent management dialogs
-  const [showAdd, setShowAdd] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<BackendConnection | null>(
     null,
   );
@@ -189,7 +192,22 @@ export function AgentControlPanel() {
     return () => clearInterval(timer);
   }, [isConnected, hasUptime]);
 
-  if (!activeConnection) return null;
+  // No active connection — show minimal UI with just "Add Agent" button
+  if (!activeConnection) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onAddAgent?.()}
+          title="Connect an agent"
+        >
+          <FaPlus className="h-3.5 w-3.5 mr-1.5" />
+          Connect Agent
+        </Button>
+      </div>
+    );
+  }
 
   const status = activeConnection.status || "disconnected";
   const statusColor =
@@ -391,7 +409,7 @@ export function AgentControlPanel() {
                       size="sm"
                       onClick={() => {
                         setMenuOpen(false);
-                        setShowAdd(true);
+                        onAddAgent?.();
                       }}
                     >
                       <FaPlus className="h-3 w-3 mr-1.5" />
@@ -645,15 +663,12 @@ export function AgentControlPanel() {
         <Button
           variant="outline"
           size="icon"
-          onClick={() => setShowAdd(true)}
+          onClick={() => onAddAgent?.()}
           title="Add agent"
         >
           <FaPlus className="h-4 w-4" />
         </Button>
       </div>
-
-      {/* Add Agent Dialog */}
-      <AddAgentDialog open={showAdd} onOpenChange={setShowAdd} />
 
       {/* Remove Agent Dialog */}
       <RemoveAgentDialog
