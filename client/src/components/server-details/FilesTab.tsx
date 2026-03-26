@@ -7,7 +7,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardContent } from "@/components/ui/card";
 import { FileExplorer } from "@/components/file-explorer/FileExplorer";
 import { useBackend } from "@/hooks/useBackend";
 import type { GameServer } from "@/types";
@@ -50,26 +49,22 @@ export function FilesTab({ server }: FilesTabProps) {
 
   if (loading) {
     return (
-      <Card>
-        <CardContent className="py-8 text-center text-muted-foreground">
-          Loading file browser...
-        </CardContent>
-      </Card>
+      <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+        Loading file browser...
+      </div>
     );
   }
 
   if (roots.length === 0) {
     return (
-      <Card>
-        <CardContent className="py-8 text-center text-muted-foreground">
-          No browsable directories available for this server.
-        </CardContent>
-      </Card>
+      <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+        No browsable directories available for this server.
+      </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-4 h-[calc(100vh-8rem)] min-h-[400px]">
+    <div className="flex flex-col flex-1 min-h-0 px-4 py-4 gap-4">
       {/* Root selector */}
       {roots.length > 1 ? (
         <div className="flex items-center gap-3 shrink-0">
