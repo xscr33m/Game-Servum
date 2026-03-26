@@ -1,11 +1,4 @@
 import { useState } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -1400,15 +1393,15 @@ function ArkInitialSettings({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Initial Server Settings</CardTitle>
-        <CardDescription>
+    <div>
+      <div className="mb-4">
+        <h3 className="text-base font-semibold">Initial Server Settings</h3>
+        <p className="text-sm text-muted-foreground">
           Configure the basic server settings before the first start. ARK will
           generate its full configuration files during the first launch.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-4 md:grid-cols-2">
+        </p>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="map">Map</Label>
           <Select
@@ -1511,8 +1504,8 @@ function ArkInitialSettings({
             {saving ? "Saving..." : "Save Initial Settings"}
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -1553,14 +1546,14 @@ function ArkMapSelector({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Server Map</CardTitle>
-        <CardDescription>
+    <div className="py-6">
+      <div className="mb-4">
+        <h3 className="text-base font-semibold">Server Map</h3>
+        <p className="text-sm text-muted-foreground">
           Select the map for this server. Changes require a server restart.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-4 md:grid-cols-2">
+        </p>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="mapSelect">Map</Label>
           <Select
@@ -1604,8 +1597,8 @@ function ArkMapSelector({
             {saving ? "Saving..." : "Save Map"}
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -1655,7 +1648,7 @@ export function ArkConfigEditor({
       );
 
   return (
-    <>
+    <div className="divide-y">
       {/* Map selector — only shown on GameUserSettings.ini tab */}
       {isGus && serverId && launchParams && (
         <ArkMapSelector
@@ -1665,12 +1658,10 @@ export function ArkConfigEditor({
         />
       )}
       {visibleSections.length === 0 && (
-        <Card>
-          <CardContent className="py-6 text-center text-muted-foreground">
-            No configuration fields found. Use the Raw Editor tab to view and
-            edit the file directly.
-          </CardContent>
-        </Card>
+        <div className="py-6 text-center text-muted-foreground">
+          No configuration fields found. Use the Raw Editor tab to view and edit
+          the file directly.
+        </div>
       )}
       {visibleSections.map((section) => {
         const renderedFields = section.fields
@@ -1680,17 +1671,17 @@ export function ArkConfigEditor({
         if (renderedFields.length === 0) return null;
 
         return (
-          <Card key={section.title}>
-            <CardHeader>
-              <CardTitle>{section.title}</CardTitle>
-              <CardDescription>{section.description}</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
-              {renderedFields}
-            </CardContent>
-          </Card>
+          <div key={section.title} className="py-6">
+            <div className="mb-4">
+              <h3 className="text-base font-semibold">{section.title}</h3>
+              <p className="text-sm text-muted-foreground">
+                {section.description}
+              </p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">{renderedFields}</div>
+          </div>
         );
       })}
-    </>
+    </div>
   );
 }

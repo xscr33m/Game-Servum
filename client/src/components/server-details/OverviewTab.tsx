@@ -253,7 +253,7 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
   const uptime = useUptime(isRunning ? server.startedAt : null);
 
   return (
-    <div className="max-w-5xl mx-auto space-y-0">
+    <div className="space-y-0">
       {/* Messages */}
       {(paramsError || portsError) && (
         <Alert variant="destructive" className="mb-6">

@@ -1,10 +1,3 @@
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -1202,20 +1195,22 @@ export function SevenDaysConfigEditor({
   }
 
   return (
-    <>
-      {SECTIONS.map((section) => (
-        <Card key={section.title}>
-          <CardHeader>
-            <CardTitle>{section.title}</CardTitle>
-            <CardDescription>{section.description}</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2">
+    <div className="divide-y">
+      {SECTIONS.map((section, idx) => (
+        <div key={section.title} className={idx === 0 ? "pb-6" : "py-6"}>
+          <div className="mb-4">
+            <h3 className="text-base font-semibold">{section.title}</h3>
+            <p className="text-sm text-muted-foreground">
+              {section.description}
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
             {section.fields.map((field) =>
               renderField(field, config, handleChange),
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       ))}
-    </>
+    </div>
   );
 }

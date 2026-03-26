@@ -555,25 +555,31 @@ export function ServerDetail() {
               hiddenSections={hiddenSections}
               gameId={server.gameId}
             />
-            <div className="flex-1 min-w-0 min-h-0 overflow-y-auto [scrollbar-gutter:stable]">
-              <div className="container mx-auto px-4 py-6 min-h-full">
-                {activeSection === "overview" && (
-                  <OverviewTab server={server} onRefresh={loadServer} />
-                )}
-                {activeSection === "config" && (
-                  <ConfigTab server={server} onRefresh={loadServer} />
-                )}
-                {activeSection === "files" && <FilesTab server={server} />}
-                {activeSection === "mods" && <ModsTab server={server} />}
-                {activeSection === "players" && hasPlayers && (
-                  <PlayersTab server={server} />
-                )}
-                {activeSection === "logs" && <LogsTab server={server} />}
-                {activeSection === "backups" && <BackupsTab server={server} />}
-                {activeSection === "settings" && (
-                  <SettingsTab server={server} onRefresh={loadServer} />
-                )}
-              </div>
+            <div
+              className={`flex-1 min-w-0 min-h-0 [scrollbar-gutter:stable] ${activeSection === "config" ? "flex flex-col" : "overflow-y-auto"}`}
+            >
+              {activeSection === "config" && (
+                <ConfigTab server={server} onRefresh={loadServer} />
+              )}
+              {activeSection !== "config" && (
+                <div className="max-w-5xl mx-auto px-4 py-6 min-h-full">
+                  {activeSection === "overview" && (
+                    <OverviewTab server={server} onRefresh={loadServer} />
+                  )}
+                  {activeSection === "files" && <FilesTab server={server} />}
+                  {activeSection === "mods" && <ModsTab server={server} />}
+                  {activeSection === "players" && hasPlayers && (
+                    <PlayersTab server={server} />
+                  )}
+                  {activeSection === "logs" && <LogsTab server={server} />}
+                  {activeSection === "backups" && (
+                    <BackupsTab server={server} />
+                  )}
+                  {activeSection === "settings" && (
+                    <SettingsTab server={server} onRefresh={loadServer} />
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
