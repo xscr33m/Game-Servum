@@ -334,7 +334,7 @@ export function PlayersTab({ server }: PlayersTabProps) {
   const offlinePlayers = players.filter((p) => !p.isOnline);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Messages */}
       {error && (
         <Alert variant="destructive">

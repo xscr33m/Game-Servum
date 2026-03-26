@@ -814,7 +814,7 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
                       · {updateRestart.delayMinutes} min delay
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                     <div className="bg-muted p-2 rounded">
                       <span className="text-muted-foreground">
                         Warnings at:{" "}
@@ -906,7 +906,7 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
                 {/* Add / Edit form */}
                 {(addingVar || editingVarId !== null) && (
                   <div className="space-y-3 border rounded-lg p-4">
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="text-sm font-medium text-muted-foreground block mb-1">
                           Variable Name
@@ -1160,7 +1160,7 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
                       Every {schedule.intervalHours}h
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                     <div className="bg-muted p-2 rounded">
                       <span className="text-muted-foreground">
                         Warnings at:{" "}
@@ -1261,7 +1261,7 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
                             ))}
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="text-sm font-medium text-muted-foreground block mb-1">
                             Interval (minutes)

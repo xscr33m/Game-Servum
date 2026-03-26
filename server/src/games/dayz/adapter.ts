@@ -456,6 +456,7 @@ export class DayZAdapter extends BaseGameAdapter {
 
   getBrowsableRoots(server: GameServer): BrowsableRoot[] {
     return [
+      ...super.getBrowsableRoots(server),
       {
         key: "profiles",
         label: "Profiles",

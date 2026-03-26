@@ -395,7 +395,7 @@ export function BackupsTab({ server }: BackupsTabProps) {
             ) : (
               <>
                 {/* Automatic Backups + Retention side by side */}
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Automatic triggers */}
                   <div className="space-y-3 rounded-lg border p-4">
                     <h3 className="text-sm font-medium border-b pb-2">
@@ -456,7 +456,7 @@ export function BackupsTab({ server }: BackupsTabProps) {
                     <h3 className="text-sm font-medium border-b pb-2">
                       Retention
                     </h3>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="retention-count" className="text-sm">
                           Max backup count
@@ -550,7 +550,7 @@ export function BackupsTab({ server }: BackupsTabProps) {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label className="text-sm">Include paths</Label>
                       <textarea

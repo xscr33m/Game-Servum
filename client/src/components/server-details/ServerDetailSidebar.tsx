@@ -7,11 +7,13 @@ import {
   FaFileLines,
   FaBoxArchive,
   FaWrench,
+  FaFolderTree,
 } from "react-icons/fa6";
 
 export type ServerSection =
   | "overview"
   | "config"
+  | "files"
   | "mods"
   | "players"
   | "logs"
@@ -35,6 +37,7 @@ const sections: SidebarItem[] = [
     icon: FaGear,
     group: "Server",
   },
+  { id: "files", label: "Files", icon: FaFolderTree, group: "Server" },
   { id: "settings", label: "Settings", icon: FaWrench, group: "Server" },
   // Management
   { id: "mods", label: "Mods", icon: FaCubes, group: "Management" },

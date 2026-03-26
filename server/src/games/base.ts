@@ -344,7 +344,13 @@ export abstract class BaseGameAdapter implements GameAdapter {
   }
 
   getBrowsableRoots(_server: GameServer): BrowsableRoot[] {
-    return [];
+    return [
+      {
+        key: "root",
+        label: "Server Root",
+        resolvePath: (s: GameServer) => s.installPath,
+      },
+    ];
   }
 
   /**

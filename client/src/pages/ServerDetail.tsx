@@ -20,6 +20,7 @@ import { PlayersTab } from "@/components/server-details/PlayersTab";
 import { LogsTab } from "@/components/server-details/LogsTab";
 import { SettingsTab } from "@/components/server-details/SettingsTab";
 import { BackupsTab } from "@/components/server-details/BackupsTab";
+import { FilesTab } from "@/components/server-details/FilesTab";
 import { ServerDetailSidebar } from "@/components/server-details/ServerDetailSidebar";
 import type { ServerSection } from "@/components/server-details/ServerDetailSidebar";
 import { useBackend } from "@/hooks/useBackend";
@@ -52,6 +53,7 @@ const statusConfig = {
 const validSections: ServerSection[] = [
   "overview",
   "config",
+  "files",
   "mods",
   "players",
   "logs",
@@ -560,6 +562,7 @@ export function ServerDetail() {
                 {activeSection === "config" && (
                   <ConfigTab server={server} onRefresh={loadServer} />
                 )}
+                {activeSection === "files" && <FilesTab server={server} />}
                 {activeSection === "mods" && <ModsTab server={server} />}
                 {activeSection === "players" && hasPlayers && (
                   <PlayersTab server={server} />
