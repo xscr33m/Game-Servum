@@ -9,6 +9,11 @@ import {
   FaWrench,
   FaFolderTree,
 } from "react-icons/fa6";
+import {
+  getGameLogo,
+  getGameName,
+} from "@/components/server-details/games/registry";
+import { publicAsset } from "@/lib/assets";
 
 export type ServerSection =
   | "overview"
@@ -57,13 +62,17 @@ interface ServerDetailSidebarProps {
   active: string;
   onChange: (section: ServerSection) => void;
   hiddenSections?: Set<string>;
+  gameId?: string;
 }
 
 export function ServerDetailSidebar({
   active,
   onChange,
   hiddenSections,
+  gameId,
 }: ServerDetailSidebarProps) {
+  const gameLogo = gameId ? getGameLogo(gameId) : null;
+  const gameName = gameId ? getGameName(gameId) : null;
   const visibleSections = hiddenSections
     ? sections.filter((s) => !hiddenSections.has(s.id))
     : sections;
@@ -83,6 +92,26 @@ export function ServerDetailSidebar({
     <>
       {/* Desktop sidebar */}
       <nav className="hidden md:flex w-52 shrink-0 flex-col overflow-y-auto border-r bg-muted/20">
+        {gameName && (
+          <div className="flex items-center gap-2.5 px-4 py-3 border-b">
+            {gameLogo ? (
+              <img
+                src={publicAsset(gameLogo)}
+                alt={gameName}
+                className="h-6 w-auto object-contain"
+              />
+            ) : (
+              <span className="text-sm font-semibold text-muted-foreground">
+                {gameName}
+              </span>
+            )}
+            {gameLogo && (
+              <span className="text-sm font-medium text-muted-foreground">
+                {gameName}
+              </span>
+            )}
+          </div>
+        )}
         <div className="p-3 space-y-4">
           {groups.map((group) => (
             <div key={group.label} className="space-y-0.5">
@@ -109,7 +138,21 @@ export function ServerDetailSidebar({
       </nav>
 
       {/* Mobile dropdown */}
-      <div className="md:hidden border-b px-4 py-2">
+      <div className="md:hidden border-b px-4 py-2 space-y-2">
+        {gameName && (
+          <div className="flex items-center gap-2">
+            {gameLogo && (
+              <img
+                src={publicAsset(gameLogo)}
+                alt={gameName}
+                className="h-5 w-auto object-contain"
+              />
+            )}
+            <span className="text-sm font-medium text-muted-foreground">
+              {gameName}
+            </span>
+          </div>
+        )}
         <select
           value={active}
           onChange={(e) => onChange(e.target.value as ServerSection)}

@@ -553,6 +553,7 @@ export function ServerDetail() {
               active={activeSection}
               onChange={handleSectionChange}
               hiddenSections={hiddenSections}
+              gameId={server.gameId}
             />
             <div className="flex-1 min-w-0 min-h-0 overflow-y-auto [scrollbar-gutter:stable]">
               <div className="container mx-auto px-4 py-6 min-h-full">
