@@ -1,25 +1,17 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   FaArrowLeft,
   FaPlay,
   FaStop,
   FaArrowsRotate,
-  FaGear,
-  FaCubes,
-  FaUsers,
-  FaFileLines,
-  FaGauge,
-  FaWrench,
   FaSpinner,
   FaTerminal,
   FaTrashCan,
   FaXmark,
-  FaBoxArchive,
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OverviewTab } from "@/components/server-details/OverviewTab";
 import { ConfigTab } from "@/components/server-details/ConfigTab";
 import { ModsTab } from "@/components/server-details/ModsTab";
@@ -28,6 +20,8 @@ import { PlayersTab } from "@/components/server-details/PlayersTab";
 import { LogsTab } from "@/components/server-details/LogsTab";
 import { SettingsTab } from "@/components/server-details/SettingsTab";
 import { BackupsTab } from "@/components/server-details/BackupsTab";
+import { ServerDetailSidebar } from "@/components/server-details/ServerDetailSidebar";
+import type { ServerSection } from "@/components/server-details/ServerDetailSidebar";
 import { useBackend } from "@/hooks/useBackend";
 import { useGameCapabilities } from "@/hooks/useGameCapabilities";
 import { AgentControlPanel } from "@/components/agent/AgentControlPanel";
@@ -55,7 +49,7 @@ const statusConfig = {
   error: { label: "Error", variant: "destructive" as const },
 };
 
-const validTabs = [
+const validSections: ServerSection[] = [
   "overview",
   "config",
   "mods",
@@ -78,6 +72,22 @@ export function ServerDetail() {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const { capabilities } = useGameCapabilities(server?.gameId ?? "");
   const hasPlayers = capabilities?.playerTracking !== false;
+
+  // Sidebar navigation
+  const activeSection: ServerSection = validSections.includes(
+    tab as ServerSection,
+  )
+    ? (tab as ServerSection)
+    : "overview";
+  const hiddenSections = useMemo(
+    () => (hasPlayers ? undefined : new Set(["players"])),
+    [hasPlayers],
+  );
+
+  function handleSectionChange(section: ServerSection) {
+    navigate(`/server/${id}/${section}`, { replace: true });
+  }
+
   const terminalRef = useRef<HTMLDivElement>(null);
   const hasFetchedInstallOutput = useRef(false);
 
@@ -462,147 +472,107 @@ export function ServerDetail() {
       <AgentStatusBanner />
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
-        <div className="container mx-auto px-4 py-6">
-          {server.status === "queued" ? (
-            /* ── Queued View ── */
-            <div className="max-w-3xl mx-auto space-y-6">
-              <div className="rounded-xl border bg-card p-6 space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
-                    <FaSpinner className="h-5 w-5 text-muted-foreground animate-spin" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-semibold">
-                      Queued — {server.name}
-                    </h2>
-                    <p className="text-sm text-muted-foreground">
-                      Waiting for the current installation to finish.
-                      Installation will start automatically.
-                    </p>
+      <main className="flex-1 flex flex-col overflow-hidden">
+        {server.status === "queued" ? (
+          /* ── Queued View ── */
+          <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
+            <div className="container mx-auto px-4 py-6">
+              <div className="max-w-3xl mx-auto space-y-6">
+                <div className="rounded-xl border bg-card p-6 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                      <FaSpinner className="h-5 w-5 text-muted-foreground animate-spin" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-semibold">
+                        Queued — {server.name}
+                      </h2>
+                      <p className="text-sm text-muted-foreground">
+                        Waiting for the current installation to finish.
+                        Installation will start automatically.
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          ) : server.status === "installing" ? (
-            /* ── Installation Progress View ── */
-            <div className="max-w-3xl mx-auto space-y-6">
-              <div className="rounded-xl border bg-card p-6 space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-warning/20 flex items-center justify-center">
-                    <FaSpinner className="h-5 w-5 text-warning animate-spin" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-semibold">
-                      Installing {server.name}
-                    </h2>
-                    <p className="text-sm text-muted-foreground">
-                      {installProgress ||
-                        "Starting installation via SteamCMD..."}
-                    </p>
+          </div>
+        ) : server.status === "installing" ? (
+          /* ── Installation Progress View ── */
+          <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
+            <div className="container mx-auto px-4 py-6">
+              <div className="max-w-3xl mx-auto space-y-6">
+                <div className="rounded-xl border bg-card p-6 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-warning/20 flex items-center justify-center">
+                      <FaSpinner className="h-5 w-5 text-warning animate-spin" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-semibold">
+                        Installing {server.name}
+                      </h2>
+                      <p className="text-sm text-muted-foreground">
+                        {installProgress ||
+                          "Starting installation via SteamCMD..."}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="rounded-xl border bg-card p-6 space-y-3">
-                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                  <FaTerminal className="h-4 w-4" />
-                  Installation Output
-                </div>
-                <div
-                  ref={terminalRef}
-                  className="bg-terminal rounded-lg p-4 h-[400px] overflow-y-auto font-mono text-xs text-green-400"
-                >
-                  {terminalOutput.length === 0 ? (
-                    <span className="text-muted-foreground">
-                      Waiting for output...
-                    </span>
-                  ) : (
-                    terminalOutput.map((line, i) => (
-                      <div key={i} className="whitespace-pre-wrap">
-                        {line}
-                      </div>
-                    ))
-                  )}
+                <div className="rounded-xl border bg-card p-6 space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <FaTerminal className="h-4 w-4" />
+                    Installation Output
+                  </div>
+                  <div
+                    ref={terminalRef}
+                    className="bg-terminal rounded-lg p-4 h-[400px] overflow-y-auto font-mono text-xs text-green-400"
+                  >
+                    {terminalOutput.length === 0 ? (
+                      <span className="text-muted-foreground">
+                        Waiting for output...
+                      </span>
+                    ) : (
+                      terminalOutput.map((line, i) => (
+                        <div key={i} className="whitespace-pre-wrap">
+                          {line}
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          ) : (
-            /* ── Normal Tab View ── */
-            <Tabs
-              value={validTabs.includes(tab ?? "") ? tab : "overview"}
-              onValueChange={(value) =>
-                navigate(`/server/${id}/${value}`, { replace: true })
-              }
-              className="space-y-6"
-            >
-              <TabsList
-                className={`grid w-full ${hasPlayers ? "grid-cols-7" : "grid-cols-6"}`}
-              >
-                <TabsTrigger value="overview" className="gap-2">
-                  <FaGauge className="h-4 w-4 text-ring/70" />
-                  <span className="hidden sm:inline">Overview</span>
-                </TabsTrigger>
-                <TabsTrigger value="config" className="gap-2">
-                  <FaGear className="h-4 w-4 text-ring/70" />
-                  <span className="hidden sm:inline">Configuration</span>
-                </TabsTrigger>
-                <TabsTrigger value="mods" className="gap-2">
-                  <FaCubes className="h-4 w-4 text-ring/70" />
-                  <span className="hidden sm:inline">Mods</span>
-                </TabsTrigger>
-                {hasPlayers && (
-                  <TabsTrigger value="players" className="gap-2">
-                    <FaUsers className="h-4 w-4 text-ring/70" />
-                    <span className="hidden sm:inline">Players</span>
-                  </TabsTrigger>
+          </div>
+        ) : (
+          /* ── Normal Sidebar + Content View ── */
+          <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
+            <ServerDetailSidebar
+              active={activeSection}
+              onChange={handleSectionChange}
+              hiddenSections={hiddenSections}
+            />
+            <div className="flex-1 min-w-0 min-h-0 overflow-y-auto [scrollbar-gutter:stable]">
+              <div className="container mx-auto px-4 py-6 min-h-full">
+                {activeSection === "overview" && (
+                  <OverviewTab server={server} onRefresh={loadServer} />
                 )}
-                <TabsTrigger value="logs" className="gap-2">
-                  <FaFileLines className="h-4 w-4 text-ring/70" />
-                  <span className="hidden sm:inline">Logs</span>
-                </TabsTrigger>
-                <TabsTrigger value="backups" className="gap-2">
-                  <FaBoxArchive className="h-4 w-4 text-ring/70" />
-                  <span className="hidden sm:inline">Backups</span>
-                </TabsTrigger>
-                <TabsTrigger value="settings" className="gap-2">
-                  <FaWrench className="h-4 w-4 text-ring/70" />
-                  <span className="hidden sm:inline">Settings</span>
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="overview">
-                <OverviewTab server={server} onRefresh={loadServer} />
-              </TabsContent>
-
-              <TabsContent value="config">
-                <ConfigTab server={server} onRefresh={loadServer} />
-              </TabsContent>
-
-              <TabsContent value="mods">
-                <ModsTab server={server} />
-              </TabsContent>
-
-              {hasPlayers && (
-                <TabsContent value="players">
+                {activeSection === "config" && (
+                  <ConfigTab server={server} onRefresh={loadServer} />
+                )}
+                {activeSection === "mods" && <ModsTab server={server} />}
+                {activeSection === "players" && hasPlayers && (
                   <PlayersTab server={server} />
-                </TabsContent>
-              )}
-
-              <TabsContent value="logs">
-                <LogsTab server={server} />
-              </TabsContent>
-
-              <TabsContent value="backups">
-                <BackupsTab server={server} />
-              </TabsContent>
-
-              <TabsContent value="settings">
-                <SettingsTab server={server} onRefresh={loadServer} />
-              </TabsContent>
-            </Tabs>
-          )}
-        </div>
+                )}
+                {activeSection === "logs" && <LogsTab server={server} />}
+                {activeSection === "backups" && <BackupsTab server={server} />}
+                {activeSection === "settings" && (
+                  <SettingsTab server={server} onRefresh={loadServer} />
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
       <DeleteServerDialog

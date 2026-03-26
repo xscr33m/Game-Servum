@@ -384,7 +384,7 @@ export function LogsTab({ server }: LogsTabProps) {
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-4 h-[calc(100vh-14rem)] min-h-[400px]">
+    <div className="grid gap-4 lg:grid-cols-4 h-[calc(100vh-8rem)] min-h-[400px]">
       {/* Sidebar: Log files list */}
       <Card className="lg:col-span-1 overflow-hidden flex flex-col">
         <CardHeader className="pb-3">

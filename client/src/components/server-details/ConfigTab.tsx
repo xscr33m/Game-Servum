@@ -378,7 +378,7 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
               </CardHeader>
               <CardContent>
                 <Textarea
-                  className="font-mono text-sm h-[calc(100vh-28rem)] min-h-[200px]"
+                  className="font-mono text-sm h-[calc(100vh-24rem)] min-h-[200px]"
                   value={currentState.rawContent}
                   onChange={(e) => handleContentChange(e.target.value)}
                   spellCheck={false}
