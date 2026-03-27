@@ -9,6 +9,8 @@ import {
 } from "@/components/ui/select";
 import { FileExplorer } from "@/components/file-explorer/FileExplorer";
 import { useBackend } from "@/hooks/useBackend";
+import { useContentWidth } from "@/hooks/useContentWidth";
+import { cn } from "@/lib/utils";
 import type { GameServer } from "@/types";
 
 interface BrowsableRoot {
@@ -22,6 +24,7 @@ interface FilesTabProps {
 
 export function FilesTab({ server }: FilesTabProps) {
   const { api, isConnected } = useBackend();
+  const { contentClass } = useContentWidth();
   const [roots, setRoots] = useState<BrowsableRoot[]>([]);
   const [selectedRoot, setSelectedRoot] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -64,7 +67,12 @@ export function FilesTab({ server }: FilesTabProps) {
   }
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 px-4 py-4 gap-4">
+    <div
+      className={cn(
+        "flex flex-col flex-1 min-h-0 px-4 py-4 gap-4",
+        contentClass,
+      )}
+    >
       {/* Root selector */}
       {roots.length > 1 ? (
         <div className="flex items-center gap-3 shrink-0">

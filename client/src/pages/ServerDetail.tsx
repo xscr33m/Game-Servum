@@ -12,6 +12,7 @@ import {
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useContentWidth } from "@/hooks/useContentWidth";
 import { OverviewTab } from "@/components/server-details/OverviewTab";
 import { ConfigTab } from "@/components/server-details/ConfigTab";
 import { ModsTab } from "@/components/server-details/ModsTab";
@@ -30,6 +31,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { AgentStatusBanner } from "@/components/agent/AgentStatusBanner";
 import { DeleteServerDialog } from "@/components/server-details/dialogs/DeleteServerDialog";
 import { CancelInstallDialog } from "@/components/server-details/dialogs/CancelInstallDialog";
+import { cn } from "@/lib/utils";
 import {
   toastSuccess,
   toastError,
@@ -64,6 +66,7 @@ const validSections: ServerSection[] = [
 export function ServerDetail() {
   const { id, tab } = useParams<{ id: string; tab?: string }>();
   const navigate = useNavigate();
+  const { contentClass } = useContentWidth();
   const [server, setServer] = useState<GameServer | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -570,7 +573,9 @@ export function ServerDetail() {
                 activeSection !== "files" &&
                 activeSection !== "players" &&
                 activeSection !== "logs" && (
-                  <div className="max-w-5xl mx-auto px-4 py-6 min-h-full">
+                  <div
+                    className={cn("px-4 pt-4 pb-6 min-h-full", contentClass)}
+                  >
                     {activeSection === "overview" && (
                       <OverviewTab server={server} onRefresh={loadServer} />
                     )}

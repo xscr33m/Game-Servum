@@ -263,7 +263,7 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
       )}
 
       {/* Metadata bar */}
-      <div className="grid grid-cols-2 gap-3 pb-6 border-b items-center sm:flex sm:flex-wrap sm:gap-x-6 sm:gap-y-3">
+      <div className="grid grid-cols-2 gap-3 pb-4 border-b items-center sm:flex sm:flex-wrap sm:gap-x-6 sm:gap-y-3">
         <div className="flex items-center gap-2">
           <FaServer className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="text-sm text-muted-foreground">Game</span>

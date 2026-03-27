@@ -22,7 +22,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CodeMirrorEditor } from "@/components/ui/code-editor";
 import { useBackend } from "@/hooks/useBackend";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { useContentWidth } from "@/hooks/useContentWidth";
 import { toastSuccess } from "@/lib/toast";
+import { cn } from "@/lib/utils";
 import { getConfigEditor } from "@/components/server-details/games/registry";
 import type { GameServer } from "@/types";
 
@@ -41,6 +43,7 @@ interface ConfigTabProps {
 export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
   const { api, isConnected } = useBackend();
   const { subscribe } = useWebSocket();
+  const { contentClass } = useContentWidth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -187,7 +190,7 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
     !initialMode
   ) {
     return (
-      <div className="max-w-5xl mx-auto px-4 py-6 w-full">
+      <div className={cn("px-4 pt-4 pb-6 w-full", contentClass)}>
         <div className="py-8 text-center text-muted-foreground">
           Loading configuration...
         </div>
@@ -199,7 +202,7 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
   if (initialMode) {
     const Editor = getConfigEditor(server.gameId);
     return (
-      <div className="max-w-5xl mx-auto px-4 py-6 w-full space-y-4">
+      <div className={cn("px-4 pt-4 pb-6 w-full space-y-4", contentClass)}>
         <Alert>
           <FaCircleInfo className="h-4 w-4" />
           <AlertDescription>
@@ -233,7 +236,7 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
 
   if (error && !currentState?.rawContent) {
     return (
-      <div className="max-w-5xl mx-auto px-4 py-6 w-full">
+      <div className={cn("px-4 pt-4 pb-6 w-full", contentClass)}>
         <Alert variant="destructive">
           <FaCircleExclamation className="h-4 w-4" />
           <AlertDescription>{error}</AlertDescription>
@@ -246,10 +249,10 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
   const hasMultipleFiles = configFiles.length > 1;
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
+    <div className="flex flex-col flex-1 min-h-0 pt-2">
       {/* Messages */}
       {error && (
-        <div className="max-w-5xl mx-auto w-full px-4 pt-4">
+        <div className={cn("w-full px-4 pt-4", contentClass)}>
           <Alert variant="destructive">
             <FaCircleExclamation className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
@@ -261,7 +264,12 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
       {currentState && (
         <Tabs defaultValue="form" className="flex flex-col flex-1 min-h-0">
           <div className="shrink-0 border-b bg-background">
-            <div className="max-w-5xl mx-auto px-4 flex flex-wrap items-center justify-between gap-3 py-2">
+            <div
+              className={cn(
+                "px-4 flex flex-wrap items-center justify-between gap-3 pb-2",
+                contentClass,
+              )}
+            >
               <div className="flex items-center gap-3">
                 {/* File selector dropdown for multi-file games */}
                 {hasMultipleFiles && (
@@ -331,7 +339,7 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
           </div>
 
           <TabsContent value="form" className="flex-1 overflow-y-auto mt-0">
-            <div className="max-w-5xl mx-auto px-4 py-6">
+            <div className={cn("px-4 pt-4 pb-6", contentClass)}>
               {(() => {
                 const Editor = getConfigEditor(server.gameId);
                 return Editor ? (
@@ -355,7 +363,7 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
           </TabsContent>
 
           <TabsContent value="raw" className="flex-1 min-h-0 mt-0 px-4 py-4">
-            <div className="max-w-5xl mx-auto h-full">
+            <div className={cn("h-full", contentClass)}>
               <div className="rounded-md border overflow-hidden h-full min-h-[300px]">
                 <CodeMirrorEditor
                   content={currentState.rawContent}

@@ -22,7 +22,9 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useBackend } from "@/hooks/useBackend";
 import { useGameCapabilities } from "@/hooks/useGameCapabilities";
+import { useContentWidth } from "@/hooks/useContentWidth";
 import { toastSuccess, toastError } from "@/lib/toast";
+import { cn } from "@/lib/utils";
 import type { GameServer, PlayerSummary } from "@/types";
 
 interface PlayersTabProps {
@@ -94,6 +96,7 @@ export function PlayersTab({ server }: PlayersTabProps) {
 
   const { api, subscribe, isConnected } = useBackend();
   const { capabilities } = useGameCapabilities(server.gameId);
+  const { contentClass } = useContentWidth();
 
   const hasWhitelist = capabilities?.whitelist !== false;
   const hasBanList = capabilities?.banList !== false;
@@ -324,10 +327,10 @@ export function PlayersTab({ server }: PlayersTabProps) {
   const offlinePlayers = players.filter((p) => !p.isOnline);
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
+    <div className="flex flex-col flex-1 min-h-0 pt-2">
       {/* Error message */}
       {error && (
-        <div className="max-w-5xl mx-auto w-full px-4 pt-4">
+        <div className={cn("w-full px-4 pt-4", contentClass)}>
           <Alert variant="destructive">
             <FaCircleExclamation className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
@@ -342,7 +345,12 @@ export function PlayersTab({ server }: PlayersTabProps) {
         className="flex flex-col flex-1 min-h-0"
       >
         <div className="shrink-0 border-b bg-background">
-          <div className="max-w-5xl mx-auto px-4 flex flex-wrap items-center justify-between gap-3 py-2">
+          <div
+            className={cn(
+              "px-4 flex flex-wrap items-center justify-between gap-3 pb-2",
+              contentClass,
+            )}
+          >
             <TabsList>
               <TabsTrigger value="overview" className="gap-2">
                 <FaUsers className="h-4 w-4 text-ring/70" />
@@ -427,7 +435,7 @@ export function PlayersTab({ server }: PlayersTabProps) {
 
         {/* ── Player Overview Tab ── */}
         <TabsContent value="overview" className="flex-1 overflow-y-auto mt-0">
-          <div className="max-w-5xl mx-auto px-4 py-6 space-y-0">
+          <div className={cn("px-4 pt-4 pb-6 space-y-0", contentClass)}>
             {/* Online Players */}
             <div className="pb-6 border-b">
               <div className="flex items-center justify-between mb-3">
@@ -824,7 +832,7 @@ export function PlayersTab({ server }: PlayersTabProps) {
             value="whitelist"
             className="flex-1 min-h-0 mt-0 px-4 py-4"
           >
-            <div className="max-w-5xl mx-auto h-full">
+            <div className={cn("h-full", contentClass)}>
               {filesLoading ? (
                 <div className="text-center py-8 text-muted-foreground text-sm">
                   Loading...
@@ -848,7 +856,7 @@ export function PlayersTab({ server }: PlayersTabProps) {
         {/* ── Ban List Tab ── */}
         {hasBanList && (
           <TabsContent value="ban" className="flex-1 min-h-0 mt-0 px-4 py-4">
-            <div className="max-w-5xl mx-auto h-full">
+            <div className={cn("h-full", contentClass)}>
               {filesLoading ? (
                 <div className="text-center py-8 text-muted-foreground text-sm">
                   Loading...

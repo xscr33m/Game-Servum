@@ -38,7 +38,9 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useBackend } from "@/hooks/useBackend";
+import { useContentWidth } from "@/hooks/useContentWidth";
 import { toastSuccess } from "@/lib/toast";
+import { cn } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import type { GameServer, LogFile, ArchiveSession, LogSettings } from "@/types";
 
@@ -87,6 +89,7 @@ const RETENTION_OPTIONS = [
 
 export function LogsTab({ server }: LogsTabProps) {
   const { api, isConnected } = useBackend();
+  const { contentClass } = useContentWidth();
   // State
   const [currentLogs, setCurrentLogs] = useState<LogFile[]>([]);
   const [archives, setArchives] = useState<ArchiveSession[]>([]);
@@ -385,10 +388,15 @@ export function LogsTab({ server }: LogsTabProps) {
     currentLogs.length + archives.reduce((sum, a) => sum + a.fileCount, 0);
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
+    <div className="flex flex-col flex-1 min-h-0 pt-2">
       {/* ── Sticky Toolbar ── */}
       <div className="shrink-0 border-b bg-background">
-        <div className="px-4 py-2 flex flex-wrap items-center justify-between gap-2">
+        <div
+          className={cn(
+            "px-4 py-2 flex flex-wrap items-center justify-between gap-2",
+            contentClass,
+          )}
+        >
           {/* Left: file info */}
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <FaFileLines className="h-4 w-4 text-ring shrink-0" />
@@ -470,7 +478,9 @@ export function LogsTab({ server }: LogsTabProps) {
 
         {/* Search + Word Wrap row */}
         {selectedLog && (
-          <div className="px-4 pb-2 flex items-center gap-2">
+          <div
+            className={cn("px-4 pb-2 flex items-center gap-2", contentClass)}
+          >
             <div className="relative flex-1">
               <FaMagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
@@ -503,11 +513,16 @@ export function LogsTab({ server }: LogsTabProps) {
       </div>
 
       {/* ── Content: Sidebar + Viewer ── */}
-      <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
+      <div
+        className={cn(
+          "flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden px-4 pb-4 pt-2 gap-4",
+          contentClass,
+        )}
+      >
         {/* Mobile file list toggle */}
         <button
           type="button"
-          className="lg:hidden shrink-0 flex items-center justify-between w-full px-4 py-2.5 border-b bg-muted/30 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          className="lg:hidden shrink-0 flex items-center justify-between w-full px-4 py-2.5 rounded-lg border bg-muted/30 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
           onClick={() => setSidebarOpen(!sidebarOpen)}
         >
           <div className="flex items-center gap-2">
@@ -554,10 +569,8 @@ export function LogsTab({ server }: LogsTabProps) {
 
         {/* File list sidebar */}
         <div
-          className={`lg:w-72 lg:border-r shrink-0 overflow-y-auto bg-background ${
-            sidebarOpen
-              ? "max-h-64 lg:max-h-none border-b lg:border-b-0"
-              : "hidden lg:block"
+          className={`lg:w-72 shrink-0 overflow-y-auto bg-background rounded-lg border ${
+            sidebarOpen ? "max-h-64 lg:max-h-none" : "hidden lg:block"
           }`}
         >
           {/* Desktop sidebar header */}
@@ -752,7 +765,7 @@ export function LogsTab({ server }: LogsTabProps) {
 
         {/* Log viewer */}
         <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
-          <div className="flex-1 p-4 flex flex-col min-h-0">
+          <div className="flex-1 flex flex-col min-h-0">
             {loadingContent ? (
               <div className="flex-1 flex items-center justify-center text-muted-foreground">
                 <div className="text-center">

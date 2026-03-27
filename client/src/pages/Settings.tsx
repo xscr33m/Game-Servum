@@ -8,6 +8,7 @@ import {
   FaGlobe,
   FaDesktop,
   FaDownload,
+  FaArrowsLeftRight,
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,11 +19,51 @@ import { publicAsset } from "@/lib/assets";
 import { AppHeader } from "@/components/AppHeader";
 import { AgentStatusBanner } from "@/components/agent/AgentStatusBanner";
 import { getElectronSettings } from "@/lib/electronSettings";
+import { useContentWidth, setContentWidthMode } from "@/hooks/useContentWidth";
 import { logger } from "@/lib/logger";
 import { toastSuccess, toastError, toastInfo } from "@/lib/toast";
 
 // Detect if we're in Electron
 const isElectron = typeof window !== "undefined" && "electronAPI" in window;
+
+function ContentWidthSetting() {
+  const { mode } = useContentWidth();
+  return (
+    <div className="px-4 py-3 flex items-center justify-between gap-4">
+      <div className="flex-1">
+        <div className="flex items-center gap-2 mb-0.5">
+          <FaArrowsLeftRight className="h-3.5 w-3.5 text-muted-foreground" />
+          <Label className="text-sm font-medium">Content Width</Label>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Page content width for server detail tabs
+        </p>
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={() => setContentWidthMode("full")}
+          className={`px-3 py-1.5 text-xs rounded border ${
+            mode === "full"
+              ? "bg-ring/10 border-ring text-foreground"
+              : "border-border text-muted-foreground hover:border-ring/50 hover:text-foreground transition-colors"
+          }`}
+        >
+          Full Width
+        </button>
+        <button
+          onClick={() => setContentWidthMode("centered")}
+          className={`px-3 py-1.5 text-xs rounded border ${
+            mode === "centered"
+              ? "bg-ring/10 border-ring text-foreground"
+              : "border-border text-muted-foreground hover:border-ring/50 hover:text-foreground transition-colors"
+          }`}
+        >
+          Centered
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function Settings() {
   const navigate = useNavigate();
@@ -280,22 +321,25 @@ export function Settings() {
             </div>
           </section>
 
-          {/* ── Appearance (Coming Soon) ── */}
-          <section className="rounded-lg border bg-card mb-6 opacity-60">
+          {/* ── Appearance ── */}
+          <section className="rounded-lg border bg-card mb-6">
             <div className="px-4 py-3 border-b bg-muted/30">
-              <div className="flex items-center justify-between">
-                <h2 className="font-semibold text-sm">Appearance</h2>
-                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                  Coming Soon
-                </Badge>
-              </div>
+              <h2 className="font-semibold text-sm">Appearance</h2>
             </div>
             <div className="divide-y">
-              <div className="px-4 py-3 flex items-center justify-between gap-4">
+              <ContentWidthSetting />
+
+              <div className="px-4 py-3 flex items-center justify-between gap-4 opacity-60">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-0.5">
                     <FaPalette className="h-3.5 w-3.5 text-muted-foreground" />
                     <Label className="text-sm font-medium">Theme</Label>
+                    <Badge
+                      variant="secondary"
+                      className="text-[10px] px-1.5 py-0"
+                    >
+                      Coming Soon
+                    </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Dark, light, or system preference
@@ -323,11 +367,17 @@ export function Settings() {
                 </div>
               </div>
 
-              <div className="px-4 py-3 flex items-center justify-between gap-4">
+              <div className="px-4 py-3 flex items-center justify-between gap-4 opacity-60">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-0.5">
                     <FaGlobe className="h-3.5 w-3.5 text-muted-foreground" />
                     <Label className="text-sm font-medium">Language</Label>
+                    <Badge
+                      variant="secondary"
+                      className="text-[10px] px-1.5 py-0"
+                    >
+                      Coming Soon
+                    </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Interface language
