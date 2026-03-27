@@ -14,11 +14,11 @@ import {
   FaCircleCheck,
   FaCircleXmark,
   FaTriangleExclamation,
-  FaXmark,
   FaDownload,
   FaPen,
+  FaChevronDown,
+  FaChevronRight,
 } from "react-icons/fa6";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -332,62 +332,72 @@ export function BackupsTab({ server }: BackupsTabProps) {
   );
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <FaBoxArchive className="h-4 w-4 text-ring/70" />
-            Backups
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {successfulBackups.length} backup
-            {successfulBackups.length !== 1 ? "s" : ""}
-            {totalSize > 0 && ` · ${formatFileSize(totalSize)} total`}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setShowSettings((prev) => !prev);
-              if (!showSettings) loadSettings();
-            }}
-            disabled={!isConnected}
-          >
-            {showSettings ? (
-              <FaXmark className="h-4 w-4 mr-2" />
-            ) : (
-              <FaGear className="h-4 w-4 mr-2" />
+    <div className="space-y-0">
+      {/* ── Header ── */}
+      <div className="pb-6 border-b">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <FaBoxArchive className="h-4 w-4 text-ring" />
+            <span className="text-sm font-medium text-muted-foreground">
+              Backups
+            </span>
+            {successfulBackups.length > 0 && (
+              <Badge variant="secondary">{successfulBackups.length}</Badge>
             )}
-            Settings
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => loadBackups()}
-            disabled={!isConnected}
-          >
-            <FaArrowsRotate className="h-4 w-4" />
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => setShowCreateDialog(true)}
-            disabled={
-              !isConnected || !!activeProgress || server.status !== "stopped"
-            }
-          >
-            <FaPlus className="h-4 w-4 mr-2" />
-            Create Backup
-          </Button>
+            {totalSize > 0 && (
+              <span className="text-xs text-muted-foreground">
+                · {formatFileSize(totalSize)} total
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => loadBackups()}
+              disabled={!isConnected}
+            >
+              <FaArrowsRotate className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => setShowCreateDialog(true)}
+              disabled={
+                !isConnected || !!activeProgress || server.status !== "stopped"
+              }
+            >
+              <FaPlus className="h-3.5 w-3.5 mr-1.5" />
+              Create Backup
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* ── Inline Settings Panel ── */}
-      {showSettings && (
-        <Card>
-          <CardContent className="py-4 space-y-6">
+      {/* ── Settings (collapsible) ── */}
+      <div className="py-6 border-b">
+        <button
+          type="button"
+          className="flex items-center justify-between w-full text-left cursor-pointer group"
+          onClick={() => {
+            setShowSettings((prev) => !prev);
+            if (!showSettings) loadSettings();
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <FaGear className="h-4 w-4 text-ring" />
+            <span className="text-sm font-medium text-muted-foreground">
+              Backup Settings
+            </span>
+          </div>
+          {showSettings ? (
+            <FaChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+          ) : (
+            <FaChevronRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+          )}
+        </button>
+
+        {showSettings && (
+          <div className="mt-4 space-y-6">
             {settingsLoading || !settings ? (
               <div className="flex items-center justify-center py-6">
                 <FaSpinner className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -608,208 +618,226 @@ export function BackupsTab({ server }: BackupsTabProps) {
                     }
                   >
                     {settingsSaving ? (
-                      <FaSpinner className="h-4 w-4 mr-2 animate-spin" />
+                      <FaSpinner className="h-3.5 w-3.5 mr-1.5 animate-spin" />
                     ) : (
-                      <FaFloppyDisk className="h-4 w-4 mr-2" />
+                      <FaFloppyDisk className="h-3.5 w-3.5 mr-1.5" />
                     )}
                     Save Settings
                   </Button>
                 </div>
               </>
             )}
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        )}
+      </div>
 
-      {/* Active backup progress */}
+      {/* ── Active backup progress ── */}
       {activeProgress && (
-        <Card className="border-primary/30 bg-primary/5">
-          <CardContent className="py-4">
-            <div className="flex items-center gap-3">
-              <FaSpinner className="h-5 w-5 text-primary animate-spin" />
-              <div className="flex-1">
-                <p className="text-sm font-medium">Backup in progress</p>
-                <p className="text-xs text-muted-foreground">
-                  {activeProgress.message}
-                </p>
-              </div>
-              <Badge variant="secondary">{activeProgress.phase}</Badge>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Backup list */}
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <FaArrowsRotate className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      ) : backups.length === 0 ? (
-        <Card>
-          <CardContent className="py-12">
-            <div className="text-center text-muted-foreground">
-              <FaBoxArchive className="h-12 w-12 mx-auto mb-4 opacity-20" />
-              <p className="text-lg font-medium">No backups yet</p>
-              <p className="text-sm mt-1">
-                Create your first backup to protect your server data.
+        <div className="py-6 border-b">
+          <div className="flex items-center gap-3 p-3 rounded-lg border border-primary/30 bg-primary/5">
+            <FaSpinner className="h-5 w-5 text-primary animate-spin shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">Backup in progress</p>
+              <p className="text-xs text-muted-foreground">
+                {activeProgress.message}
               </p>
             </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {backups.map((backup) => (
-            <Card key={backup.id}>
-              <CardContent className="py-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4 min-w-0">
-                    {/* Status icon */}
-                    {backup.status === "success" &&
-                    backup.fileExists === false ? (
-                      <FaTriangleExclamation className="h-5 w-5 text-yellow-500 shrink-0" />
-                    ) : backup.status === "success" ? (
-                      <FaCircleCheck className="h-5 w-5 text-green-500 shrink-0" />
-                    ) : backup.status === "running" ? (
-                      <FaSpinner className="h-5 w-5 text-primary animate-spin shrink-0" />
-                    ) : (
-                      <FaCircleXmark className="h-5 w-5 text-destructive shrink-0" />
-                    )}
-
-                    {/* Info */}
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        {backup.name ? (
-                          <span
-                            className="text-sm font-medium truncate"
-                            title={backup.name}
-                          >
-                            {backup.name}
-                          </span>
-                        ) : (
-                          <span
-                            className="text-sm font-medium truncate"
-                            title={formatDate(backup.timestamp)}
-                          >
-                            {formatDate(backup.timestamp)}
-                          </span>
-                        )}
-                        <Badge variant="outline" className="text-xs">
-                          {triggerLabels[backup.trigger] || backup.trigger}
-                        </Badge>
-                        {backup.tag && (
-                          <Badge variant="secondary" className="text-xs gap-1">
-                            <FaTag className="h-3 w-3" />
-                            {backup.tag}
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
-                        {backup.name && (
-                          <span>{formatDate(backup.timestamp)}</span>
-                        )}
-                        <span className="flex items-center gap-1">
-                          <FaClock className="h-3 w-3" />
-                          {formatRelativeDate(backup.timestamp)}
-                        </span>
-                        {backup.sizeBytes != null && (
-                          <span className="flex items-center gap-1">
-                            <FaHardDrive className="h-3 w-3" />
-                            {formatFileSize(backup.sizeBytes)}
-                          </span>
-                        )}
-                        {backup.durationMs != null && (
-                          <span>{formatDuration(backup.durationMs)}</span>
-                        )}
-                        {backup.fileCount != null && (
-                          <span>{backup.fileCount} files</span>
-                        )}
-                      </div>
-                      {backup.status === "failed" && backup.errorMessage && (
-                        <p className="text-xs text-destructive mt-1">
-                          {backup.errorMessage}
-                        </p>
-                      )}
-                      {backup.status === "success" &&
-                        backup.fileExists === false && (
-                          <p className="text-xs text-yellow-500 mt-1">
-                            Backup file missing from disk — deleted externally?
-                          </p>
-                        )}
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  {backup.status === "success" && (
-                    <div className="flex items-center gap-2 shrink-0 ml-4">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setRestoreTarget(backup);
-                          setPreRestoreBackup(true);
-                        }}
-                        disabled={
-                          !isConnected ||
-                          server.status === "running" ||
-                          !!activeProgress ||
-                          backup.fileExists === false
-                        }
-                        title={
-                          backup.fileExists === false
-                            ? "Backup file missing from disk"
-                            : server.status === "running"
-                              ? "Stop the server before restoring"
-                              : "Restore this backup"
-                        }
-                      >
-                        <FaRotateLeft className="h-4 w-4 mr-2" />
-                        Restore
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => handleDownloadBackup(backup)}
-                        disabled={!isConnected || backup.fileExists === false}
-                        title={
-                          backup.fileExists === false
-                            ? "Backup file missing from disk"
-                            : "Download backup"
-                        }
-                      >
-                        <FaDownload className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                        onClick={() => {
-                          setEditTarget(backup);
-                          setEditName(backup.name ?? "");
-                          setEditTag(backup.tag ?? "");
-                        }}
-                        disabled={!isConnected}
-                        title="Edit name & tag"
-                      >
-                        <FaPen className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                        onClick={() => setDeleteTarget(backup)}
-                        disabled={!isConnected}
-                      >
-                        <FaTrashCan className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+            <Badge variant="secondary">{activeProgress.phase}</Badge>
+          </div>
         </div>
       )}
+
+      {/* ── Backup list ── */}
+      <div className="py-6">
+        <div className="flex items-center gap-2 mb-3">
+          <FaBoxArchive className="h-4 w-4 text-ring" />
+          <span className="text-sm font-medium text-muted-foreground">
+            Backup History
+          </span>
+          {backups.length > 0 && (
+            <Badge variant="secondary">{backups.length}</Badge>
+          )}
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <FaArrowsRotate className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : backups.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <FaBoxArchive className="h-8 w-8 mx-auto mb-2 opacity-50" />
+            <p className="text-sm">No backups yet</p>
+            <p className="text-xs mt-1">
+              Create your first backup to protect your server data.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {backups.map((backup) => (
+              <div
+                key={backup.id}
+                className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 rounded-lg border ${
+                  backup.status === "failed"
+                    ? "bg-destructive/5 border-destructive/30"
+                    : backup.status === "success" && backup.fileExists === false
+                      ? "bg-yellow-500/5 border-yellow-500/30"
+                      : "bg-muted/50 border-border"
+                }`}
+              >
+                {/* Row 1: Status + Info */}
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  {/* Status icon */}
+                  {backup.status === "success" &&
+                  backup.fileExists === false ? (
+                    <FaTriangleExclamation className="h-4 w-4 text-yellow-500 shrink-0" />
+                  ) : backup.status === "success" ? (
+                    <FaCircleCheck className="h-4 w-4 text-green-500 shrink-0" />
+                  ) : backup.status === "running" ? (
+                    <FaSpinner className="h-4 w-4 text-primary animate-spin shrink-0" />
+                  ) : (
+                    <FaCircleXmark className="h-4 w-4 text-destructive shrink-0" />
+                  )}
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {backup.name ? (
+                        <span
+                          className="text-sm font-medium truncate"
+                          title={backup.name}
+                        >
+                          {backup.name}
+                        </span>
+                      ) : (
+                        <span
+                          className="text-sm font-medium truncate"
+                          title={formatDate(backup.timestamp)}
+                        >
+                          {formatDate(backup.timestamp)}
+                        </span>
+                      )}
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] px-1.5 py-0 shrink-0"
+                      >
+                        {triggerLabels[backup.trigger] || backup.trigger}
+                      </Badge>
+                      {backup.tag && (
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] px-1.5 py-0 gap-0.5 shrink-0"
+                        >
+                          <FaTag className="h-2.5 w-2.5" />
+                          {backup.tag}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                      {backup.name && (
+                        <span>{formatDate(backup.timestamp)}</span>
+                      )}
+                      <span className="flex items-center gap-1">
+                        <FaClock className="h-3 w-3" />
+                        {formatRelativeDate(backup.timestamp)}
+                      </span>
+                      {backup.sizeBytes != null && (
+                        <span className="flex items-center gap-1">
+                          <FaHardDrive className="h-3 w-3" />
+                          {formatFileSize(backup.sizeBytes)}
+                        </span>
+                      )}
+                      {backup.durationMs != null && (
+                        <span>{formatDuration(backup.durationMs)}</span>
+                      )}
+                      {backup.fileCount != null && (
+                        <span>{backup.fileCount} files</span>
+                      )}
+                    </div>
+                    {backup.status === "failed" && backup.errorMessage && (
+                      <p className="text-xs text-destructive mt-1">
+                        {backup.errorMessage}
+                      </p>
+                    )}
+                    {backup.status === "success" &&
+                      backup.fileExists === false && (
+                        <p className="text-xs text-yellow-500 mt-1">
+                          Backup file missing from disk — deleted externally?
+                        </p>
+                      )}
+                  </div>
+                </div>
+
+                {/* Row 2 (mobile) / right side (desktop): Actions */}
+                {backup.status === "success" && (
+                  <div className="flex items-center gap-1 sm:shrink-0 justify-end sm:justify-start pl-7 sm:pl-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        setRestoreTarget(backup);
+                        setPreRestoreBackup(true);
+                      }}
+                      disabled={
+                        !isConnected ||
+                        server.status === "running" ||
+                        !!activeProgress ||
+                        backup.fileExists === false
+                      }
+                      title={
+                        backup.fileExists === false
+                          ? "Backup file missing from disk"
+                          : server.status === "running"
+                            ? "Stop the server before restoring"
+                            : "Restore this backup"
+                      }
+                    >
+                      <FaRotateLeft className="h-3 w-3 mr-1" />
+                      Restore
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => handleDownloadBackup(backup)}
+                      disabled={!isConnected || backup.fileExists === false}
+                      title={
+                        backup.fileExists === false
+                          ? "Backup file missing from disk"
+                          : "Download backup"
+                      }
+                    >
+                      <FaDownload className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      onClick={() => {
+                        setEditTarget(backup);
+                        setEditName(backup.name ?? "");
+                        setEditTag(backup.tag ?? "");
+                      }}
+                      disabled={!isConnected}
+                      title="Edit name & tag"
+                    >
+                      <FaPen className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                      onClick={() => setDeleteTarget(backup)}
+                      disabled={!isConnected}
+                    >
+                      <FaTrashCan className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* ── Edit Backup Dialog ── */}
       <Dialog
