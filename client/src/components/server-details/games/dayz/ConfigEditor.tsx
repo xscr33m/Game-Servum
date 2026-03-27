@@ -190,12 +190,12 @@ export function DayZConfigEditor({
   }
 
   return (
-    <div className="divide-y">
+    <div className="space-y-6">
       {/* Basic Settings */}
-      <div className="py-6 first:pt-0">
-        <div className="mb-4">
-          <h3 className="text-base font-semibold">Basic Settings</h3>
-          <p className="text-sm text-muted-foreground">
+      <div className="space-y-3 rounded-lg border p-4">
+        <div className="border-b pb-2">
+          <h3 className="text-sm font-medium">Basic Settings</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
             Server name and access settings
           </p>
         </div>
@@ -250,10 +250,10 @@ export function DayZConfigEditor({
       </div>
 
       {/* Gameplay Settings */}
-      <div className="py-6">
-        <div className="mb-4">
-          <h3 className="text-base font-semibold">Gameplay Settings</h3>
-          <p className="text-sm text-muted-foreground">
+      <div className="space-y-3 rounded-lg border p-4">
+        <div className="border-b pb-2">
+          <h3 className="text-sm font-medium">Gameplay Settings</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
             Configure gameplay options
           </p>
         </div>
@@ -358,10 +358,10 @@ export function DayZConfigEditor({
       </div>
 
       {/* Server Settings */}
-      <div className="py-6">
-        <div className="mb-4">
-          <h3 className="text-base font-semibold">Server Settings</h3>
-          <p className="text-sm text-muted-foreground">
+      <div className="space-y-3 rounded-lg border p-4">
+        <div className="border-b pb-2">
+          <h3 className="text-sm font-medium">Server Settings</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
             Instance and storage configuration
           </p>
         </div>
@@ -455,10 +455,10 @@ export function DayZConfigEditor({
       </div>
 
       {/* Network Settings */}
-      <div className="py-6">
-        <div className="mb-4">
-          <h3 className="text-base font-semibold">Network Settings</h3>
-          <p className="text-sm text-muted-foreground">
+      <div className="space-y-3 rounded-lg border p-4">
+        <div className="border-b pb-2">
+          <h3 className="text-sm font-medium">Network Settings</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
             Login queue and network configuration
           </p>
         </div>
@@ -519,10 +519,10 @@ export function DayZConfigEditor({
       </div>
 
       {/* Time Settings */}
-      <div className="py-6">
-        <div className="mb-4">
-          <h3 className="text-base font-semibold">Time Settings</h3>
-          <p className="text-sm text-muted-foreground">
+      <div className="space-y-3 rounded-lg border p-4">
+        <div className="border-b pb-2">
+          <h3 className="text-sm font-medium">Time Settings</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
             Configure in-game time
           </p>
         </div>
@@ -604,10 +604,10 @@ export function DayZConfigEditor({
       </div>
 
       {/* Mission Settings */}
-      <div className="py-6">
-        <div className="mb-4">
-          <h3 className="text-base font-semibold">Mission / Map</h3>
-          <p className="text-sm text-muted-foreground">
+      <div className="space-y-3 rounded-lg border p-4">
+        <div className="border-b pb-2">
+          <h3 className="text-sm font-medium">Mission / Map</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
             Select the map to play on
           </p>
         </div>

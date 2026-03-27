@@ -1393,10 +1393,10 @@ function ArkInitialSettings({
   }
 
   return (
-    <div>
-      <div className="mb-4">
-        <h3 className="text-base font-semibold">Initial Server Settings</h3>
-        <p className="text-sm text-muted-foreground">
+    <div className="space-y-3 rounded-lg border p-4">
+      <div className="border-b pb-2">
+        <h3 className="text-sm font-medium">Initial Server Settings</h3>
+        <p className="text-xs text-muted-foreground mt-0.5">
           Configure the basic server settings before the first start. ARK will
           generate its full configuration files during the first launch.
         </p>
@@ -1546,10 +1546,10 @@ function ArkMapSelector({
   }
 
   return (
-    <div className="py-6">
-      <div className="mb-4">
-        <h3 className="text-base font-semibold">Server Map</h3>
-        <p className="text-sm text-muted-foreground">
+    <div className="space-y-3 rounded-lg border p-4">
+      <div className="border-b pb-2">
+        <h3 className="text-sm font-medium">Server Map</h3>
+        <p className="text-xs text-muted-foreground mt-0.5">
           Select the map for this server. Changes require a server restart.
         </p>
       </div>
@@ -1648,7 +1648,7 @@ export function ArkConfigEditor({
       );
 
   return (
-    <div className="divide-y">
+    <div className="space-y-6">
       {/* Map selector — only shown on GameUserSettings.ini tab */}
       {isGus && serverId && launchParams && (
         <ArkMapSelector
@@ -1658,7 +1658,7 @@ export function ArkConfigEditor({
         />
       )}
       {visibleSections.length === 0 && (
-        <div className="py-6 text-center text-muted-foreground">
+        <div className="text-center text-muted-foreground rounded-lg border p-6">
           No configuration fields found. Use the Raw Editor tab to view and edit
           the file directly.
         </div>
@@ -1671,10 +1671,10 @@ export function ArkConfigEditor({
         if (renderedFields.length === 0) return null;
 
         return (
-          <div key={section.title} className="py-6">
-            <div className="mb-4">
-              <h3 className="text-base font-semibold">{section.title}</h3>
-              <p className="text-sm text-muted-foreground">
+          <div key={section.title} className="space-y-3 rounded-lg border p-4">
+            <div className="border-b pb-2">
+              <h3 className="text-sm font-medium">{section.title}</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
                 {section.description}
               </p>
             </div>

@@ -820,7 +820,7 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
 
             {/* Expanded form */}
             {urOpen && (
-              <div className="mt-4 space-y-4">
+              <div className="mt-4 space-y-4 rounded-lg border p-4">
                 {/* Enabled */}
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-medium">
@@ -992,7 +992,7 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
 
             {/* Expanded form */}
             {scheduleOpen && (
-              <div className="mt-4 space-y-4">
+              <div className="mt-4 space-y-4 rounded-lg border p-4">
                 {/* Enabled */}
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-medium">Enable Schedule</label>
@@ -1463,7 +1463,7 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
           {firewallOpen && (
             <div className="mt-4 space-y-4">
               {firewallStatus ? (
-                <div className="space-y-3">
+                <div className="space-y-3 rounded-lg border p-4">
                   {/* Action button */}
                   <div className="flex items-center gap-2">
                     {firewallStatus.allPresent ? (
