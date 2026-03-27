@@ -845,40 +845,41 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
                   />
                 </div>
 
-                {/* Check interval */}
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground block mb-1">
-                    Check Interval (minutes)
-                  </label>
-                  <Input
-                    className="font-mono text-sm"
-                    type="number"
-                    min={5}
-                    max={1440}
-                    value={urCheckInterval}
-                    onChange={(e) => setUrCheckInterval(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Check every {urCheckInterval || "?"} minute(s)
-                  </p>
-                </div>
+                {/* Check interval + Restart delay */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground block mb-1">
+                      Check Interval (minutes)
+                    </label>
+                    <Input
+                      className="font-mono text-sm"
+                      type="number"
+                      min={5}
+                      max={1440}
+                      value={urCheckInterval}
+                      onChange={(e) => setUrCheckInterval(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Check every {urCheckInterval || "?"} minute(s)
+                    </p>
+                  </div>
 
-                {/* Restart delay */}
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground block mb-1">
-                    Restart Delay (minutes)
-                  </label>
-                  <Input
-                    className="font-mono text-sm"
-                    type="number"
-                    min={1}
-                    max={60}
-                    value={urDelay}
-                    onChange={(e) => setUrDelay(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Wait {urDelay || "?"} min after detecting updates
-                  </p>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground block mb-1">
+                      Restart Delay (minutes)
+                    </label>
+                    <Input
+                      className="font-mono text-sm"
+                      type="number"
+                      min={1}
+                      max={60}
+                      value={urDelay}
+                      onChange={(e) => setUrDelay(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Wait {urDelay || "?"} min after detecting updates
+                    </p>
+                  </div>
                 </div>
 
                 {/* Warning times */}
@@ -1001,38 +1002,39 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
                   />
                 </div>
 
-                {/* Interval */}
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground block mb-1">
-                    Restart Interval (hours)
-                  </label>
-                  <Input
-                    className="font-mono text-sm"
-                    type="number"
-                    min={1}
-                    max={168}
-                    value={scheduleInterval}
-                    onChange={(e) => setScheduleInterval(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Restart every {scheduleInterval || "?"} hour(s)
-                  </p>
-                </div>
+                {/* Interval + Warning times */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground block mb-1">
+                      Restart Interval (hours)
+                    </label>
+                    <Input
+                      className="font-mono text-sm"
+                      type="number"
+                      min={1}
+                      max={168}
+                      value={scheduleInterval}
+                      onChange={(e) => setScheduleInterval(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Restart every {scheduleInterval || "?"} hour(s)
+                    </p>
+                  </div>
 
-                {/* Warning times */}
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground block mb-1">
-                    Warning Times (minutes)
-                  </label>
-                  <Input
-                    className="font-mono text-sm"
-                    value={scheduleWarnings}
-                    onChange={(e) => setScheduleWarnings(e.target.value)}
-                    placeholder="15,5,1"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Comma-separated. Warnings sent via RCON in-game chat.
-                  </p>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground block mb-1">
+                      Warning Times (minutes)
+                    </label>
+                    <Input
+                      className="font-mono text-sm"
+                      value={scheduleWarnings}
+                      onChange={(e) => setScheduleWarnings(e.target.value)}
+                      placeholder="15,5,1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Comma-separated. Warnings sent via RCON.
+                    </p>
+                  </div>
                 </div>
 
                 {/* Warning message */}
