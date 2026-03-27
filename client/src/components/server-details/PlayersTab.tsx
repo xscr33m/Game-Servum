@@ -73,6 +73,9 @@ function formatLastSeen(isoDate: string): string {
 }
 
 export function PlayersTab({ server }: PlayersTabProps) {
+  // Tab state
+  const [activeTab, setActiveTab] = useState("overview");
+
   // Player overview state
   const [players, setPlayers] = useState<PlayerSummary[]>([]);
   const [onlineCount, setOnlineCount] = useState(0);
@@ -317,12 +320,6 @@ export function PlayersTab({ server }: PlayersTabProps) {
   const whitelistChanged = whitelistContent !== originalWhitelist;
   const banChanged = banContent !== originalBan;
 
-  function countEntries(content: string): number {
-    return content
-      .split("\n")
-      .filter((line) => line.trim() && !line.trim().startsWith("//")).length;
-  }
-
   const onlinePlayers = players.filter((p) => p.isOnline);
   const offlinePlayers = players.filter((p) => !p.isOnline);
 
@@ -338,9 +335,14 @@ export function PlayersTab({ server }: PlayersTabProps) {
         </div>
       )}
 
-      <Tabs defaultValue="overview" className="flex flex-col flex-1 min-h-0">
+      <Tabs
+        defaultValue="overview"
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="flex flex-col flex-1 min-h-0"
+      >
         <div className="shrink-0 border-b bg-background">
-          <div className="max-w-5xl mx-auto px-4 py-2">
+          <div className="max-w-5xl mx-auto px-4 flex flex-wrap items-center justify-between gap-3 py-2">
             <TabsList>
               <TabsTrigger value="overview" className="gap-2">
                 <FaUsers className="h-4 w-4 text-ring/70" />
@@ -374,6 +376,52 @@ export function PlayersTab({ server }: PlayersTabProps) {
                 </TabsTrigger>
               )}
             </TabsList>
+            {activeTab === "whitelist" && isPlayerListEditable && (
+              <div className="flex items-center gap-2">
+                {whitelistChanged && (
+                  <Badge variant="warning">Unsaved Changes</Badge>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setWhitelistContent(originalWhitelist)}
+                  disabled={!whitelistChanged || saving}
+                >
+                  <FaRotateLeft className="h-4 w-4 mr-2" />
+                  Reset
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSaveWhitelist}
+                  disabled={!whitelistChanged || saving}
+                >
+                  <FaFloppyDisk className="h-4 w-4 mr-2" />
+                  {saving ? "Saving..." : "Save"}
+                </Button>
+              </div>
+            )}
+            {activeTab === "ban" && isPlayerListEditable && (
+              <div className="flex items-center gap-2">
+                {banChanged && <Badge variant="warning">Unsaved Changes</Badge>}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setBanContent(originalBan)}
+                  disabled={!banChanged || saving}
+                >
+                  <FaRotateLeft className="h-4 w-4 mr-2" />
+                  Reset
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSaveBan}
+                  disabled={!banChanged || saving}
+                >
+                  <FaFloppyDisk className="h-4 w-4 mr-2" />
+                  {saving ? "Saving..." : "Save"}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -774,129 +822,49 @@ export function PlayersTab({ server }: PlayersTabProps) {
         {hasWhitelist && (
           <TabsContent
             value="whitelist"
-            className="flex-1 overflow-y-auto mt-0"
+            className="flex-1 min-h-0 mt-0 px-4 py-4"
           >
-            <div className="max-w-5xl mx-auto px-4 py-6">
-              <div className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <FaShield className="h-4 w-4 text-ring" />
-                    <span className="text-sm font-medium text-muted-foreground">
-                      Whitelist
-                    </span>
-                    <Badge variant="secondary">
-                      {countEntries(whitelistContent)} entries
-                    </Badge>
-                  </div>
-                  {isPlayerListEditable && (
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setWhitelistContent(originalWhitelist)}
-                        disabled={!whitelistChanged || saving}
-                      >
-                        <FaRotateLeft className="h-3.5 w-3.5 mr-1.5" />
-                        Revert
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={handleSaveWhitelist}
-                        disabled={!whitelistChanged || saving}
-                      >
-                        <FaFloppyDisk className="h-3.5 w-3.5 mr-1.5" />
-                        {saving ? "Saving..." : "Save"}
-                      </Button>
-                    </div>
-                  )}
+            <div className="max-w-5xl mx-auto h-full">
+              {filesLoading ? (
+                <div className="text-center py-8 text-muted-foreground text-sm">
+                  Loading...
                 </div>
-
-                {filesLoading ? (
-                  <div className="text-center py-8 text-muted-foreground text-sm">
-                    Loading...
-                  </div>
-                ) : (
-                  <>
-                    <Textarea
-                      className="font-mono text-sm h-[300px] sm:h-[400px]"
-                      value={whitelistContent}
-                      onChange={(e) => setWhitelistContent(e.target.value)}
-                      placeholder={`// Add player IDs here (one per line)`}
-                      spellCheck={false}
-                      readOnly={!isPlayerListEditable}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      {isPlayerListEditable
-                        ? "Add one player ID per line. Lines starting with // are comments. You can also use the player action buttons to add/remove players."
-                        : "This list is managed via the player action buttons. Use the buttons in the Players tab to add or remove entries."}
-                    </p>
-                  </>
-                )}
-              </div>
+              ) : (
+                <div className="rounded-md border overflow-hidden h-full min-h-[300px] flex flex-col">
+                  <Textarea
+                    className="font-mono text-sm flex-1 resize-none rounded-none border-0 focus-visible:ring-0"
+                    value={whitelistContent}
+                    onChange={(e) => setWhitelistContent(e.target.value)}
+                    placeholder={`// Add player IDs here (one per line)`}
+                    spellCheck={false}
+                    readOnly={!isPlayerListEditable}
+                  />
+                </div>
+              )}
             </div>
           </TabsContent>
         )}
 
         {/* ── Ban List Tab ── */}
         {hasBanList && (
-          <TabsContent value="ban" className="flex-1 overflow-y-auto mt-0">
-            <div className="max-w-5xl mx-auto px-4 py-6">
-              <div className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <FaBan className="h-4 w-4 text-ring" />
-                    <span className="text-sm font-medium text-muted-foreground">
-                      Ban List
-                    </span>
-                    <Badge variant="secondary">
-                      {countEntries(banContent)} entries
-                    </Badge>
-                  </div>
-                  {isPlayerListEditable && (
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setBanContent(originalBan)}
-                        disabled={!banChanged || saving}
-                      >
-                        <FaRotateLeft className="h-3.5 w-3.5 mr-1.5" />
-                        Revert
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={handleSaveBan}
-                        disabled={!banChanged || saving}
-                      >
-                        <FaFloppyDisk className="h-3.5 w-3.5 mr-1.5" />
-                        {saving ? "Saving..." : "Save"}
-                      </Button>
-                    </div>
-                  )}
+          <TabsContent value="ban" className="flex-1 min-h-0 mt-0 px-4 py-4">
+            <div className="max-w-5xl mx-auto h-full">
+              {filesLoading ? (
+                <div className="text-center py-8 text-muted-foreground text-sm">
+                  Loading...
                 </div>
-
-                {filesLoading ? (
-                  <div className="text-center py-8 text-muted-foreground text-sm">
-                    Loading...
-                  </div>
-                ) : (
-                  <>
-                    <Textarea
-                      className="font-mono text-sm h-[300px] sm:h-[400px]"
-                      value={banContent}
-                      onChange={(e) => setBanContent(e.target.value)}
-                      placeholder={`// Add player IDs of banned players here (one per line)`}
-                      spellCheck={false}
-                      readOnly={!isPlayerListEditable}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      {isPlayerListEditable
-                        ? "Add one player ID per line. Lines starting with // are comments. You can also use the player action buttons to add/remove players."
-                        : "This list is managed via the player action buttons. Use the buttons in the Players tab to add or remove entries."}
-                    </p>
-                  </>
-                )}
-              </div>
+              ) : (
+                <div className="rounded-md border overflow-hidden h-full min-h-[300px] flex flex-col">
+                  <Textarea
+                    className="font-mono text-sm flex-1 resize-none rounded-none border-0 focus-visible:ring-0"
+                    value={banContent}
+                    onChange={(e) => setBanContent(e.target.value)}
+                    placeholder={`// Add player IDs of banned players here (one per line)`}
+                    spellCheck={false}
+                    readOnly={!isPlayerListEditable}
+                  />
+                </div>
+              )}
             </div>
           </TabsContent>
         )}
