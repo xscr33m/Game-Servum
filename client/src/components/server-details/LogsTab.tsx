@@ -15,6 +15,7 @@ import {
   FaDownload,
   FaTextSlash,
   FaTextWidth,
+  FaList,
 } from "react-icons/fa6";
 import {
   Select,
@@ -23,13 +24,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -120,6 +114,7 @@ export function LogsTab({ server }: LogsTabProps) {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [wordWrap, setWordWrap] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const logContentRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<number | null>(null);
@@ -262,6 +257,7 @@ export function LogsTab({ server }: LogsTabProps) {
     setViewingSource("current");
     setAutoRefresh(false);
     setSearchQuery("");
+    setSidebarOpen(false);
     loadLogContent(filename, "current");
   }
 
@@ -291,6 +287,7 @@ export function LogsTab({ server }: LogsTabProps) {
     setViewingSource({ archive: sessionName });
     setAutoRefresh(false);
     setSearchQuery("");
+    setSidebarOpen(false);
     loadLogContent(filename, { archive: sessionName });
   }
 
@@ -375,21 +372,202 @@ export function LogsTab({ server }: LogsTabProps) {
 
   if (loading) {
     return (
-      <Card>
-        <CardContent className="py-8 text-center text-muted-foreground">
-          Loading log files...
-        </CardContent>
-      </Card>
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center text-muted-foreground">
+          <FaArrowsRotate className="h-6 w-6 animate-spin mx-auto mb-2" />
+          <p className="text-sm">Loading log files...</p>
+        </div>
+      </div>
     );
   }
 
+  const totalFileCount =
+    currentLogs.length + archives.reduce((sum, a) => sum + a.fileCount, 0);
+
   return (
-    <div className="grid gap-4 lg:grid-cols-4 h-[calc(100vh-8rem)] min-h-[400px]">
-      {/* Sidebar: Log files list */}
-      <Card className="lg:col-span-1 overflow-hidden flex flex-col">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Log Files</CardTitle>
+    <div className="flex flex-col flex-1 min-h-0">
+      {/* ── Sticky Toolbar ── */}
+      <div className="shrink-0 border-b bg-background">
+        <div className="px-4 py-2 flex flex-wrap items-center justify-between gap-2">
+          {/* Left: file info */}
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <FaFileLines className="h-4 w-4 text-ring shrink-0" />
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium truncate">
+                  {selectedLog || "Select a log file"}
+                </span>
+                {viewingSource !== "current" && (
+                  <Badge variant="secondary" className="text-xs shrink-0">
+                    <FaBoxArchive className="h-3 w-3 mr-1" />
+                    Archived
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground truncate">
+                {getViewerDescription()}
+              </p>
+            </div>
+          </div>
+
+          {/* Right: action buttons */}
+          {selectedLog && (
+            <div className="flex items-center gap-1.5 shrink-0">
+              {viewingSource !== "current" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (currentLogs.length > 0) {
+                      handleSelectLog(currentLogs[0].name);
+                    } else {
+                      setSelectedLog(null);
+                      setLogContent("");
+                      setTotalLines(0);
+                      setViewingSource("current");
+                    }
+                  }}
+                >
+                  <FaArrowLeft className="h-3.5 w-3.5 mr-1.5" />
+                  <span className="hidden sm:inline">Current Logs</span>
+                </Button>
+              )}
+              {viewingSource === "current" && (
+                <Button
+                  variant={autoRefresh ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setAutoRefresh(!autoRefresh)}
+                >
+                  <FaArrowsRotate
+                    className={`h-3.5 w-3.5 ${autoRefresh ? "animate-spin" : ""}`}
+                  />
+                  <span className="hidden sm:inline ml-1.5">
+                    {autoRefresh ? "Auto-refresh ON" : "Auto-refresh"}
+                  </span>
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDownload}
+                disabled={!logContent}
+                title="Download log file"
+              >
+                <FaDownload className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => loadLogContent(selectedLog, viewingSource)}
+                disabled={loadingContent}
+                title="Refresh content"
+              >
+                <FaArrowsRotate className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Search + Word Wrap row */}
+        {selectedLog && (
+          <div className="px-4 pb-2 flex items-center gap-2">
+            <div className="relative flex-1">
+              <FaMagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Search in log..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-8 pl-9 text-sm"
+              />
+            </div>
+            {searchQuery.trim() && (
+              <Badge variant="secondary" className="text-xs shrink-0">
+                {matchCount} {matchCount === 1 ? "match" : "matches"}
+              </Badge>
+            )}
+            <Button
+              variant={wordWrap ? "default" : "outline"}
+              size="sm"
+              className="h-8 shrink-0"
+              onClick={() => setWordWrap(!wordWrap)}
+              title={wordWrap ? "Disable word wrap" : "Enable word wrap"}
+            >
+              {wordWrap ? (
+                <FaTextWidth className="h-3.5 w-3.5" />
+              ) : (
+                <FaTextSlash className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* ── Content: Sidebar + Viewer ── */}
+      <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
+        {/* Mobile file list toggle */}
+        <button
+          type="button"
+          className="lg:hidden shrink-0 flex items-center justify-between w-full px-4 py-2.5 border-b bg-muted/30 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+        >
+          <div className="flex items-center gap-2">
+            <FaList className="h-3.5 w-3.5 text-ring" />
+            Log Files
+            {totalFileCount > 0 && (
+              <Badge variant="secondary" className="text-xs">
+                {totalFileCount}
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowSettings(true);
+              }}
+              title="Log settings"
+            >
+              <FaGear className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                loadLogFiles();
+              }}
+              title="Refresh file list"
+            >
+              <FaArrowsRotate className="h-3.5 w-3.5" />
+            </Button>
+            {sidebarOpen ? (
+              <FaChevronDown className="h-3.5 w-3.5" />
+            ) : (
+              <FaChevronRight className="h-3.5 w-3.5" />
+            )}
+          </div>
+        </button>
+
+        {/* File list sidebar */}
+        <div
+          className={`lg:w-72 lg:border-r shrink-0 overflow-y-auto bg-background ${
+            sidebarOpen
+              ? "max-h-64 lg:max-h-none border-b lg:border-b-0"
+              : "hidden lg:block"
+          }`}
+        >
+          {/* Desktop sidebar header */}
+          <div className="hidden lg:flex items-center justify-between px-3 py-2.5 border-b">
+            <div className="flex items-center gap-2">
+              <FaFileLines className="h-4 w-4 text-ring" />
+              <span className="text-sm font-medium text-muted-foreground">
+                Log Files
+              </span>
+            </div>
             <div className="flex items-center gap-1">
               <Button
                 variant="ghost"
@@ -397,16 +575,19 @@ export function LogsTab({ server }: LogsTabProps) {
                 onClick={() => setShowSettings(true)}
                 title="Log settings"
               >
-                <FaGear className="h-4 w-4" />
+                <FaGear className="h-3.5 w-3.5" />
               </Button>
-              <Button variant="ghost" size="sm" onClick={loadLogFiles}>
-                <FaArrowsRotate className="h-4 w-4" />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={loadLogFiles}
+                title="Refresh file list"
+              >
+                <FaArrowsRotate className="h-3.5 w-3.5" />
               </Button>
             </div>
           </div>
-        </CardHeader>
 
-        <CardContent className="p-0 flex-1 overflow-y-auto min-h-0">
           {/* Current logs section */}
           {currentLogs.length > 0 && (
             <div>
@@ -425,7 +606,7 @@ export function LogsTab({ server }: LogsTabProps) {
                     }`}
                   >
                     <div className="flex items-center gap-2">
-                      <FaFileLines className="h-4 w-4 text-ring/70 flex-shrink-0" />
+                      <FaFileLines className="h-3.5 w-3.5 text-ring/70 shrink-0" />
                       <span
                         className="text-sm font-medium truncate"
                         title={log.name}
@@ -433,7 +614,7 @@ export function LogsTab({ server }: LogsTabProps) {
                         {log.name}
                       </span>
                     </div>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-3 mt-1 ml-[1.625rem] text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <FaHardDrive className="h-3 w-3" />
                         {formatFileSize(log.size)}
@@ -475,11 +656,11 @@ export function LogsTab({ server }: LogsTabProps) {
                       >
                         <div className="flex items-center gap-2">
                           {expandedArchives.has(archive.name) ? (
-                            <FaChevronDown className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                            <FaChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                           ) : (
-                            <FaChevronRight className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                            <FaChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                           )}
-                          <FaFolderOpen className="h-4 w-4 text-ring/70 flex-shrink-0" />
+                          <FaFolderOpen className="h-3.5 w-3.5 text-ring/70 shrink-0" />
                           <span
                             className="text-sm font-medium truncate"
                             title={formatDate(archive.date)}
@@ -534,7 +715,7 @@ export function LogsTab({ server }: LogsTabProps) {
                                 }`}
                               >
                                 <div className="flex items-center gap-2">
-                                  <FaFileLines className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                                  <FaFileLines className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                                   <span
                                     className="text-xs font-medium truncate"
                                     title={file.name}
@@ -559,151 +740,59 @@ export function LogsTab({ server }: LogsTabProps) {
 
           {/* Empty state */}
           {currentLogs.length === 0 && archives.length === 0 && (
-            <div className="p-4 text-center text-sm text-muted-foreground">
-              No log files found
+            <div className="text-center py-6 text-muted-foreground">
+              <FaFileLines className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">No log files found</p>
+              <p className="text-xs mt-1">
+                Log files will appear after the server runs.
+              </p>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Main: Log content viewer */}
-      <Card className="lg:col-span-3 flex flex-col overflow-hidden">
-        <CardHeader className="shrink-0 pb-3">
-          <div className="flex items-center justify-between">
-            <div className="min-w-0 flex-1">
-              <CardTitle className="flex items-center gap-2">
-                <FaFileLines className="h-5 w-5 text-ring flex-shrink-0" />
-                <span className="truncate">
-                  {selectedLog || "Select a log file"}
-                </span>
-                {viewingSource !== "current" && (
-                  <Badge variant="secondary" className="text-xs flex-shrink-0">
-                    <FaBoxArchive className="h-3 w-3 mr-1" />
-                    Archived
-                  </Badge>
+        {/* Log viewer */}
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
+          <div className="flex-1 p-4 flex flex-col min-h-0">
+            {loadingContent ? (
+              <div className="flex-1 flex items-center justify-center text-muted-foreground">
+                <div className="text-center">
+                  <FaArrowsRotate className="h-6 w-6 animate-spin mx-auto mb-2" />
+                  <p className="text-sm">Loading log content...</p>
+                </div>
+              </div>
+            ) : selectedLog ? (
+              <div
+                ref={logContentRef}
+                className={`bg-terminal rounded-lg p-4 flex-1 min-h-[200px] font-mono text-xs text-green-400 ${
+                  wordWrap
+                    ? "whitespace-pre-wrap break-words overflow-y-auto overflow-x-hidden"
+                    : "whitespace-pre overflow-auto"
+                }`}
+              >
+                {filteredContent || (
+                  <span className="text-muted-foreground">
+                    {searchQuery.trim()
+                      ? "No matching lines"
+                      : "Log file is empty"}
+                  </span>
                 )}
-              </CardTitle>
-              <CardDescription className="truncate">
-                {getViewerDescription()}
-              </CardDescription>
-            </div>
-            {selectedLog && (
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {viewingSource !== "current" && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      if (currentLogs.length > 0) {
-                        handleSelectLog(currentLogs[0].name);
-                      } else {
-                        setSelectedLog(null);
-                        setLogContent("");
-                        setTotalLines(0);
-                        setViewingSource("current");
-                      }
-                    }}
-                  >
-                    <FaArrowLeft className="h-4 w-4 mr-1" />
-                    Current Logs
-                  </Button>
-                )}
-                {viewingSource === "current" && (
-                  <Button
-                    variant={autoRefresh ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setAutoRefresh(!autoRefresh)}
-                  >
-                    <FaArrowsRotate
-                      className={`h-4 w-4 mr-2 ${autoRefresh ? "animate-spin" : ""}`}
-                    />
-                    {autoRefresh ? "Auto-refresh ON" : "Auto-refresh"}
-                  </Button>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDownload}
-                  disabled={!logContent}
-                  title="Download log file"
-                >
-                  <FaDownload className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => loadLogContent(selectedLog, viewingSource)}
-                  disabled={loadingContent}
-                  title="Refresh"
-                >
-                  <FaArrowsRotate className="h-4 w-4" />
-                </Button>
+              </div>
+            ) : (
+              <div className="flex-1 flex items-center justify-center text-muted-foreground">
+                <div className="text-center">
+                  <FaFileLines className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">
+                    Select a log file to view its contents
+                  </p>
+                  <p className="text-xs mt-1">
+                    Choose from the file list on the left
+                  </p>
+                </div>
               </div>
             )}
           </div>
-
-          {/* Search + Word Wrap toolbar */}
-          {selectedLog && (
-            <div className="flex items-center gap-2 mt-3">
-              <div className="relative flex-1">
-                <FaMagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                <Input
-                  placeholder="Search in log..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-8 pl-9 text-sm"
-                />
-              </div>
-              {searchQuery.trim() && (
-                <Badge variant="secondary" className="text-xs flex-shrink-0">
-                  {matchCount} {matchCount === 1 ? "match" : "matches"}
-                </Badge>
-              )}
-              <Button
-                variant={wordWrap ? "default" : "outline"}
-                size="sm"
-                className="h-8 flex-shrink-0"
-                onClick={() => setWordWrap(!wordWrap)}
-                title={wordWrap ? "Disable word wrap" : "Enable word wrap"}
-              >
-                {wordWrap ? (
-                  <FaTextWidth className="h-3.5 w-3.5" />
-                ) : (
-                  <FaTextSlash className="h-3.5 w-3.5" />
-                )}
-              </Button>
-            </div>
-          )}
-        </CardHeader>
-        <CardContent className="flex-1 flex flex-col min-h-0">
-          {loadingContent ? (
-            <div className="py-8 text-center text-muted-foreground">
-              Loading log content...
-            </div>
-          ) : selectedLog ? (
-            <div
-              ref={logContentRef}
-              className={`bg-terminal rounded-md p-3 flex-1 min-h-[200px] font-mono text-xs text-green-400 ${
-                wordWrap
-                  ? "whitespace-pre-wrap break-words overflow-y-auto overflow-x-hidden"
-                  : "whitespace-pre overflow-auto"
-              }`}
-            >
-              {filteredContent || (
-                <span className="text-muted-foreground">
-                  {searchQuery.trim()
-                    ? "No matching lines"
-                    : "Log file is empty"}
-                </span>
-              )}
-            </div>
-          ) : (
-            <div className="py-8 text-center text-muted-foreground">
-              Select a log file to view its contents
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Settings Dialog */}
       <Dialog open={showSettings} onOpenChange={setShowSettings}>

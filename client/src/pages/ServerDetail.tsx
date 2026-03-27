@@ -556,7 +556,7 @@ export function ServerDetail() {
               gameId={server.gameId}
             />
             <div
-              className={`flex-1 min-w-0 min-h-0 [scrollbar-gutter:stable] ${activeSection === "config" || activeSection === "files" || activeSection === "players" ? "flex flex-col" : "overflow-y-auto"}`}
+              className={`flex-1 min-w-0 min-h-0 [scrollbar-gutter:stable] ${activeSection === "config" || activeSection === "files" || activeSection === "players" || activeSection === "logs" ? "flex flex-col" : "overflow-y-auto"}`}
             >
               {activeSection === "config" && (
                 <ConfigTab server={server} onRefresh={loadServer} />
@@ -565,15 +565,16 @@ export function ServerDetail() {
               {activeSection === "players" && hasPlayers && (
                 <PlayersTab server={server} />
               )}
+              {activeSection === "logs" && <LogsTab server={server} />}
               {activeSection !== "config" &&
                 activeSection !== "files" &&
-                activeSection !== "players" && (
+                activeSection !== "players" &&
+                activeSection !== "logs" && (
                   <div className="max-w-5xl mx-auto px-4 py-6 min-h-full">
                     {activeSection === "overview" && (
                       <OverviewTab server={server} onRefresh={loadServer} />
                     )}
                     {activeSection === "mods" && <ModsTab server={server} />}
-                    {activeSection === "logs" && <LogsTab server={server} />}
                     {activeSection === "backups" && (
                       <BackupsTab server={server} />
                     )}
