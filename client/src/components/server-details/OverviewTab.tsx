@@ -20,6 +20,7 @@ import { useUptime } from "@/hooks/useUptime";
 import { useGameCapabilities } from "@/hooks/useGameCapabilities";
 import { toastSuccess } from "@/lib/toast";
 import { getGameName } from "@/components/server-details/games/registry";
+import { Tip } from "@/components/ui/tooltip";
 import type { GameServer, GameDefinition } from "@/types";
 
 interface OverviewTabProps {
@@ -566,15 +567,16 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
                     spellCheck={false}
                     placeholder="e.g. profiles or profiles/config1"
                   />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowDirPicker(!showDirPicker)}
-                    title="Browse existing folders"
-                    className="shrink-0"
-                  >
-                    <FaChevronDown className="h-4 w-4" />
-                  </Button>
+                  <Tip content="Browse existing folders">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowDirPicker(!showDirPicker)}
+                      className="shrink-0"
+                    >
+                      <FaChevronDown className="h-4 w-4" />
+                    </Button>
+                  </Tip>
                 </div>
                 {showDirPicker && availableDirs.length > 0 && (
                   <div className="rounded border bg-muted/50 max-h-[160px] overflow-y-auto">
@@ -642,15 +644,16 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
             {editingParams ? (
               <>
                 {defaultLaunchParams !== null && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleResetToDefault}
-                    title="Reset to game default parameters"
-                    disabled={paramsSaving}
-                  >
-                    Default
-                  </Button>
+                  <Tip content="Reset to game default parameters">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleResetToDefault}
+                      disabled={paramsSaving}
+                    >
+                      Default
+                    </Button>
+                  </Tip>
                 )}
                 <Button
                   variant="outline"

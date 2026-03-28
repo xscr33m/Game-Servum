@@ -30,6 +30,7 @@ import { useBackend } from "@/hooks/useBackend";
 import { toastSuccess, toastError, toastInfo } from "@/lib/toast";
 import type { BackendConnection } from "@/lib/config";
 import type { UpdateState } from "@/types";
+import { Tip } from "@/components/ui/tooltip";
 
 const STATUS_COLORS = {
   connected: "text-green-500",
@@ -196,15 +197,12 @@ export function AgentControlPanel({ onAddAgent }: AgentControlPanelProps) {
   if (!activeConnection) {
     return (
       <div className="flex items-center gap-1.5">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onAddAgent?.()}
-          title="Connect an agent"
-        >
-          <FaPlus className="h-3.5 w-3.5 mr-1.5" />
-          Connect Agent
-        </Button>
+        <Tip content="Connect an agent">
+          <Button variant="outline" size="sm" onClick={() => onAddAgent?.()}>
+            <FaPlus className="h-3.5 w-3.5 mr-1.5" />
+            Connect Agent
+          </Button>
+        </Tip>
       </div>
     );
   }
@@ -488,20 +486,22 @@ export function AgentControlPanel({ onAddAgent }: AgentControlPanelProps) {
                               onMouseEnter={() => setHoveringActionsId(conn.id)}
                               onMouseLeave={() => setHoveringActionsId(null)}
                             >
-                              <button
-                                onClick={(e) => handleEdit(e, conn)}
-                                className="p-1.5 rounded hover:bg-muted/50 transition-colors hover:cursor-pointer"
-                                title="Edit agent"
-                              >
-                                <FaPen className="h-4 w-4 text-muted-foreground" />
-                              </button>
-                              <button
-                                onClick={(e) => handleRemove(e, conn)}
-                                className="p-1.5 rounded hover:bg-destructive/20 transition-colors hover:cursor-pointer"
-                                title="Remove agent"
-                              >
-                                <FaTrash className="h-4 w-4 text-destructive" />
-                              </button>
+                              <Tip content="Edit agent">
+                                <button
+                                  onClick={(e) => handleEdit(e, conn)}
+                                  className="p-1.5 rounded hover:bg-muted/50 transition-colors hover:cursor-pointer"
+                                >
+                                  <FaPen className="h-4 w-4 text-muted-foreground" />
+                                </button>
+                              </Tip>
+                              <Tip content="Remove agent">
+                                <button
+                                  onClick={(e) => handleRemove(e, conn)}
+                                  className="p-1.5 rounded hover:bg-destructive/20 transition-colors hover:cursor-pointer"
+                                >
+                                  <FaTrash className="h-4 w-4 text-destructive" />
+                                </button>
+                              </Tip>
                             </div>
                           </div>
                         </button>
@@ -516,14 +516,15 @@ export function AgentControlPanel({ onAddAgent }: AgentControlPanelProps) {
 
         {/* Agent Actions Menu */}
         <div className="relative">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setActionsMenuOpen(!actionsMenuOpen)}
-            title="Agent actions"
-          >
-            <FaEllipsis className="h-4 w-4" />
-          </Button>
+          <Tip content="Agent actions">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setActionsMenuOpen(!actionsMenuOpen)}
+            >
+              <FaEllipsis className="h-4 w-4" />
+            </Button>
+          </Tip>
 
           {actionsMenuOpen && (
             <>
@@ -660,14 +661,11 @@ export function AgentControlPanel({ onAddAgent }: AgentControlPanelProps) {
         </div>
 
         {/* Add Agent Button */}
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => onAddAgent?.()}
-          title="Add agent"
-        >
-          <FaPlus className="h-4 w-4" />
-        </Button>
+        <Tip content="Add agent">
+          <Button variant="outline" size="icon" onClick={() => onAddAgent?.()}>
+            <FaPlus className="h-4 w-4" />
+          </Button>
+        </Tip>
       </div>
 
       {/* Remove Agent Dialog */}

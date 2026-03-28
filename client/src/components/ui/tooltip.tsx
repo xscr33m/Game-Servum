@@ -1,4 +1,5 @@
 import * as React from "react";
+import type { ReactNode } from "react";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import { cn } from "@/lib/utils";
 
@@ -24,4 +25,21 @@ const TooltipContent = React.forwardRef<
 ));
 TooltipContent.displayName = TooltipPrimitive.Content.displayName;
 
-export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider };
+interface TipProps {
+  content: ReactNode;
+  side?: "top" | "right" | "bottom" | "left";
+  children: ReactNode;
+}
+
+function Tip({ content, side = "bottom", children }: TipProps) {
+  if (!content) return <>{children}</>;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side={side}>{content}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider, Tip };

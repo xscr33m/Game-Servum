@@ -41,6 +41,7 @@ import { useBackend } from "@/hooks/useBackend";
 import { useContentWidth } from "@/hooks/useContentWidth";
 import { toastSuccess } from "@/lib/toast";
 import { cn } from "@/lib/utils";
+import { Tip } from "@/components/ui/tooltip";
 import { logger } from "@/lib/logger";
 import type { GameServer, LogFile, ArchiveSession, LogSettings } from "@/types";
 
@@ -466,24 +467,26 @@ export function LogsTab({ server }: LogsTabProps) {
                   </span>
                 </Button>
               )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleDownload}
-                disabled={!logContent}
-                title="Download log file"
-              >
-                <FaDownload className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => loadLogContent(selectedLog, viewingSource)}
-                disabled={loadingContent}
-                title="Refresh content"
-              >
-                <FaArrowsRotate className="h-3.5 w-3.5" />
-              </Button>
+              <Tip content="Download log file">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownload}
+                  disabled={!logContent}
+                >
+                  <FaDownload className="h-3.5 w-3.5" />
+                </Button>
+              </Tip>
+              <Tip content="Refresh content">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => loadLogContent(selectedLog, viewingSource)}
+                  disabled={loadingContent}
+                >
+                  <FaArrowsRotate className="h-3.5 w-3.5" />
+                </Button>
+              </Tip>
             </div>
           )}
         </div>
@@ -512,30 +515,32 @@ export function LogsTab({ server }: LogsTabProps) {
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-              onClick={(e) => {
-                e.stopPropagation();
-                openSettingsDialog();
-              }}
-              title="Log settings"
-            >
-              <FaGear className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-              onClick={(e) => {
-                e.stopPropagation();
-                loadLogFiles();
-              }}
-              title="Refresh file list"
-            >
-              <FaArrowsRotate className="h-3.5 w-3.5" />
-            </Button>
+            <Tip content="Log settings">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openSettingsDialog();
+                }}
+              >
+                <FaGear className="h-3.5 w-3.5" />
+              </Button>
+            </Tip>
+            <Tip content="Refresh file list">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  loadLogFiles();
+                }}
+              >
+                <FaArrowsRotate className="h-3.5 w-3.5" />
+              </Button>
+            </Tip>
             {sidebarOpen ? (
               <FaChevronDown className="h-3.5 w-3.5" />
             ) : (
@@ -559,22 +564,20 @@ export function LogsTab({ server }: LogsTabProps) {
               </span>
             </div>
             <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => openSettingsDialog()}
-                title="Log settings"
-              >
-                <FaGear className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={loadLogFiles}
-                title="Refresh file list"
-              >
-                <FaArrowsRotate className="h-3.5 w-3.5" />
-              </Button>
+              <Tip content="Log settings">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => openSettingsDialog()}
+                >
+                  <FaGear className="h-3.5 w-3.5" />
+                </Button>
+              </Tip>
+              <Tip content="Refresh file list">
+                <Button variant="ghost" size="sm" onClick={loadLogFiles}>
+                  <FaArrowsRotate className="h-3.5 w-3.5" />
+                </Button>
+              </Tip>
             </div>
           </div>
 
@@ -597,12 +600,11 @@ export function LogsTab({ server }: LogsTabProps) {
                   >
                     <div className="flex items-center gap-2">
                       <FaFileLines className="h-3.5 w-3.5 text-ring/70 shrink-0" />
-                      <span
-                        className="text-sm font-medium truncate"
-                        title={log.name}
-                      >
-                        {log.name}
-                      </span>
+                      <Tip content={log.name} side="right">
+                        <span className="text-sm font-medium truncate">
+                          {log.name}
+                        </span>
+                      </Tip>
                     </div>
                     <div className="flex items-center gap-3 mt-1 ml-[1.625rem] text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
@@ -651,12 +653,14 @@ export function LogsTab({ server }: LogsTabProps) {
                             <FaChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                           )}
                           <FaFolderOpen className="h-3.5 w-3.5 text-ring/70 shrink-0" />
-                          <span
-                            className="text-sm font-medium truncate"
-                            title={formatDate(archive.date)}
+                          <Tip
+                            content={formatDate(archive.date)}
+                            side="right"
                           >
-                            {formatShortDateTime(archive.date)}
-                          </span>
+                            <span className="text-sm font-medium truncate">
+                              {formatShortDateTime(archive.date)}
+                            </span>
+                          </Tip>
                         </div>
                         <div className="flex items-center gap-3 mt-1 ml-[3.25rem] text-xs text-muted-foreground">
                           <span>
@@ -666,15 +670,16 @@ export function LogsTab({ server }: LogsTabProps) {
                           <span>{formatFileSize(archive.totalSize)}</span>
                         </div>
                       </button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="mr-2 text-muted-foreground hover:text-destructive"
-                        onClick={() => setDeleteTarget(archive.name)}
-                        title="Delete archive"
-                      >
-                        <FaTrashCan className="h-3.5 w-3.5" />
-                      </Button>
+                      <Tip content="Delete archive">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="mr-2 text-muted-foreground hover:text-destructive"
+                          onClick={() => setDeleteTarget(archive.name)}
+                        >
+                          <FaTrashCan className="h-3.5 w-3.5" />
+                        </Button>
+                      </Tip>
                     </div>
 
                     {/* Expanded archive files */}
@@ -706,12 +711,14 @@ export function LogsTab({ server }: LogsTabProps) {
                               >
                                 <div className="flex items-center gap-2">
                                   <FaFileLines className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                  <span
-                                    className="text-xs font-medium truncate"
-                                    title={file.name}
+                                  <Tip
+                                    content={file.name}
+                                    side="right"
                                   >
-                                    {file.name}
-                                  </span>
+                                    <span className="text-xs font-medium truncate">
+                                      {file.name}
+                                    </span>
+                                  </Tip>
                                 </div>
                                 <div className="flex items-center gap-3 mt-0.5 ml-[1.625rem] text-[11px] text-muted-foreground">
                                   <span>{formatFileSize(file.size)}</span>
@@ -759,19 +766,22 @@ export function LogsTab({ server }: LogsTabProps) {
                   {matchCount} {matchCount === 1 ? "match" : "matches"}
                 </Badge>
               )}
-              <Button
-                variant={wordWrap ? "default" : "outline"}
-                size="sm"
-                className="h-8 shrink-0"
-                onClick={() => setWordWrap(!wordWrap)}
-                title={wordWrap ? "Disable word wrap" : "Enable word wrap"}
+              <Tip
+                content={wordWrap ? "Disable word wrap" : "Enable word wrap"}
               >
-                {wordWrap ? (
-                  <FaTextWidth className="h-3.5 w-3.5" />
-                ) : (
-                  <FaTextSlash className="h-3.5 w-3.5" />
-                )}
-              </Button>
+                <Button
+                  variant={wordWrap ? "default" : "outline"}
+                  size="sm"
+                  className="h-8 shrink-0"
+                  onClick={() => setWordWrap(!wordWrap)}
+                >
+                  {wordWrap ? (
+                    <FaTextWidth className="h-3.5 w-3.5" />
+                  ) : (
+                    <FaTextSlash className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              </Tip>
             </div>
           )}
 

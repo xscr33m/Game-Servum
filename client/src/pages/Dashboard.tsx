@@ -28,6 +28,7 @@ import { AgentControlPanel } from "@/components/agent/AgentControlPanel";
 import { AppHeader } from "@/components/AppHeader";
 import { publicAsset } from "@/lib/assets";
 import { toastSuccess, toastError, showDependencyError } from "@/lib/toast";
+import { Tip } from "@/components/ui/tooltip";
 import type { GameServer, SteamCMDStatus } from "@/types";
 import { APP_VERSION } from "@game-servum/shared";
 
@@ -378,58 +379,63 @@ export function Dashboard() {
           <>
             {/* SteamCMD status indicator */}
             {steamcmd?.installed && (
-              <Badge
-                variant={steamcmd.loggedIn ? "success" : "secondary"}
-                className={`gap-1.5 ${isConnected ? "cursor-pointer" : "opacity-50 cursor-not-allowed"}`}
-                onClick={() => isConnected && setShowSteamAccount(true)}
-                title="Steam Account"
-              >
-                {steamcmd.loggedIn ? (
-                  <>
-                    <FaUser className="h-3 w-3" />
-                    {steamcmd.username}
-                  </>
-                ) : (
-                  <>
-                    <FaUserSlash className="h-3 w-3" />
-                    Anonymous
-                  </>
-                )}
-              </Badge>
+              <Tip content="Steam Account">
+                <Badge
+                  variant={steamcmd.loggedIn ? "success" : "secondary"}
+                  className={`gap-1.5 ${isConnected ? "cursor-pointer" : "opacity-50 cursor-not-allowed"}`}
+                  onClick={() => isConnected && setShowSteamAccount(true)}
+                >
+                  {steamcmd.loggedIn ? (
+                    <>
+                      <FaUser className="h-3 w-3" />
+                      {steamcmd.username}
+                    </>
+                  ) : (
+                    <>
+                      <FaUserSlash className="h-3 w-3" />
+                      Anonymous
+                    </>
+                  )}
+                </Badge>
+              </Tip>
             )}
-            <Button
-              onClick={loadData}
-              variant="outline"
-              size="icon"
-              title="Refresh Data"
-              disabled={!isConnected || noAgents}
-            >
-              <FaArrowsRotate className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => navigate("/help")}
-              title="Help & Info"
-            >
-              <FaCircleQuestion className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => navigate("/logs")}
-              title="Application Logs"
-            >
-              <FaFileLines className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => navigate("/settings")}
-              title="Settings"
-            >
-              <FaGear className="h-4 w-4" />
-            </Button>
+            <Tip content="Refresh Data">
+              <Button
+                onClick={loadData}
+                variant="outline"
+                size="icon"
+                disabled={!isConnected || noAgents}
+              >
+                <FaArrowsRotate className="h-4 w-4" />
+              </Button>
+            </Tip>
+            <Tip content="Help & Info">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => navigate("/help")}
+              >
+                <FaCircleQuestion className="h-4 w-4" />
+              </Button>
+            </Tip>
+            <Tip content="Application Logs">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => navigate("/logs")}
+              >
+                <FaFileLines className="h-4 w-4" />
+              </Button>
+            </Tip>
+            <Tip content="Settings">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => navigate("/settings")}
+              >
+                <FaGear className="h-4 w-4" />
+              </Button>
+            </Tip>
           </>
         }
       />

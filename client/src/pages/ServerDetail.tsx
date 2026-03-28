@@ -32,6 +32,7 @@ import { AgentStatusBanner } from "@/components/agent/AgentStatusBanner";
 import { DeleteServerDialog } from "@/components/server-details/dialogs/DeleteServerDialog";
 import { CancelInstallDialog } from "@/components/server-details/dialogs/CancelInstallDialog";
 import { cn } from "@/lib/utils";
+import { Tip } from "@/components/ui/tooltip";
 import {
   toastSuccess,
   toastError,
@@ -448,27 +449,29 @@ export function ServerDetail() {
               <FaArrowsRotate className="h-4 w-4" />
             </Button>
             {server.status === "installing" || server.status === "queued" ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                onClick={() => setShowCancelDialog(true)}
-                disabled={!isConnected}
-                title="Cancel Installation"
-              >
-                <FaXmark className="h-4 w-4" />
-              </Button>
+              <Tip content="Cancel Installation">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  onClick={() => setShowCancelDialog(true)}
+                  disabled={!isConnected}
+                >
+                  <FaXmark className="h-4 w-4" />
+                </Button>
+              </Tip>
             ) : (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                onClick={() => setShowDeleteDialog(true)}
-                disabled={isRunning || isBusy || !isConnected}
-                title="Delete Server"
-              >
-                <FaTrashCan className="h-4 w-4" />
-              </Button>
+              <Tip content="Delete Server">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  onClick={() => setShowDeleteDialog(true)}
+                  disabled={isRunning || isBusy || !isConnected}
+                >
+                  <FaTrashCan className="h-4 w-4" />
+                </Button>
+              </Tip>
             )}
           </>
         }

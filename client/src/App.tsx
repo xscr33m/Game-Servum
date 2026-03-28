@@ -5,6 +5,7 @@ import { Settings } from "./pages/Settings";
 import { Logs } from "./pages/Logs";
 import { Help } from "./pages/Help";
 import { Toaster } from "./components/ui/sonner";
+import { TooltipProvider } from "./components/ui/tooltip";
 import { UpdateNotification } from "./components/UpdateNotification";
 import { BackendProvider } from "./contexts/BackendContext";
 
@@ -17,17 +18,19 @@ const Router = isElectron ? HashRouter : BrowserRouter;
 function App() {
   return (
     <BackendProvider>
-      <Router>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/logs" element={<Logs />} />
-          <Route path="/help" element={<Help />} />
-          <Route path="/server/:id" element={<ServerDetail />} />
-          <Route path="/server/:id/:tab" element={<ServerDetail />} />
-        </Routes>
-        <Toaster />
-      </Router>
+      <TooltipProvider delayDuration={300}>
+        <Router>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/logs" element={<Logs />} />
+            <Route path="/help" element={<Help />} />
+            <Route path="/server/:id" element={<ServerDetail />} />
+            <Route path="/server/:id/:tab" element={<ServerDetail />} />
+          </Routes>
+          <Toaster />
+        </Router>
+      </TooltipProvider>
       {isElectron && <UpdateNotification />}
     </BackendProvider>
   );

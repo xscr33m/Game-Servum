@@ -38,6 +38,7 @@ import {
   getWorkshopUrl,
 } from "@/components/server-details/games/registry";
 import type { GameServer, ServerMod } from "@/types";
+import { Tip } from "@/components/ui/tooltip";
 
 interface ModsTabProps {
   server: GameServer;
@@ -412,29 +413,31 @@ export function ModsTab({ server }: ModsTabProps) {
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       {/* Load order & move buttons */}
                       <div className="flex flex-col items-center gap-0.5 shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-5 w-5"
-                          onClick={() => handleMoveMod(mod.id, "up")}
-                          disabled={index === 0}
-                          title="Move up"
-                        >
-                          <FaChevronUp className="h-3.5 w-3.5" />
-                        </Button>
+                        <Tip content="Move up">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5"
+                            onClick={() => handleMoveMod(mod.id, "up")}
+                            disabled={index === 0}
+                          >
+                            <FaChevronUp className="h-3.5 w-3.5" />
+                          </Button>
+                        </Tip>
                         <span className="text-xs font-mono text-muted-foreground w-5 text-center">
                           {index + 1}
                         </span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-5 w-5"
-                          onClick={() => handleMoveMod(mod.id, "down")}
-                          disabled={index === mods.length - 1}
-                          title="Move down"
-                        >
-                          <FaChevronDown className="h-3.5 w-3.5" />
-                        </Button>
+                        <Tip content="Move down">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5"
+                            onClick={() => handleMoveMod(mod.id, "down")}
+                            disabled={index === mods.length - 1}
+                          >
+                            <FaChevronDown className="h-3.5 w-3.5" />
+                          </Button>
+                        </Tip>
                       </div>
 
                       {/* Mod info */}
@@ -479,43 +482,48 @@ export function ModsTab({ server }: ModsTabProps) {
 
                     {/* Action buttons */}
                     <div className="flex items-center gap-1 sm:shrink-0 justify-end sm:justify-start">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleToggleMod(mod)}
-                        disabled={
-                          isRunning ||
-                          isProcessing ||
-                          (mod.status !== "installed" &&
-                            mod.status !== "update_available")
-                        }
-                        title={mod.enabled ? "Disable mod" : "Enable mod"}
+                      <Tip
+                        content={mod.enabled ? "Disable mod" : "Enable mod"}
                       >
-                        {mod.enabled ? "Disable" : "Enable"}
-                      </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleToggleMod(mod)}
+                          disabled={
+                            isRunning ||
+                            isProcessing ||
+                            (mod.status !== "installed" &&
+                              mod.status !== "update_available")
+                          }
+                        >
+                          {mod.enabled ? "Disable" : "Enable"}
+                        </Button>
+                      </Tip>
 
                       {mod.status === "error" && (
+                        <Tip content="Retry installation">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleReinstallMod(mod)}
+                            disabled={isRunning || isProcessing}
+                          >
+                            <FaArrowsRotate className="h-4 w-4" />
+                          </Button>
+                        </Tip>
+                      )}
+
+                      <Tip content="Remove mod">
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => handleReinstallMod(mod)}
+                          onClick={() => setModToRemove(mod)}
                           disabled={isRunning || isProcessing}
-                          title="Retry installation"
+                          className="text-destructive hover:text-destructive"
                         >
-                          <FaArrowsRotate className="h-4 w-4" />
+                          <FaTrashCan className="h-4 w-4" />
                         </Button>
-                      )}
-
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setModToRemove(mod)}
-                        disabled={isRunning || isProcessing}
-                        title="Remove mod"
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <FaTrashCan className="h-4 w-4" />
-                      </Button>
+                      </Tip>
                     </div>
                   </div>
                 );

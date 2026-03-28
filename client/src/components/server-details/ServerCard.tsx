@@ -15,6 +15,7 @@ import {
   getGameLogo,
 } from "@/components/server-details/games/registry";
 import { useUptime } from "@/hooks/useUptime";
+import { Tip } from "@/components/ui/tooltip";
 import type { GameServer } from "@/types";
 
 interface ServerCardProps {
@@ -220,16 +221,17 @@ export function ServerCard({
         </Button>
         {(server.status === "installing" || server.status === "queued") &&
         onCancelInstall ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-            onClick={() => onCancelInstall(server.id)}
-            disabled={disabled}
-            title="Cancel Installation"
-          >
-            <FaXmark className="h-4 w-4" />
-          </Button>
+          <Tip content="Cancel Installation">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+              onClick={() => onCancelInstall(server.id)}
+              disabled={disabled}
+            >
+              <FaXmark className="h-4 w-4" />
+            </Button>
+          </Tip>
         ) : (
           <Button
             variant="ghost"

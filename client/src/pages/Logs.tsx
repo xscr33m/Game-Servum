@@ -49,6 +49,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { AgentStatusBanner } from "@/components/agent/AgentStatusBanner";
 import { toastSuccess, toastError } from "@/lib/toast";
 import { logger } from "@/lib/logger";
+import { Tip } from "@/components/ui/tooltip";
 import { LogLevel } from "@game-servum/shared";
 import type { LoggerSettings } from "@game-servum/shared";
 
@@ -1034,33 +1035,39 @@ export function Logs() {
 
               {/* Actions */}
               <div className="flex items-center gap-2 shrink-0">
-                <Button
-                  variant={colorize ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setColorize(!colorize)}
-                  title={
+                <Tip
+                  content={
                     colorize
                       ? "Disable log level colors"
                       : "Enable log level colors"
                   }
-                  className="h-9 gap-2"
                 >
-                  <FaPalette className="h-4 w-4" />
-                  <span className="hidden sm:inline">Colors</span>
-                </Button>
-                <Button
-                  variant={wordWrap ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setWordWrap(!wordWrap)}
-                  title={wordWrap ? "Disable word wrap" : "Enable word wrap"}
-                  className="h-9"
+                  <Button
+                    variant={colorize ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setColorize(!colorize)}
+                    className="h-9 gap-2"
+                  >
+                    <FaPalette className="h-4 w-4" />
+                    <span className="hidden sm:inline">Colors</span>
+                  </Button>
+                </Tip>
+                <Tip
+                  content={wordWrap ? "Disable word wrap" : "Enable word wrap"}
                 >
-                  {wordWrap ? (
-                    <FaTextWidth className="h-4 w-4" />
-                  ) : (
-                    <FaTextSlash className="h-4 w-4" />
-                  )}
-                </Button>
+                  <Button
+                    variant={wordWrap ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setWordWrap(!wordWrap)}
+                    className="h-9"
+                  >
+                    {wordWrap ? (
+                      <FaTextWidth className="h-4 w-4" />
+                    ) : (
+                      <FaTextSlash className="h-4 w-4" />
+                    )}
+                  </Button>
+                </Tip>
                 <Button
                   variant="outline"
                   size="sm"

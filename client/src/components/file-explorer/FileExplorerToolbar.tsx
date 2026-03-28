@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Tip } from "@/components/ui/tooltip";
 
 interface FileExplorerToolbarProps {
   /** Currently selected path in the tree (file or directory), or null */
@@ -143,65 +144,71 @@ export function FileExplorerToolbar({
       <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/30">
         <BreadcrumbPath path={selectedPath} />
         <div className="flex items-center gap-1 shrink-0">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => setNewFileOpen(true)}
-            title="New File"
-          >
-            <FaFileCirclePlus className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => setNewFolderOpen(true)}
-            title="New Folder"
-          >
-            <FaFolderPlus className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={openRenameDialog}
-            disabled={!selectedPath}
-            title="Rename"
-          >
-            <FaPen className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => setDeleteOpen(true)}
-            disabled={!selectedPath}
-            title="Delete"
-          >
-            <FaTrash className="h-3.5 w-3.5" />
-          </Button>
+          <Tip content="New File">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => setNewFileOpen(true)}
+            >
+              <FaFileCirclePlus className="h-3.5 w-3.5" />
+            </Button>
+          </Tip>
+          <Tip content="New Folder">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => setNewFolderOpen(true)}
+            >
+              <FaFolderPlus className="h-3.5 w-3.5" />
+            </Button>
+          </Tip>
+          <Tip content="Rename">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={openRenameDialog}
+              disabled={!selectedPath}
+            >
+              <FaPen className="h-3.5 w-3.5" />
+            </Button>
+          </Tip>
+          <Tip content="Delete">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => setDeleteOpen(true)}
+              disabled={!selectedPath}
+            >
+              <FaTrash className="h-3.5 w-3.5" />
+            </Button>
+          </Tip>
           <div className="w-px h-5 bg-border mx-0.5" />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => selectedPath && onDownload(selectedPath)}
-            disabled={!selectedPath}
-            title="Download"
-          >
-            <FaDownload className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            title="Upload Files"
-          >
-            <FaUpload className="h-3.5 w-3.5" />
-          </Button>
+          <Tip content="Download">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => selectedPath && onDownload(selectedPath)}
+              disabled={!selectedPath}
+            >
+              <FaDownload className="h-3.5 w-3.5" />
+            </Button>
+          </Tip>
+          <Tip content="Upload Files">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+            >
+              <FaUpload className="h-3.5 w-3.5" />
+            </Button>
+          </Tip>
           <input
             ref={fileInputRef}
             type="file"
@@ -215,15 +222,16 @@ export function FileExplorerToolbar({
             }}
           />
           <div className="w-px h-5 bg-border mx-0.5" />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={onRefresh}
-            title="Refresh"
-          >
-            <FaArrowsRotate className="h-3.5 w-3.5" />
-          </Button>
+          <Tip content="Refresh">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={onRefresh}
+            >
+              <FaArrowsRotate className="h-3.5 w-3.5" />
+            </Button>
+          </Tip>
         </div>
       </div>
 

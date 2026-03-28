@@ -9,6 +9,7 @@ import {
   FaServer,
 } from "react-icons/fa6";
 import { useBackend } from "@/hooks/useBackend";
+import { Tip } from "@/components/ui/tooltip";
 import type { SystemMetrics } from "@/types";
 
 /** Polling interval in ms */
@@ -217,13 +218,12 @@ export function SystemMonitor() {
               <FaMicrochip className="absolute inset-0 m-auto h-3.5 w-3.5 text-ring/40" />
             </div>
           </div>
-          <p
-            className="text-[10px] sm:text-[11px] text-muted-foreground truncate mt-auto min-w-0 hidden sm:block"
-            title={metrics.cpu.model}
-          >
-            {metrics.cpu.cores} Cores &middot;{" "}
-            {metrics.cpu.model.split("@")[0].trim().replace(/\s+/g, " ")}
-          </p>
+          <Tip content={metrics.cpu.model}>
+            <p className="text-[10px] sm:text-[11px] text-muted-foreground truncate mt-auto min-w-0 hidden sm:block">
+              {metrics.cpu.cores} Cores &middot;{" "}
+              {metrics.cpu.model.split("@")[0].trim().replace(/\s+/g, " ")}
+            </p>
+          </Tip>
         </div>
 
         {/* Memory */}

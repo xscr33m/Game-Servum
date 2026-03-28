@@ -10,6 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import type { BrowseTreeEntry } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { Tip } from "@/components/ui/tooltip";
 
 interface FileTreeProps {
   tree: BrowseTreeEntry[];
@@ -111,51 +112,55 @@ function TreeNode({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={handleClick}
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
-        className={cn(
-          "flex items-center gap-1.5 w-full text-left py-1 px-2 text-sm rounded-sm hover:bg-accent/50 transition-colors",
-          isSelected && "bg-accent text-accent-foreground",
-          !isEditable && !isDirectory && "opacity-50 cursor-not-allowed",
-          isDragTarget && "bg-primary/20 ring-1 ring-primary/50",
-        )}
-        style={{ paddingLeft: `${depth * 16 + 8}px` }}
-        disabled={!isDirectory && !isEditable}
-        title={
+      <Tip
+        content={
           !isEditable && !isDirectory
             ? `${entry.name} — Binary file, cannot be edited`
             : entry.name
         }
+        side="right"
       >
-        {isDirectory ? (
-          <>
-            {isExpanded ? (
-              <FaChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
-            ) : (
-              <FaChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
-            )}
-            {isExpanded ? (
-              <FaFolderOpen className="h-4 w-4 shrink-0 text-ring/70" />
-            ) : (
-              <FaFolder className="h-4 w-4 shrink-0 text-ring/70" />
-            )}
-          </>
-        ) : (
-          <>
-            <span className="w-3 shrink-0" />
-            <FaFile className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          </>
-        )}
-        <span className="truncate flex-1">{entry.name}</span>
-        {entry.type === "file" && entry.size != null && (
-          <span className="text-xs text-muted-foreground shrink-0 ml-1">
-            {formatFileSize(entry.size)}
-          </span>
-        )}
-      </button>
+        <button
+          type="button"
+          onClick={handleClick}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          className={cn(
+            "flex items-center gap-1.5 w-full text-left py-1 px-2 text-sm rounded-sm hover:bg-accent/50 transition-colors",
+            isSelected && "bg-accent text-accent-foreground",
+            !isEditable && !isDirectory && "opacity-50 cursor-not-allowed",
+            isDragTarget && "bg-primary/20 ring-1 ring-primary/50",
+          )}
+          style={{ paddingLeft: `${depth * 16 + 8}px` }}
+          disabled={!isDirectory && !isEditable}
+        >
+          {isDirectory ? (
+            <>
+              {isExpanded ? (
+                <FaChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+              ) : (
+                <FaChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+              )}
+              {isExpanded ? (
+                <FaFolderOpen className="h-4 w-4 shrink-0 text-ring/70" />
+              ) : (
+                <FaFolder className="h-4 w-4 shrink-0 text-ring/70" />
+              )}
+            </>
+          ) : (
+            <>
+              <span className="w-3 shrink-0" />
+              <FaFile className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            </>
+          )}
+          <span className="truncate flex-1">{entry.name}</span>
+          {entry.type === "file" && entry.size != null && (
+            <span className="text-xs text-muted-foreground shrink-0 ml-1">
+              {formatFileSize(entry.size)}
+            </span>
+          )}
+        </button>
+      </Tip>
       {isDirectory && isExpanded && entry.children && (
         <div>
           {entry.children.map((child) => (

@@ -24,6 +24,7 @@ import { useGameCapabilities } from "@/hooks/useGameCapabilities";
 import { toastSuccess } from "@/lib/toast";
 import { UpdateCheckDialog } from "@/components/server-details/UpdateCheckDialog";
 import { logger } from "@/lib/logger";
+import { Tip } from "@/components/ui/tooltip";
 import type {
   GameServer,
   ServerSchedule,
@@ -79,14 +80,15 @@ function VariableTag({
   onClick: (varName: string) => void;
 }) {
   return (
-    <button
-      type="button"
-      className="text-xs font-mono bg-muted hover:bg-muted/70 text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded cursor-pointer transition-colors"
-      title={`${description} — click to insert`}
-      onClick={() => onClick(name)}
-    >
-      {`{${name}}`}
-    </button>
+    <Tip content={`${description} — click to insert`}>
+      <button
+        type="button"
+        className="text-xs font-mono bg-muted hover:bg-muted/70 text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+        onClick={() => onClick(name)}
+      >
+        {`{${name}}`}
+      </button>
+    </Tip>
   );
 }
 
@@ -1348,16 +1350,14 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {builtinVars.map((v) => (
-                    <span
-                      key={v.name}
-                      className="inline-flex items-center gap-1 text-xs bg-muted px-2 py-1 rounded font-mono"
-                      title={v.description}
-                    >
-                      {`{${v.name}}`}
-                      <span className="text-muted-foreground font-sans">
-                        — {v.description}
+                    <Tip key={v.name} content={v.description}>
+                      <span className="inline-flex items-center gap-1 text-xs bg-muted px-2 py-1 rounded font-mono">
+                        {`{${v.name}}`}
+                        <span className="text-muted-foreground font-sans">
+                          — {v.description}
+                        </span>
                       </span>
-                    </span>
+                    </Tip>
                   ))}
                 </div>
               </div>

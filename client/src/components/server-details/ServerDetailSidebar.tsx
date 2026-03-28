@@ -18,12 +18,7 @@ import {
   getGameName,
 } from "@/components/server-details/games/registry";
 import { publicAsset } from "@/lib/assets";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tip } from "@/components/ui/tooltip";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 
@@ -161,111 +156,106 @@ export function ServerDetailSidebar({
   return (
     <>
       {/* Desktop sidebar */}
-      <TooltipProvider delayDuration={150}>
-        <nav
-          className={`hidden md:flex shrink-0 flex-col border-r bg-muted/20 transition-[width] duration-200 ease-in-out ${
-            collapsed ? "w-14" : "w-52"
-          }`}
-        >
-          {/* Game header */}
-          {gameName && (
-            <div
-              className={`flex items-center border-b overflow-hidden ${
-                collapsed ? "justify-center px-2 py-3" : "gap-2.5 px-4 py-3"
-              }`}
-            >
-              {gameLogo ? (
-                <>
-                  <img
-                    src={publicAsset(gameLogo)}
-                    alt={gameName}
-                    className="h-6 w-auto object-contain shrink-0"
-                  />
-                  {!collapsed && (
-                    <span className="text-sm font-medium text-muted-foreground truncate">
-                      {gameName}
-                    </span>
-                  )}
-                </>
-              ) : (
-                !collapsed && (
-                  <span className="text-sm font-semibold text-muted-foreground truncate">
+      <nav
+        className={`hidden md:flex shrink-0 flex-col border-r bg-muted/20 transition-[width] duration-200 ease-in-out ${
+          collapsed ? "w-14" : "w-52"
+        }`}
+      >
+        {/* Game header */}
+        {gameName && (
+          <div
+            className={`flex items-center border-b overflow-hidden ${
+              collapsed ? "justify-center px-2 py-3" : "gap-2.5 px-4 py-3"
+            }`}
+          >
+            {gameLogo ? (
+              <>
+                <img
+                  src={publicAsset(gameLogo)}
+                  alt={gameName}
+                  className="h-6 w-auto object-contain shrink-0"
+                />
+                {!collapsed && (
+                  <span className="text-sm font-medium text-muted-foreground truncate">
                     {gameName}
                   </span>
-                )
-              )}
-            </div>
-          )}
-
-          {/* Navigation */}
-          <div className="flex-1 overflow-y-auto">
-            {collapsed ? (
-              /* Collapsed: icon-only with tooltips */
-              <div className="px-1.5 py-3 space-y-3">
-                {groups.map((group, groupIndex) => (
-                  <div key={group.label}>
-                    {groupIndex > 0 && (
-                      <div className="mx-2.5 mb-3 border-t border-border/40" />
-                    )}
-                    <div className="space-y-0.5">
-                      {group.items.map((item) => (
-                        <Tooltip key={item.id}>
-                          <TooltipTrigger asChild>
-                            <button
-                              onClick={() => onChange(item.id)}
-                              aria-label={item.label}
-                              className={`flex w-full items-center justify-center rounded-md p-2.5 transition-colors ${
-                                active === item.id
-                                  ? "bg-accent text-accent-foreground"
-                                  : "text-muted-foreground hover:text-foreground hover:bg-accent/50 hover:cursor-pointer"
-                              }`}
-                            >
-                              <item.icon className="h-4 w-4" />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent side="right">
-                            {item.label}
-                          </TooltipContent>
-                        </Tooltip>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                )}
+              </>
             ) : (
-              /* Expanded: full labels */
-              renderNavList()
+              !collapsed && (
+                <span className="text-sm font-semibold text-muted-foreground truncate">
+                  {gameName}
+                </span>
+              )
             )}
           </div>
+        )}
 
-          {/* Collapse toggle */}
-          <div className="border-t p-2">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={toggleCollapsed}
-                  aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                  className={`flex w-full items-center rounded-md p-2 text-muted-foreground hover:text-foreground hover:bg-accent/50 hover:cursor-pointer transition-colors ${
-                    collapsed ? "justify-center" : "gap-2.5 px-3"
-                  }`}
-                >
-                  {collapsed ? (
-                    <FaChevronRight className="h-3 w-3" />
-                  ) : (
-                    <>
-                      <FaChevronLeft className="h-3 w-3 shrink-0" />
-                      <span className="text-xs">Collapse</span>
-                    </>
+        {/* Navigation */}
+        <div className="flex-1 overflow-y-auto">
+          {collapsed ? (
+            /* Collapsed: icon-only with tooltips */
+            <div className="px-1.5 py-3 space-y-3">
+              {groups.map((group, groupIndex) => (
+                <div key={group.label}>
+                  {groupIndex > 0 && (
+                    <div className="mx-2.5 mb-3 border-t border-border/40" />
                   )}
-                </button>
-              </TooltipTrigger>
-              {collapsed && (
-                <TooltipContent side="right">Expand sidebar</TooltipContent>
+                  <div className="space-y-0.5">
+                    {group.items.map((item) => (
+                      <Tip
+                        key={item.id}
+                        content={item.label}
+                        side="right"
+                      >
+                        <button
+                          onClick={() => onChange(item.id)}
+                          aria-label={item.label}
+                          className={`flex w-full items-center justify-center rounded-md p-2.5 transition-colors ${
+                            active === item.id
+                              ? "bg-accent text-accent-foreground"
+                              : "text-muted-foreground hover:text-foreground hover:bg-accent/50 hover:cursor-pointer"
+                          }`}
+                        >
+                          <item.icon className="h-4 w-4" />
+                        </button>
+                      </Tip>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            /* Expanded: full labels */
+            renderNavList()
+          )}
+        </div>
+
+        {/* Collapse toggle */}
+        <div className="border-t p-2">
+          <Tip
+            content={collapsed ? "Expand sidebar" : ""}
+            side="right"
+          >
+            <button
+              onClick={toggleCollapsed}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              className={`flex w-full items-center rounded-md p-2 text-muted-foreground hover:text-foreground hover:bg-accent/50 hover:cursor-pointer transition-colors ${
+                collapsed ? "justify-center" : "gap-2.5 px-3"
+              }`}
+            >
+              {collapsed ? (
+                <FaChevronRight className="h-3 w-3" />
+              ) : (
+                <>
+                  <FaChevronLeft className="h-3 w-3 shrink-0" />
+                  <span className="text-xs">Collapse</span>
+                </>
               )}
-            </Tooltip>
-          </div>
-        </nav>
-      </TooltipProvider>
+            </button>
+          </Tip>
+        </div>
+      </nav>
 
       {/* Mobile navigation bar + Sheet drawer */}
       <div className="md:hidden border-b">

@@ -6,6 +6,7 @@ import {
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tip } from "@/components/ui/tooltip";
 import { CodeMirrorEditor } from "@/components/ui/code-editor";
 
 interface FileEditorProps {
@@ -65,14 +66,15 @@ export function FileEditor({
           <span className="text-sm font-medium truncate">{fileName}</span>
           {hasChanges && <Badge variant="warning">Unsaved</Badge>}
           {isLargeFile && (
-            <Badge
-              variant="outline"
-              className="gap-1 text-yellow-500 border-yellow-500/50 cursor-help"
-              title="This file is large. Editor performance may be affected."
-            >
-              <FaTriangleExclamation className="h-3 w-3" />
-              Large file
-            </Badge>
+            <Tip content="This file is large. Editor performance may be affected.">
+              <Badge
+                variant="outline"
+                className="gap-1 text-yellow-500 border-yellow-500/50 cursor-help"
+              >
+                <FaTriangleExclamation className="h-3 w-3" />
+                Large file
+              </Badge>
+            </Tip>
           )}
           {fileSize != null && (
             <span className="text-xs text-muted-foreground">

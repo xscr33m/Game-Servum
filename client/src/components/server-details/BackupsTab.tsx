@@ -35,6 +35,7 @@ import {
 import { useBackend } from "@/hooks/useBackend";
 import { toastSuccess, toastError } from "@/lib/toast";
 import { logger } from "@/lib/logger";
+import { Tip } from "@/components/ui/tooltip";
 import type {
   GameServer,
   BackupMetadata,
@@ -701,19 +702,20 @@ export function BackupsTab({ server }: BackupsTabProps) {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5">
                       {backup.name ? (
-                        <span
-                          className="text-sm font-medium truncate"
-                          title={backup.name}
-                        >
-                          {backup.name}
-                        </span>
+                        <Tip content={backup.name} side="right">
+                          <span className="text-sm font-medium truncate">
+                            {backup.name}
+                          </span>
+                        </Tip>
                       ) : (
-                        <span
-                          className="text-sm font-medium truncate"
-                          title={formatDate(backup.timestamp)}
+                        <Tip
+                          content={formatDate(backup.timestamp)}
+                          side="right"
                         >
-                          {formatDate(backup.timestamp)}
-                        </span>
+                          <span className="text-sm font-medium truncate">
+                            {formatDate(backup.timestamp)}
+                          </span>
+                        </Tip>
                       )}
                       <Badge
                         variant="outline"
@@ -769,21 +771,8 @@ export function BackupsTab({ server }: BackupsTabProps) {
                 {/* Row 2 (mobile) / right side (desktop): Actions */}
                 {backup.status === "success" && (
                   <div className="flex items-center gap-1 sm:shrink-0 justify-end sm:justify-start pl-7 sm:pl-0">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => {
-                        setRestoreTarget(backup);
-                        setPreRestoreBackup(true);
-                      }}
-                      disabled={
-                        !isConnected ||
-                        server.status === "running" ||
-                        !!activeProgress ||
-                        backup.fileExists === false
-                      }
-                      title={
+                    <Tip
+                      content={
                         backup.fileExists === false
                           ? "Backup file missing from disk"
                           : server.status === "running"
@@ -791,37 +780,57 @@ export function BackupsTab({ server }: BackupsTabProps) {
                             : "Restore this backup"
                       }
                     >
-                      <FaRotateLeft className="h-3 w-3 mr-1" />
-                      Restore
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => handleDownloadBackup(backup)}
-                      disabled={!isConnected || backup.fileExists === false}
-                      title={
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => {
+                          setRestoreTarget(backup);
+                          setPreRestoreBackup(true);
+                        }}
+                        disabled={
+                          !isConnected ||
+                          server.status === "running" ||
+                          !!activeProgress ||
+                          backup.fileExists === false
+                        }
+                      >
+                        <FaRotateLeft className="h-3 w-3 mr-1" />
+                        Restore
+                      </Button>
+                    </Tip>
+                    <Tip
+                      content={
                         backup.fileExists === false
                           ? "Backup file missing from disk"
                           : "Download backup"
                       }
                     >
-                      <FaDownload className="h-3 w-3" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                      onClick={() => {
-                        setEditTarget(backup);
-                        setEditName(backup.name ?? "");
-                        setEditTag(backup.tag ?? "");
-                      }}
-                      disabled={!isConnected}
-                      title="Edit name & tag"
-                    >
-                      <FaPen className="h-3 w-3" />
-                    </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => handleDownloadBackup(backup)}
+                        disabled={!isConnected || backup.fileExists === false}
+                      >
+                        <FaDownload className="h-3 w-3" />
+                      </Button>
+                    </Tip>
+                    <Tip content="Edit name & tag">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        onClick={() => {
+                          setEditTarget(backup);
+                          setEditName(backup.name ?? "");
+                          setEditTag(backup.tag ?? "");
+                        }}
+                        disabled={!isConnected}
+                      >
+                        <FaPen className="h-3 w-3" />
+                      </Button>
+                    </Tip>
                     <Button
                       variant="ghost"
                       size="icon"
