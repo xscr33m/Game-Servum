@@ -46,16 +46,25 @@ export function FilesTab({ server }: FilesTabProps) {
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-        Loading file browser...
+      <div className="flex-1 flex items-center justify-center text-muted-foreground">
+        <div className="text-center">
+          <FaFolderTree className="h-8 w-8 mx-auto mb-2 opacity-50 animate-pulse" />
+          <p className="text-sm">Loading file browser...</p>
+        </div>
       </div>
     );
   }
 
   if (roots.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-        No browsable directories available for this server.
+      <div className="flex-1 flex items-center justify-center text-muted-foreground">
+        <div className="text-center">
+          <FaFolderTree className="h-8 w-8 mx-auto mb-2 opacity-50" />
+          <p className="text-sm">No browsable directories available</p>
+          <p className="text-xs mt-1">
+            Directories will appear after the server has been started once.
+          </p>
+        </div>
       </div>
     );
   }

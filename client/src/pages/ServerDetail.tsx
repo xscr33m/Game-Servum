@@ -577,7 +577,10 @@ export function ServerDetail() {
                 activeSection !== "players" &&
                 activeSection !== "logs" && (
                   <div
-                    className={cn("px-4 pt-4 pb-6 min-h-full", contentClass)}
+                    className={cn(
+                      "px-4 pt-4 pb-6 min-h-full flex flex-col",
+                      contentClass,
+                    )}
                   >
                     {activeSection === "overview" && (
                       <OverviewTab server={server} onRefresh={loadServer} />

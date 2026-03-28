@@ -242,12 +242,15 @@ export function ModsTab({ server }: ModsTabProps) {
   // No Workshop support — show info message
   if (capabilities && !capabilities.workshopMods) {
     return (
-      <div className="space-y-0">
-        <div className="py-6">
-          <p className="text-sm text-muted-foreground">
-            Steam Workshop is not available for {getGameName(server.gameId)}.
-            Mods must be downloaded from external sources (e.g., Nexus Mods) and
-            installed manually into the server directory.
+      <div className="flex-1 flex items-center justify-center text-muted-foreground">
+        <div className="text-center">
+          <FaCubes className="h-8 w-8 mx-auto mb-2 opacity-50" />
+          <p className="text-sm">
+            Steam Workshop is not available for {getGameName(server.gameId)}
+          </p>
+          <p className="text-xs mt-1">
+            Mods must be downloaded from external sources and installed manually
+            into the server directory.
           </p>
         </div>
       </div>
@@ -482,9 +485,7 @@ export function ModsTab({ server }: ModsTabProps) {
 
                     {/* Action buttons */}
                     <div className="flex items-center gap-1 sm:shrink-0 justify-end sm:justify-start">
-                      <Tip
-                        content={mod.enabled ? "Disable mod" : "Enable mod"}
-                      >
+                      <Tip content={mod.enabled ? "Disable mod" : "Enable mod"}>
                         <Button
                           variant="ghost"
                           size="sm"
