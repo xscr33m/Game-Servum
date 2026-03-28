@@ -143,8 +143,10 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
   const [firewallOpen, setFirewallOpen] = useState(false);
 
   // ── Section expand/collapse ──
+  const [autoRestartOpen, setAutoRestartOpen] = useState(false);
   const [urOpen, setUrOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [variablesOpen, setVariablesOpen] = useState(false);
 
   // ── Schedule state ──
   const [schedule, setSchedule] = useState<ServerSchedule | null>(null);
@@ -367,7 +369,6 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
       setUrWarnings(settings.warningMinutes.join(","));
       setUrMessage(settings.warningMessage);
       setUrCheckGameUpdates(settings.checkGameUpdates);
-      if (settings.enabled) setUrOpen(true);
     } catch {
       // No settings yet
     } finally {
@@ -466,7 +467,6 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
         setScheduleWarnings(result.schedule.warningMinutes.join(","));
         setScheduleMessage(result.schedule.warningMessage);
         setScheduleEnabled(result.schedule.enabled);
-        if (result.schedule.enabled) setScheduleOpen(true);
       }
     } catch {
       // No schedule yet
@@ -749,26 +749,45 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
   return (
     <>
       <div className="space-y-0">
-        {/* ─── Auto-Restart on Crash ─── */}
+        {/* ─── Auto-Restart on Crash (collapsible) ─── */}
         <div className="pb-6 border-b">
-          <div className="flex items-center gap-2 mb-3">
-            <FaArrowsRotate className="h-4 w-4 text-ring" />
-            <label className="text-sm font-medium text-muted-foreground">
-              Auto-Restart on Crash
-            </label>
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">Enable Auto-Restart</p>
-              <p className="text-xs text-muted-foreground">
-                Restarts with a 10s delay. Stops after 3 crashes in 10 min.
-              </p>
+          <button
+            type="button"
+            className="flex items-center justify-between w-full text-left cursor-pointer group"
+            onClick={() => setAutoRestartOpen((o) => !o)}
+          >
+            <div className="flex items-center gap-2">
+              <FaArrowsRotate className="h-4 w-4 text-ring" />
+              <span className="text-sm font-medium text-muted-foreground">
+                Auto-Restart on Crash
+              </span>
+              <Badge variant={server.autoRestart ? "success" : "secondary"}>
+                {server.autoRestart ? "Active" : "Disabled"}
+              </Badge>
             </div>
-            <Switch
-              checked={server.autoRestart}
-              onCheckedChange={handleToggleAutoRestart}
-            />
-          </div>
+            {autoRestartOpen ? (
+              <FaChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+            ) : (
+              <FaChevronRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+            )}
+          </button>
+
+          {autoRestartOpen && (
+            <div className="mt-4 space-y-4 rounded-lg border p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Enable Auto-Restart</p>
+                  <p className="text-xs text-muted-foreground">
+                    Restarts with a 10s delay. Stops after 3 crashes in 10 min.
+                  </p>
+                </div>
+                <Switch
+                  checked={server.autoRestart}
+                  onCheckedChange={handleToggleAutoRestart}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ─── Auto-Restart on Update (collapsible) ─── */}
@@ -1273,162 +1292,189 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
           </div>
         )}
 
-        {/* ─── Template Variables ─── */}
+        {/* ─── Template Variables (collapsible) ─── */}
         <div className="py-6 border-b">
-          <div className="flex items-center justify-between mb-3">
+          <button
+            type="button"
+            className="flex items-center justify-between w-full text-left cursor-pointer group"
+            onClick={() => setVariablesOpen((o) => !o)}
+          >
             <div className="flex items-center gap-2">
               <FaCode className="h-4 w-4 text-ring" />
-              <label className="text-sm font-medium text-muted-foreground">
+              <span className="text-sm font-medium text-muted-foreground">
                 Template Variables
-              </label>
+              </span>
+              {variables.length > 0 && (
+                <Badge variant="secondary">{variables.length} custom</Badge>
+              )}
             </div>
-            {!addingVar && editingVarId === null && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  resetVarForm();
-                  setAddingVar(true);
-                }}
-              >
-                <FaPlus className="h-3.5 w-3.5 mr-1.5" />
-                Add
-              </Button>
-            )}
-          </div>
-
-          <div className="space-y-4">
-            {/* Built-in variables */}
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-2">
-                Built-in Variables
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {builtinVars.map((v) => (
-                  <span
-                    key={v.name}
-                    className="inline-flex items-center gap-1 text-xs bg-muted px-2 py-1 rounded font-mono"
-                    title={v.description}
-                  >
-                    {`{${v.name}}`}
-                    <span className="text-muted-foreground font-sans">
-                      — {v.description}
-                    </span>
-                  </span>
-                ))}
-              </div>
+            <div className="flex items-center gap-2">
+              {!addingVar && editingVarId === null && variablesOpen && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    resetVarForm();
+                    setAddingVar(true);
+                  }}
+                >
+                  <FaPlus className="h-3.5 w-3.5 mr-1.5" />
+                  Add
+                </Button>
+              )}
+              {variablesOpen ? (
+                <FaChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+              ) : (
+                <FaChevronRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+              )}
             </div>
+          </button>
 
-            {/* Add / Edit form */}
-            {(addingVar || editingVarId !== null) && (
-              <div className="space-y-3 border rounded-lg p-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground block mb-1">
-                      Variable Name
-                    </label>
-                    <Input
-                      className="font-mono text-sm uppercase"
-                      value={varName}
-                      onChange={(e) => setVarName(e.target.value)}
-                      placeholder="DISCORD"
-                      disabled={editingVarId !== null}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Used as{" "}
-                      <code className="font-mono text-primary bg-muted px-1 py-0.5 rounded">
-                        {`{${varName.toUpperCase().replace(/[^A-Z0-9_]/g, "") || "NAME"}}`}
-                      </code>{" "}
-                      in messages
-                    </p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground block mb-1">
-                      Value
-                    </label>
-                    <Input
-                      className="text-sm"
-                      value={varValue}
-                      onChange={(e) => setVarValue(e.target.value)}
-                      placeholder="discord.gg/example"
-                    />
-                  </div>
-                </div>
-                {varError && <p className="text-xs text-red-500">{varError}</p>}
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={cancelEditVar}
-                    disabled={varSaving}
-                  >
-                    <FaRotateLeft className="h-3.5 w-3.5 mr-1.5" />
-                    Cancel
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleSaveVariable}
-                    disabled={varSaving}
-                  >
-                    <FaFloppyDisk className="h-3.5 w-3.5 mr-1.5" />
-                    {varSaving ? "Saving..." : "Save"}
-                  </Button>
-                </div>
-              </div>
-            )}
+          {/* Collapsed summary */}
+          {!variablesOpen && builtinVars.length > 0 && (
+            <p className="text-xs text-muted-foreground mt-2 ml-6">
+              {builtinVars.length} built-in
+              {variables.length > 0 ? ` · ${variables.length} custom` : ""}
+            </p>
+          )}
 
-            {/* Custom variables list */}
-            {variables.length > 0 ? (
+          {variablesOpen && (
+            <div className="mt-4 space-y-4 rounded-lg border p-4">
+              {/* Built-in variables */}
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-2">
-                  Custom Variables
+                  Built-in Variables
                 </p>
-                <div className="space-y-2">
-                  {variables.map((v) => (
-                    <div
-                      key={v.id}
-                      className="flex items-center justify-between gap-3 bg-muted p-3 rounded-lg"
+                <div className="flex flex-wrap gap-1.5">
+                  {builtinVars.map((v) => (
+                    <span
+                      key={v.name}
+                      className="inline-flex items-center gap-1 text-xs bg-muted px-2 py-1 rounded font-mono"
+                      title={v.description}
                     >
-                      <div className="flex-1 min-w-0">
-                        <code className="text-sm font-mono text-primary">
-                          {`{${v.name}}`}
-                        </code>
-                        <span className="text-sm text-muted-foreground ml-2">
-                          → {v.value}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => startEditVar(v)}
-                          disabled={editingVarId !== null || addingVar}
-                        >
-                          <FaPencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-red-500 hover:text-red-600"
-                          onClick={() => handleDeleteVariable(v.id)}
-                        >
-                          <FaTrashCan className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </div>
+                      {`{${v.name}}`}
+                      <span className="text-muted-foreground font-sans">
+                        — {v.description}
+                      </span>
+                    </span>
                   ))}
                 </div>
               </div>
-            ) : (
-              !addingVar && (
-                <p className="text-sm text-muted-foreground">
-                  No custom variables defined. Click "Add" to create one (e.g.
-                  DISCORD, WEBSITE, TEAMSPEAK).
-                </p>
-              )
-            )}
-          </div>
+
+              {/* Add / Edit form */}
+              {(addingVar || editingVarId !== null) && (
+                <div className="space-y-3 border rounded-lg p-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground block mb-1">
+                        Variable Name
+                      </label>
+                      <Input
+                        className="font-mono text-sm uppercase"
+                        value={varName}
+                        onChange={(e) => setVarName(e.target.value)}
+                        placeholder="DISCORD"
+                        disabled={editingVarId !== null}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Used as{" "}
+                        <code className="font-mono text-primary bg-muted px-1 py-0.5 rounded">
+                          {`{${varName.toUpperCase().replace(/[^A-Z0-9_]/g, "") || "NAME"}}`}
+                        </code>{" "}
+                        in messages
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground block mb-1">
+                        Value
+                      </label>
+                      <Input
+                        className="text-sm"
+                        value={varValue}
+                        onChange={(e) => setVarValue(e.target.value)}
+                        placeholder="discord.gg/example"
+                      />
+                    </div>
+                  </div>
+                  {varError && (
+                    <p className="text-xs text-red-500">{varError}</p>
+                  )}
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={cancelEditVar}
+                      disabled={varSaving}
+                    >
+                      <FaRotateLeft className="h-3.5 w-3.5 mr-1.5" />
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSaveVariable}
+                      disabled={varSaving}
+                    >
+                      <FaFloppyDisk className="h-3.5 w-3.5 mr-1.5" />
+                      {varSaving ? "Saving..." : "Save"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Custom variables list */}
+              {variables.length > 0 ? (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-2">
+                    Custom Variables
+                  </p>
+                  <div className="space-y-2">
+                    {variables.map((v) => (
+                      <div
+                        key={v.id}
+                        className="flex items-center justify-between gap-3 bg-muted p-3 rounded-lg"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <code className="text-sm font-mono text-primary">
+                            {`{${v.name}}`}
+                          </code>
+                          <span className="text-sm text-muted-foreground ml-2">
+                            → {v.value}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => startEditVar(v)}
+                            disabled={editingVarId !== null || addingVar}
+                          >
+                            <FaPencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-red-500 hover:text-red-600"
+                            onClick={() => handleDeleteVariable(v.id)}
+                          >
+                            <FaTrashCan className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                !addingVar && (
+                  <p className="text-sm text-muted-foreground">
+                    No custom variables defined. Click "Add" to create one (e.g.
+                    DISCORD, WEBSITE, TEAMSPEAK).
+                  </p>
+                )
+              )}
+            </div>
+          )}
         </div>
 
         {/* ─── Windows Firewall Rules (collapsible) ─── */}

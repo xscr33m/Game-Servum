@@ -242,13 +242,7 @@ export function ModsTab({ server }: ModsTabProps) {
   if (capabilities && !capabilities.workshopMods) {
     return (
       <div className="space-y-0">
-        <div className="pb-6">
-          <div className="flex items-center gap-2 mb-3">
-            <FaCubes className="h-4 w-4 text-ring" />
-            <span className="text-sm font-medium text-muted-foreground">
-              Mod Management
-            </span>
-          </div>
+        <div className="py-6">
           <p className="text-sm text-muted-foreground">
             Steam Workshop is not available for {getGameName(server.gameId)}.
             Mods must be downloaded from external sources (e.g., Nexus Mods) and
@@ -278,7 +272,7 @@ export function ModsTab({ server }: ModsTabProps) {
 
         {/* Error display */}
         {(error || persistentError) && (
-          <div className={`${isRunning ? "py-6" : "pb-6"} border-b`}>
+          <div className="pb-6 border-b">
             <Alert variant="destructive">
               <FaCircleExclamation className="h-4 w-4" />
               <AlertDescription className="flex items-center justify-between gap-2">
@@ -299,9 +293,7 @@ export function ModsTab({ server }: ModsTabProps) {
         )}
 
         {/* ─── Add Workshop Mod (collapsible) ─── */}
-        <div
-          className={`${isRunning || error || persistentError ? "py-6" : "pb-6"} border-b`}
-        >
+        <div className="pb-6 border-b">
           <button
             type="button"
             className="flex items-center justify-between w-full text-left cursor-pointer group"

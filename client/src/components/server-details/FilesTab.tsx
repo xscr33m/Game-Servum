@@ -1,12 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { FaFolderTree } from "react-icons/fa6";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileExplorer } from "@/components/file-explorer/FileExplorer";
 import { useBackend } from "@/hooks/useBackend";
 import { useContentWidth } from "@/hooks/useContentWidth";
@@ -67,39 +61,46 @@ export function FilesTab({ server }: FilesTabProps) {
   }
 
   return (
-    <div
-      className={cn(
-        "flex flex-col flex-1 min-h-0 px-4 py-4 gap-4",
-        contentClass,
-      )}
+    <Tabs
+      value={selectedRoot}
+      onValueChange={setSelectedRoot}
+      className="flex flex-col flex-1 min-h-0 pt-2"
     >
-      {/* Root selector */}
-      {roots.length > 1 ? (
-        <div className="flex items-center gap-3 shrink-0">
-          <FaFolderTree className="h-4 w-4 text-muted-foreground shrink-0" />
-          <Select value={selectedRoot} onValueChange={setSelectedRoot}>
-            <SelectTrigger className="w-full sm:w-64">
-              <SelectValue placeholder="Select directory..." />
-            </SelectTrigger>
-            <SelectContent>
-              {roots.map((root) => (
-                <SelectItem key={root.key} value={root.key}>
-                  {root.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      {/* ── Header toolbar ── */}
+      <div className="shrink-0 border-b bg-background">
+        <div
+          className={cn(
+            "px-4 flex flex-wrap items-center justify-between gap-3 pb-2",
+            contentClass,
+          )}
+        >
+          <div className="flex items-center gap-3">
+            {roots.length > 1 ? (
+              <TabsList>
+                {roots.map((root) => (
+                  <TabsTrigger
+                    key={root.key}
+                    value={root.key}
+                    className="gap-2"
+                  >
+                    <FaFolderTree className="h-4 w-4 text-ring/70" />
+                    {root.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            ) : (
+              <span className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <FaFolderTree className="h-4 w-4 text-ring" />
+                {roots[0].label}
+              </span>
+            )}
+          </div>
         </div>
-      ) : (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground shrink-0">
-          <FaFolderTree className="h-4 w-4" />
-          <span className="font-medium">{roots[0].label}</span>
-        </div>
-      )}
+      </div>
 
       {/* File Explorer */}
       {selectedRoot && (
-        <div className="flex-1 min-h-0">
+        <div className={cn("flex-1 min-h-0 px-4 py-4", contentClass)}>
           <FileExplorer
             key={selectedRoot}
             serverId={server.id}
@@ -107,6 +108,6 @@ export function FilesTab({ server }: FilesTabProps) {
           />
         </div>
       )}
-    </div>
+    </Tabs>
   );
 }
