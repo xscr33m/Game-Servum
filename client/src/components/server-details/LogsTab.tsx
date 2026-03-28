@@ -313,14 +313,26 @@ export function LogsTab({ server }: LogsTabProps) {
     }
   }
 
-  async function handleUpdateSettings(
-    updates: Partial<Pick<LogSettings, "archiveOnStart" | "retentionDays">>,
-  ) {
+  // Draft settings state for the dialog
+  const [draftSettings, setDraftSettings] = useState<
+    Pick<LogSettings, "archiveOnStart" | "retentionDays">
+  >({ archiveOnStart: true, retentionDays: 30 });
+
+  function openSettingsDialog() {
+    setDraftSettings({
+      archiveOnStart: logSettings.archiveOnStart,
+      retentionDays: logSettings.retentionDays,
+    });
+    setShowSettings(true);
+  }
+
+  async function handleSaveSettings() {
     setSettingsLoading(true);
     try {
-      await api.servers.updateLogSettings(server.id, updates);
-      setLogSettings((prev) => ({ ...prev, ...updates }));
+      await api.servers.updateLogSettings(server.id, draftSettings);
+      setLogSettings((prev) => ({ ...prev, ...draftSettings }));
       toastSuccess("Log settings saved");
+      setShowSettings(false);
     } catch (err) {
       logger.error("Failed to update log settings", err);
     } finally {
@@ -477,41 +489,6 @@ export function LogsTab({ server }: LogsTabProps) {
         </div>
       </div>
 
-      {/* Search + Word Wrap row */}
-      {selectedLog && (
-        <div className="shrink-0 px-4">
-          <div className={cn("py-2 flex items-center gap-2", contentClass)}>
-            <div className="relative flex-1">
-              <FaMagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                placeholder="Search in log..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-8 pl-9 text-sm"
-              />
-            </div>
-            {searchQuery.trim() && (
-              <Badge variant="secondary" className="text-xs shrink-0">
-                {matchCount} {matchCount === 1 ? "match" : "matches"}
-              </Badge>
-            )}
-            <Button
-              variant={wordWrap ? "default" : "outline"}
-              size="sm"
-              className="h-8 shrink-0"
-              onClick={() => setWordWrap(!wordWrap)}
-              title={wordWrap ? "Disable word wrap" : "Enable word wrap"}
-            >
-              {wordWrap ? (
-                <FaTextWidth className="h-3.5 w-3.5" />
-              ) : (
-                <FaTextSlash className="h-3.5 w-3.5" />
-              )}
-            </Button>
-          </div>
-        </div>
-      )}
-
       {/* ── Content: Sidebar + Viewer ── */}
       <div
         className={cn(
@@ -541,7 +518,7 @@ export function LogsTab({ server }: LogsTabProps) {
               className="h-7 w-7 p-0"
               onClick={(e) => {
                 e.stopPropagation();
-                setShowSettings(true);
+                openSettingsDialog();
               }}
               title="Log settings"
             >
@@ -585,7 +562,7 @@ export function LogsTab({ server }: LogsTabProps) {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setShowSettings(true)}
+                onClick={() => openSettingsDialog()}
                 title="Log settings"
               >
                 <FaGear className="h-3.5 w-3.5" />
@@ -763,8 +740,42 @@ export function LogsTab({ server }: LogsTabProps) {
           )}
         </div>
 
-        {/* Log viewer */}
-        <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
+        {/* Log viewer column: search + content */}
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden gap-2">
+          {/* Search + Word Wrap row */}
+          {selectedLog && (
+            <div className="shrink-0 flex items-center gap-2 px-1 py-1">
+              <div className="relative flex-1">
+                <FaMagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Search in log..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-8 pl-9 text-sm"
+                />
+              </div>
+              {searchQuery.trim() && (
+                <Badge variant="secondary" className="text-xs shrink-0">
+                  {matchCount} {matchCount === 1 ? "match" : "matches"}
+                </Badge>
+              )}
+              <Button
+                variant={wordWrap ? "default" : "outline"}
+                size="sm"
+                className="h-8 shrink-0"
+                onClick={() => setWordWrap(!wordWrap)}
+                title={wordWrap ? "Disable word wrap" : "Enable word wrap"}
+              >
+                {wordWrap ? (
+                  <FaTextWidth className="h-3.5 w-3.5" />
+                ) : (
+                  <FaTextSlash className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </div>
+          )}
+
+          {/* Log content */}
           <div className="flex-1 flex flex-col min-h-0">
             {loadingContent ? (
               <div className="flex-1 flex items-center justify-center text-muted-foreground">
@@ -829,24 +840,26 @@ export function LogsTab({ server }: LogsTabProps) {
               </Label>
               <Switch
                 id="archive-on-start"
-                checked={logSettings.archiveOnStart}
+                checked={draftSettings.archiveOnStart}
                 disabled={settingsLoading}
                 onCheckedChange={(checked: boolean) =>
-                  handleUpdateSettings({
+                  setDraftSettings((prev) => ({
+                    ...prev,
                     archiveOnStart: checked,
-                  })
+                  }))
                 }
               />
             </div>
             <div className="space-y-1.5">
               <Label className="text-sm">Auto-delete archives after</Label>
               <Select
-                value={String(logSettings.retentionDays)}
+                value={String(draftSettings.retentionDays)}
                 disabled={settingsLoading}
                 onValueChange={(val) =>
-                  handleUpdateSettings({
+                  setDraftSettings((prev) => ({
+                    ...prev,
                     retentionDays: parseInt(val, 10),
-                  })
+                  }))
                 }
               >
                 <SelectTrigger>
@@ -862,6 +875,23 @@ export function LogsTab({ server }: LogsTabProps) {
               </Select>
             </div>
           </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setShowSettings(false)}
+              disabled={settingsLoading}
+              className="w-full sm:w-auto"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveSettings}
+              disabled={settingsLoading}
+              className="w-full sm:w-auto"
+            >
+              Save
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
