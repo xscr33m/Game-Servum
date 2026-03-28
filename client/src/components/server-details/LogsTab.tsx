@@ -390,10 +390,10 @@ export function LogsTab({ server }: LogsTabProps) {
   return (
     <div className="flex flex-col flex-1 min-h-0 pt-2">
       {/* ── Sticky Toolbar ── */}
-      <div className="shrink-0 border-b bg-background">
+      <div className="shrink-0 bg-background px-4">
         <div
           className={cn(
-            "px-4 py-2 flex flex-wrap items-center justify-between gap-2",
+            "py-2 flex items-center justify-between gap-2 border-b",
             contentClass,
           )}
         >
@@ -475,12 +475,12 @@ export function LogsTab({ server }: LogsTabProps) {
             </div>
           )}
         </div>
+      </div>
 
-        {/* Search + Word Wrap row */}
-        {selectedLog && (
-          <div
-            className={cn("px-4 pb-2 flex items-center gap-2", contentClass)}
-          >
+      {/* Search + Word Wrap row */}
+      {selectedLog && (
+        <div className="shrink-0 px-4">
+          <div className={cn("py-2 flex items-center gap-2", contentClass)}>
             <div className="relative flex-1">
               <FaMagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
@@ -509,8 +509,8 @@ export function LogsTab({ server }: LogsTabProps) {
               )}
             </Button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* ── Content: Sidebar + Viewer ── */}
       <div

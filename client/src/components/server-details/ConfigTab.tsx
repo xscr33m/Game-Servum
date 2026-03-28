@@ -263,10 +263,10 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
       {/* Config Editor */}
       {currentState && (
         <Tabs defaultValue="form" className="flex flex-col flex-1 min-h-0">
-          <div className="shrink-0 border-b bg-background">
+          <div className="shrink-0 bg-background px-4">
             <div
               className={cn(
-                "px-4 flex flex-wrap items-center justify-between gap-3 pb-2",
+                "flex flex-wrap items-center justify-between gap-3 pb-2 border-b",
                 contentClass,
               )}
             >

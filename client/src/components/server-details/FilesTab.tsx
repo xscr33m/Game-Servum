@@ -67,10 +67,10 @@ export function FilesTab({ server }: FilesTabProps) {
       className="flex flex-col flex-1 min-h-0 pt-2"
     >
       {/* ── Header toolbar ── */}
-      <div className="shrink-0 border-b bg-background">
+      <div className="shrink-0 bg-background px-4">
         <div
           className={cn(
-            "px-4 flex flex-wrap items-center justify-between gap-3 pb-2",
+            "flex flex-wrap items-center justify-between gap-3 pb-2 border-b",
             contentClass,
           )}
         >
