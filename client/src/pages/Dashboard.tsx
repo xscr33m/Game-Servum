@@ -25,6 +25,7 @@ import { useBackend } from "@/hooks/useBackend";
 import { logger } from "@/lib/logger";
 import { getElectronSettings } from "@/lib/electronSettings";
 import { AgentControlPanel } from "@/components/agent/AgentControlPanel";
+import { MobileAgentSection } from "@/components/agent/MobileAgentSection";
 import { AppHeader } from "@/components/AppHeader";
 import { publicAsset } from "@/lib/assets";
 import { toastSuccess, toastError, showDependencyError } from "@/lib/toast";
@@ -367,12 +368,14 @@ export function Dashboard() {
             />
             <div className="flex items-baseline gap-2">
               <h1 className="text-xl font-bold">Game-Servum</h1>
-              <span className="text-xs text-muted-foreground font-mono">
+              <span className="text-xs text-muted-foreground font-mono hidden md:inline">
                 v{APP_VERSION}
               </span>
             </div>
-            <div className="h-7 w-px bg-ring/30" />
-            <AgentControlPanel onAddAgent={handleAddAgent} />
+            <div className="h-7 w-px bg-ring/30 hidden md:block" />
+            <div className="hidden md:flex">
+              <AgentControlPanel onAddAgent={handleAddAgent} />
+            </div>
           </>
         }
         right={
@@ -437,6 +440,86 @@ export function Dashboard() {
               </Button>
             </Tip>
           </>
+        }
+        mobileMenuTitle="Game-Servum"
+        mobileMenu={
+          <div className="space-y-5">
+            {/* Agent section */}
+            <MobileAgentSection onAddAgent={handleAddAgent} />
+
+            <div className="border-t" />
+
+            {/* Steam account */}
+            {steamcmd?.installed && (
+              <button
+                data-mobile-nav
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                onClick={() => isConnected && setShowSteamAccount(true)}
+                disabled={!isConnected}
+              >
+                {steamcmd.loggedIn ? (
+                  <FaUser className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <FaUserSlash className="h-4 w-4 text-muted-foreground" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium">
+                    {steamcmd.loggedIn ? steamcmd.username : "Anonymous"}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    Steam Account
+                  </div>
+                </div>
+              </button>
+            )}
+
+            {/* Navigation */}
+            <div className="space-y-1">
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1 mb-2">
+                Navigation
+              </div>
+              <button
+                data-mobile-nav
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                onClick={loadData}
+                disabled={!isConnected || noAgents}
+              >
+                <FaArrowsRotate className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">Refresh Data</span>
+              </button>
+              <button
+                data-mobile-nav
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                onClick={() => navigate("/help")}
+              >
+                <FaCircleQuestion className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">Help & Info</span>
+              </button>
+              <button
+                data-mobile-nav
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                onClick={() => navigate("/logs")}
+              >
+                <FaFileLines className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">Application Logs</span>
+              </button>
+              <button
+                data-mobile-nav
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                onClick={() => navigate("/settings")}
+              >
+                <FaGear className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">Settings</span>
+              </button>
+            </div>
+
+            {/* Version info */}
+            <div className="border-t pt-3">
+              <span className="text-[11px] text-muted-foreground/60 font-mono">
+                v{APP_VERSION}
+              </span>
+            </div>
+          </div>
         }
       />
 

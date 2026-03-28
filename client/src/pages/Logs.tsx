@@ -970,6 +970,97 @@ export function Logs() {
             </Sheet>
           </>
         }
+        mobileMenuTitle="Logs"
+        mobileMenu={
+          <div className="space-y-5">
+            {/* Source selector — flat list instead of Select (portaled dropdowns break inside Sheet) */}
+            <div className="space-y-2">
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">
+                Source
+              </div>
+              <div className="space-y-1">
+                <button
+                  data-keep-open
+                  className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg transition-colors text-left ${activeTab === "dashboard" ? "bg-muted/70 font-medium" : "hover:bg-muted/50"}`}
+                  onClick={() => setActiveTab("dashboard")}
+                >
+                  <FaDesktop className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="text-sm truncate">Dashboard</span>
+                  <FaCircle className="h-2 w-2 text-green-500 shrink-0 ml-auto" />
+                </button>
+                {connections.map((conn) => (
+                  <button
+                    key={conn.id}
+                    data-keep-open
+                    className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg transition-colors text-left ${activeTab === conn.id ? "bg-muted/70 font-medium" : "hover:bg-muted/50"}`}
+                    onClick={() => setActiveTab(conn.id)}
+                  >
+                    <FaServer className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="text-sm truncate">{conn.name}</span>
+                    <FaCircle
+                      className={`h-2 w-2 shrink-0 ml-auto ${STATUS_COLORS[(conn.status as keyof typeof STATUS_COLORS) || "disconnected"]}`}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* File selector — flat list */}
+            <div className="space-y-2">
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">
+                Log File
+              </div>
+              <div className="space-y-1 max-h-48 overflow-y-auto">
+                {currentLogs.files.length === 0 ? (
+                  <p className="text-sm text-muted-foreground px-3 py-2">
+                    No log files available
+                  </p>
+                ) : (
+                  currentLogs.files.map((file) => (
+                    <button
+                      key={file.name}
+                      data-mobile-nav
+                      className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg transition-colors text-left ${currentLogs.selectedFile === file.name ? "bg-muted/70 font-medium" : "hover:bg-muted/50"}`}
+                      onClick={() => {
+                        setLogStates((prev) => ({
+                          ...prev,
+                          [activeTab]: {
+                            ...prev[activeTab],
+                            selectedFile: file.name,
+                          },
+                        }));
+                        loadLogContent(activeTab, file.name);
+                      }}
+                      disabled={!isTabConnected()}
+                    >
+                      <span className="text-sm truncate">{file.name}</span>
+                      <span className="text-xs text-muted-foreground shrink-0 ml-auto">
+                        {formatFileSize(file.size)}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="border-t" />
+
+            {/* Settings */}
+            <div className="space-y-1">
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1 mb-2">
+                Options
+              </div>
+              <button
+                data-mobile-nav
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                onClick={() => setSettingsOpen(true)}
+              >
+                <FaGear className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">Log Settings</span>
+              </button>
+            </div>
+          </div>
+        }
       />
 
       <AgentStatusBanner />

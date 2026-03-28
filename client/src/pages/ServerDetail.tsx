@@ -27,6 +27,7 @@ import type { ServerSection } from "@/components/server-details/ServerDetailSide
 import { useBackend } from "@/hooks/useBackend";
 import { useGameCapabilities } from "@/hooks/useGameCapabilities";
 import { AgentControlPanel } from "@/components/agent/AgentControlPanel";
+import { MobileAgentSection } from "@/components/agent/MobileAgentSection";
 import { AppHeader } from "@/components/AppHeader";
 import { AgentStatusBanner } from "@/components/agent/AgentStatusBanner";
 import { DeleteServerDialog } from "@/components/server-details/dialogs/DeleteServerDialog";
@@ -372,6 +373,11 @@ export function ServerDetail() {
             </Button>
           }
           right={<AgentControlPanel />}
+          mobileMenu={
+            <div className="space-y-5">
+              <MobileAgentSection />
+            </div>
+          }
         />
         <AgentStatusBanner />
         <main className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
@@ -409,8 +415,20 @@ export function ServerDetail() {
                 className="h-7 w-auto mr-1"
               />
             </Button>
-            <div className="h-7 w-px bg-ring/30" />
-            <AgentControlPanel />
+            <div className="h-7 w-px bg-ring/30 hidden md:block" />
+            <div className="hidden md:flex">
+              <AgentControlPanel />
+            </div>
+            {/* Mobile: show server name + status inline */}
+            <div className="flex items-center gap-2 md:hidden min-w-0">
+              <h1 className="text-sm font-bold truncate">{server.name}</h1>
+              <Badge
+                variant={status.variant}
+                className="text-[10px] px-1.5 shrink-0"
+              >
+                {status.label}
+              </Badge>
+            </div>
           </>
         }
         right={
@@ -474,6 +492,83 @@ export function ServerDetail() {
               </Tip>
             )}
           </>
+        }
+        mobileMenuTitle={server.name}
+        mobileMenu={
+          <div className="space-y-5">
+            {/* Server info */}
+            <div className="rounded-lg border bg-muted/20 p-3">
+              <div className="flex items-center gap-3">
+                <h2 className="text-sm font-bold truncate flex-1">
+                  {server.name}
+                </h2>
+                <Badge variant={status.variant}>{status.label}</Badge>
+              </div>
+            </div>
+
+            {/* Server actions */}
+            <div className="space-y-1.5">
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1 mb-2">
+                Actions
+              </div>
+              {isRunning ? (
+                <Button
+                  variant="destructive"
+                  className="w-full justify-start"
+                  onClick={handleStop}
+                  disabled={actionLoading || !isConnected}
+                >
+                  <FaStop className="h-4 w-4 mr-2" />
+                  Stop Server
+                </Button>
+              ) : (
+                <Button
+                  variant="success"
+                  className="w-full justify-start"
+                  onClick={handleStart}
+                  disabled={actionLoading || isBusy || !isConnected}
+                >
+                  <FaPlay className="h-4 w-4 mr-2" />
+                  Start Server
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => loadServer(true)}
+                disabled={actionLoading || !isConnected}
+              >
+                <FaArrowsRotate className="h-4 w-4 mr-2" />
+                Refresh
+              </Button>
+              {server.status === "installing" || server.status === "queued" ? (
+                <Button
+                  variant="outline"
+                  className="w-full justify-start text-destructive hover:text-destructive"
+                  onClick={() => setShowCancelDialog(true)}
+                  disabled={!isConnected}
+                >
+                  <FaXmark className="h-4 w-4 mr-2" />
+                  Cancel Installation
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  className="w-full justify-start text-destructive hover:text-destructive"
+                  onClick={() => setShowDeleteDialog(true)}
+                  disabled={isRunning || isBusy || !isConnected}
+                >
+                  <FaTrashCan className="h-4 w-4 mr-2" />
+                  Delete Server
+                </Button>
+              )}
+            </div>
+
+            <div className="border-t" />
+
+            {/* Agent section */}
+            <MobileAgentSection />
+          </div>
         }
       />
 
