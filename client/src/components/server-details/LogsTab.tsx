@@ -551,12 +551,12 @@ export function LogsTab({ server }: LogsTabProps) {
 
         {/* File list sidebar */}
         <div
-          className={`lg:w-72 shrink-0 overflow-y-auto bg-background rounded-lg border ${
+          className={`lg:w-72 shrink-0 flex flex-col bg-background rounded-lg border ${
             sidebarOpen ? "max-h-64 lg:max-h-none" : "hidden lg:block"
           }`}
         >
           {/* Desktop sidebar header */}
-          <div className="hidden lg:flex items-center justify-between px-3 py-2.5 border-b">
+          <div className="hidden lg:flex items-center justify-between px-3 py-2.5 border-b shrink-0">
             <div className="flex items-center gap-2">
               <FaFileLines className="h-4 w-4 text-ring" />
               <span className="text-sm font-medium text-muted-foreground">
@@ -581,170 +581,170 @@ export function LogsTab({ server }: LogsTabProps) {
             </div>
           </div>
 
-          {/* Current logs section */}
-          {currentLogs.length > 0 && (
-            <div>
-              <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider bg-muted/30 border-b">
-                Current Session
-              </div>
-              <div className="divide-y">
-                {currentLogs.map((log) => (
-                  <button
-                    key={log.name}
-                    onClick={() => handleSelectLog(log.name)}
-                    className={`w-full p-3 text-left hover:bg-muted/50 transition-colors ${
-                      selectedLog === log.name && viewingSource === "current"
-                        ? "bg-muted"
-                        : ""
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <FaFileLines className="h-3.5 w-3.5 text-ring/70 shrink-0" />
-                      <Tip content={log.name} side="right">
-                        <span className="text-sm font-medium truncate">
-                          {log.name}
+          {/* Scrollable file list */}
+          <div className="flex-1 overflow-y-auto">
+            {/* Current logs section */}
+            {currentLogs.length > 0 && (
+              <div>
+                <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider bg-muted/30 border-b">
+                  Current Session
+                </div>
+                <div className="divide-y">
+                  {currentLogs.map((log) => (
+                    <button
+                      key={log.name}
+                      onClick={() => handleSelectLog(log.name)}
+                      className={`w-full p-3 text-left hover:bg-muted/50 transition-colors ${
+                        selectedLog === log.name && viewingSource === "current"
+                          ? "bg-muted"
+                          : ""
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <FaFileLines className="h-3.5 w-3.5 text-ring/70 shrink-0" />
+                        <Tip content={log.name} side="right">
+                          <span className="text-sm font-medium truncate">
+                            {log.name}
+                          </span>
+                        </Tip>
+                      </div>
+                      <div className="flex items-center gap-3 mt-1 ml-[1.625rem] text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <FaHardDrive className="h-3 w-3" />
+                          {formatFileSize(log.size)}
                         </span>
-                      </Tip>
-                    </div>
-                    <div className="flex items-center gap-3 mt-1 ml-[1.625rem] text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <FaHardDrive className="h-3 w-3" />
-                        {formatFileSize(log.size)}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <FaClock className="h-3 w-3" />
-                        {formatRelativeDate(log.modified)}
-                      </span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Archives section */}
-          {archives.length > 0 && (
-            <div>
-              <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider bg-muted/30 border-b border-t">
-                <div className="flex items-center gap-1.5">
-                  <FaBoxArchive className="h-3 w-3 text-ring/70" />
-                  Archives
-                  <Badge
-                    variant="secondary"
-                    className="text-[10px] px-1.5 py-0 ml-auto"
-                  >
-                    {archives.length}
-                  </Badge>
+                        <span className="flex items-center gap-1">
+                          <FaClock className="h-3 w-3" />
+                          {formatRelativeDate(log.modified)}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
                 </div>
               </div>
-              <div className="divide-y">
-                {archives.map((archive) => (
-                  <div key={archive.name}>
-                    {/* Archive session header */}
-                    <div className="flex items-center hover:bg-muted/50 transition-colors">
-                      <button
-                        onClick={() => handleToggleArchive(archive.name)}
-                        className="flex-1 p-3 text-left"
-                      >
-                        <div className="flex items-center gap-2">
-                          {expandedArchives.has(archive.name) ? (
-                            <FaChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          ) : (
-                            <FaChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          )}
-                          <FaFolderOpen className="h-3.5 w-3.5 text-ring/70 shrink-0" />
-                          <Tip
-                            content={formatDate(archive.date)}
-                            side="right"
-                          >
-                            <span className="text-sm font-medium truncate">
-                              {formatShortDateTime(archive.date)}
-                            </span>
-                          </Tip>
-                        </div>
-                        <div className="flex items-center gap-3 mt-1 ml-[3.25rem] text-xs text-muted-foreground">
-                          <span>
-                            {archive.fileCount} file
-                            {archive.fileCount !== 1 ? "s" : ""}
-                          </span>
-                          <span>{formatFileSize(archive.totalSize)}</span>
-                        </div>
-                      </button>
-                      <Tip content="Delete archive">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="mr-2 text-muted-foreground hover:text-destructive"
-                          onClick={() => setDeleteTarget(archive.name)}
-                        >
-                          <FaTrashCan className="h-3.5 w-3.5" />
-                        </Button>
-                      </Tip>
-                    </div>
+            )}
 
-                    {/* Expanded archive files */}
-                    {expandedArchives.has(archive.name) && (
-                      <div className="bg-muted/20">
-                        {getArchiveFilesForSession(archive.name).length ===
-                        0 ? (
-                          <div className="px-3 py-2 text-xs text-muted-foreground ml-8">
-                            Loading...
-                          </div>
-                        ) : (
-                          getArchiveFilesForSession(archive.name).map(
-                            (file) => (
-                              <button
-                                key={`${archive.name}/${file.name}`}
-                                onClick={() =>
-                                  handleSelectArchivedLog(
-                                    archive.name,
-                                    file.name,
-                                  )
-                                }
-                                className={`w-full p-2 pl-12 text-left hover:bg-muted/50 transition-colors border-t border-border/30 ${
-                                  selectedLog === file.name &&
-                                  viewingSource !== "current" &&
-                                  selectedArchive === archive.name
-                                    ? "bg-muted border-l-2 border-l-ring"
-                                    : ""
-                                }`}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <FaFileLines className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                  <Tip
-                                    content={file.name}
-                                    side="right"
-                                  >
-                                    <span className="text-xs font-medium truncate">
-                                      {file.name}
-                                    </span>
-                                  </Tip>
-                                </div>
-                                <div className="flex items-center gap-3 mt-0.5 ml-[1.625rem] text-[11px] text-muted-foreground">
-                                  <span>{formatFileSize(file.size)}</span>
-                                </div>
-                              </button>
-                            ),
-                          )
-                        )}
-                      </div>
-                    )}
+            {/* Archives section */}
+            {archives.length > 0 && (
+              <div>
+                <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider bg-muted/30 border-b border-t">
+                  <div className="flex items-center gap-1.5">
+                    <FaBoxArchive className="h-3 w-3 text-ring/70" />
+                    Archives
+                    <Badge
+                      variant="secondary"
+                      className="text-[10px] px-1.5 py-0 ml-auto"
+                    >
+                      {archives.length}
+                    </Badge>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                </div>
+                <div className="divide-y">
+                  {archives.map((archive) => (
+                    <div key={archive.name}>
+                      {/* Archive session header */}
+                      <div className="flex items-center hover:bg-muted/50 transition-colors">
+                        <button
+                          onClick={() => handleToggleArchive(archive.name)}
+                          className="flex-1 p-3 text-left"
+                        >
+                          <div className="flex items-center gap-2">
+                            {expandedArchives.has(archive.name) ? (
+                              <FaChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            ) : (
+                              <FaChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            )}
+                            <FaFolderOpen className="h-3.5 w-3.5 text-ring/70 shrink-0" />
+                            <Tip
+                              content={formatDate(archive.date)}
+                              side="right"
+                            >
+                              <span className="text-sm font-medium truncate">
+                                {formatShortDateTime(archive.date)}
+                              </span>
+                            </Tip>
+                          </div>
+                          <div className="flex items-center gap-3 mt-1 ml-[3.25rem] text-xs text-muted-foreground">
+                            <span>
+                              {archive.fileCount} file
+                              {archive.fileCount !== 1 ? "s" : ""}
+                            </span>
+                            <span>{formatFileSize(archive.totalSize)}</span>
+                          </div>
+                        </button>
+                        <Tip content="Delete archive">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="mr-2 text-muted-foreground hover:text-destructive"
+                            onClick={() => setDeleteTarget(archive.name)}
+                          >
+                            <FaTrashCan className="h-3.5 w-3.5" />
+                          </Button>
+                        </Tip>
+                      </div>
 
-          {/* Empty state */}
-          {currentLogs.length === 0 && archives.length === 0 && (
-            <div className="text-center py-6 text-muted-foreground">
-              <FaFileLines className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">No log files found</p>
-              <p className="text-xs mt-1">
-                Log files will appear after the server runs.
-              </p>
-            </div>
-          )}
+                      {/* Expanded archive files */}
+                      {expandedArchives.has(archive.name) && (
+                        <div className="bg-muted/20">
+                          {getArchiveFilesForSession(archive.name).length ===
+                          0 ? (
+                            <div className="px-3 py-2 text-xs text-muted-foreground ml-8">
+                              Loading...
+                            </div>
+                          ) : (
+                            getArchiveFilesForSession(archive.name).map(
+                              (file) => (
+                                <button
+                                  key={`${archive.name}/${file.name}`}
+                                  onClick={() =>
+                                    handleSelectArchivedLog(
+                                      archive.name,
+                                      file.name,
+                                    )
+                                  }
+                                  className={`w-full p-2 pl-12 text-left hover:bg-muted/50 transition-colors border-t border-border/30 ${
+                                    selectedLog === file.name &&
+                                    viewingSource !== "current" &&
+                                    selectedArchive === archive.name
+                                      ? "bg-muted border-l-2 border-l-ring"
+                                      : ""
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <FaFileLines className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                    <Tip content={file.name} side="right">
+                                      <span className="text-xs font-medium truncate">
+                                        {file.name}
+                                      </span>
+                                    </Tip>
+                                  </div>
+                                  <div className="flex items-center gap-3 mt-0.5 ml-[1.625rem] text-[11px] text-muted-foreground">
+                                    <span>{formatFileSize(file.size)}</span>
+                                  </div>
+                                </button>
+                              ),
+                            )
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Empty state */}
+            {currentLogs.length === 0 && archives.length === 0 && (
+              <div className="text-center py-6 text-muted-foreground">
+                <FaFileLines className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No log files found</p>
+                <p className="text-xs mt-1">
+                  Log files will appear after the server runs.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Log viewer column: search + content */}
