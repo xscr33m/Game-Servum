@@ -35,6 +35,6 @@ export function useContentWidth(): {
   const mode = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   return {
     mode,
-    contentClass: mode === "centered" ? "max-w-5xl mx-auto w-full" : "",
+    contentClass: mode === "centered" ? "max-w-7xl mx-auto w-full" : "",
   };
 }

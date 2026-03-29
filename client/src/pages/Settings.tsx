@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import { useBackend } from "@/hooks/useBackend";
 import { publicAsset } from "@/lib/assets";
 import { AppHeader } from "@/components/AppHeader";
@@ -69,6 +70,7 @@ function ContentWidthSetting() {
 export function Settings() {
   const navigate = useNavigate();
   const { api, isConnected } = useBackend();
+  const { contentClass } = useContentWidth();
   const [isWindows, setIsWindows] = useState(false);
   const [monitoringEnabled, setMonitoringEnabled] = useState(() => {
     return (
@@ -188,7 +190,7 @@ export function Settings() {
       <AgentStatusBanner />
 
       <main className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
-        <div className="max-w-6xl mx-auto px-6 py-6">
+        <div className={cn("mx-auto px-6 py-6", contentClass)}>
           {/* ── General Settings ── */}
           <section className="rounded-lg border bg-card mb-6">
             <div className="px-4 py-3 border-b bg-muted/30">
