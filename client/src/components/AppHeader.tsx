@@ -81,6 +81,7 @@ export function AppHeader({
               <SheetContent
                 side="right"
                 className="w-[300px] p-0 flex flex-col"
+                aria-describedby={undefined}
               >
                 <SheetHeader className="px-5 pt-5 pb-4 border-b shrink-0">
                   <SheetTitle className="text-base font-semibold">

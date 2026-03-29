@@ -100,6 +100,7 @@ export function HelpSidebar({ active, onChange }: HelpSidebarProps) {
         <SheetContent
           side="left"
           className="w-64 p-0 [&>button:last-child]:top-3.5"
+          aria-describedby={undefined}
         >
           <VisuallyHidden.Root>
             <SheetTitle>Navigation</SheetTitle>
