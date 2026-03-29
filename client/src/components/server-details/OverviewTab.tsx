@@ -264,46 +264,62 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
       )}
 
       {/* Metadata bar */}
-      <div className="grid grid-cols-2 gap-3 pb-4 border-b items-center sm:flex sm:flex-wrap sm:gap-x-6 sm:gap-y-3">
-        <div className="flex items-center gap-2">
-          <FaServer className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">Game</span>
-          <span className="text-sm font-semibold">{gameName}</span>
-          <span className="text-xs text-muted-foreground font-mono">
-            ({server.appId})
+      <div className="grid grid-cols-2 gap-3 pb-4 border-b sm:flex sm:flex-wrap sm:items-center sm:gap-x-6 sm:gap-y-3">
+        <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2">
+          <div className="flex items-center gap-1.5">
+            <FaServer className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Game</span>
+          </div>
+          <div className="flex items-center gap-1.5 pl-5 sm:pl-0">
+            <span className="text-sm font-semibold">{gameName}</span>
+            <span className="text-xs text-muted-foreground font-mono">
+              ({server.appId})
+            </span>
+          </div>
+        </div>
+
+        <div className="hidden sm:block h-4 w-px bg-border" />
+
+        <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2">
+          <div className="flex items-center gap-1.5">
+            <FaNetworkWired className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Port</span>
+          </div>
+          <div className="flex items-center gap-1.5 pl-5 sm:pl-0">
+            <span className="text-sm font-semibold font-mono">
+              {server.port}
+            </span>
+            {server.queryPort && (
+              <span className="text-xs text-muted-foreground font-mono">
+                / {server.queryPort}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="hidden sm:block h-4 w-px bg-border" />
+
+        <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2">
+          <div className="flex items-center gap-1.5">
+            <FaClock className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Created</span>
+          </div>
+          <span className="text-sm font-semibold pl-5 sm:pl-0">
+            {createdDate}
           </span>
         </div>
 
         <div className="hidden sm:block h-4 w-px bg-border" />
 
-        <div className="flex items-center gap-2">
-          <FaNetworkWired className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">Port</span>
-          <span className="text-sm font-semibold font-mono">{server.port}</span>
-          {server.queryPort && (
-            <span className="text-xs text-muted-foreground font-mono">
-              / {server.queryPort}
-            </span>
-          )}
-        </div>
-
-        <div className="hidden sm:block h-4 w-px bg-border" />
-
-        <div className="flex items-center gap-2">
-          <FaClock className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">Created</span>
-          <span className="text-sm font-semibold">{createdDate}</span>
-        </div>
-
-        <div className="hidden sm:block h-4 w-px bg-border" />
-
-        <div className="flex items-center gap-2">
-          <FaHardDrive
-            className={`h-3.5 w-3.5 text-muted-foreground${diskLoading && !diskUsage ? " animate-pulse" : ""}`}
-          />
-          <span className="text-sm text-muted-foreground">Disk</span>
+        <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2">
+          <div className="flex items-center gap-1.5">
+            <FaHardDrive
+              className={`h-3.5 w-3.5 text-muted-foreground${diskLoading && !diskUsage ? " animate-pulse" : ""}`}
+            />
+            <span className="text-sm text-muted-foreground">Disk</span>
+          </div>
           <span
-            className={`text-sm font-semibold${diskLoading && !diskUsage ? " animate-pulse text-muted-foreground" : ""}`}
+            className={`text-sm font-semibold pl-5 sm:pl-0${diskLoading && !diskUsage ? " animate-pulse text-muted-foreground" : ""}`}
           >
             {diskUsage ?? "Calculating..."}
           </span>
@@ -312,17 +328,21 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
         {(uptime || server.pid) && (
           <>
             <div className="hidden sm:block h-4 w-px bg-border" />
-            <div className="flex items-center gap-2">
-              <FaClock className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Uptime</span>
-              <span className="text-sm font-semibold font-mono tabular-nums">
-                {uptime}
-              </span>
-              {server.pid && (
-                <span className="text-xs text-muted-foreground font-mono">
-                  PID {server.pid}
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2">
+              <div className="flex items-center gap-1.5">
+                <FaClock className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Uptime</span>
+              </div>
+              <div className="flex items-center gap-1.5 pl-5 sm:pl-0">
+                <span className="text-sm font-semibold font-mono tabular-nums">
+                  {uptime}
                 </span>
-              )}
+                {server.pid && (
+                  <span className="text-xs text-muted-foreground font-mono">
+                    PID {server.pid}
+                  </span>
+                )}
+              </div>
             </div>
           </>
         )}
