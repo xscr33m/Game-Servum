@@ -402,11 +402,19 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
               ))}
             </ul>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOverwriteDialog(null)}>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setOverwriteDialog(null)}
+              className="w-full sm:w-auto"
+            >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleOverwriteConfirm}>
+            <Button
+              variant="destructive"
+              onClick={handleOverwriteConfirm}
+              className="w-full sm:w-auto"
+            >
               Replace{" "}
               {overwriteDialog?.conflicts.length === 1 ? "file" : "files"}
             </Button>

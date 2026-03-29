@@ -256,11 +256,19 @@ export function FileExplorerToolbar({
               autoFocus
             />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setNewFileOpen(false)}>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setNewFileOpen(false)}
+              className="w-full sm:w-auto"
+            >
               Cancel
             </Button>
-            <Button onClick={handleNewFile} disabled={!newFileName.trim()}>
+            <Button
+              onClick={handleNewFile}
+              disabled={!newFileName.trim()}
+              className="w-full sm:w-auto"
+            >
               Create
             </Button>
           </DialogFooter>
@@ -289,11 +297,19 @@ export function FileExplorerToolbar({
               autoFocus
             />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setNewFolderOpen(false)}>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setNewFolderOpen(false)}
+              className="w-full sm:w-auto"
+            >
               Cancel
             </Button>
-            <Button onClick={handleNewFolder} disabled={!newFolderName.trim()}>
+            <Button
+              onClick={handleNewFolder}
+              disabled={!newFolderName.trim()}
+              className="w-full sm:w-auto"
+            >
               Create
             </Button>
           </DialogFooter>
@@ -320,11 +336,19 @@ export function FileExplorerToolbar({
               autoFocus
             />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRenameOpen(false)}>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setRenameOpen(false)}
+              className="w-full sm:w-auto"
+            >
               Cancel
             </Button>
-            <Button onClick={handleRename} disabled={!renameTo.trim()}>
+            <Button
+              onClick={handleRename}
+              disabled={!renameTo.trim()}
+              className="w-full sm:w-auto"
+            >
               Rename
             </Button>
           </DialogFooter>
@@ -344,11 +368,19 @@ export function FileExplorerToolbar({
             {selectedIsDirectory && " Only empty folders can be deleted."} This
             action cannot be undone.
           </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteOpen(false)}>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteOpen(false)}
+              className="w-full sm:w-auto"
+            >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDelete}>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              className="w-full sm:w-auto"
+            >
               Delete
             </Button>
           </DialogFooter>
