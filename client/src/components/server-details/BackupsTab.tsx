@@ -570,6 +570,12 @@ export function BackupsTab({ server }: BackupsTabProps) {
                         onChange={(e) =>
                           setSettings({
                             ...settings,
+                            customIncludePaths: e.target.value.split("\n"),
+                          })
+                        }
+                        onBlur={(e) =>
+                          setSettings({
+                            ...settings,
                             customIncludePaths: e.target.value
                               .split("\n")
                               .filter((p) => p.trim()),
@@ -591,6 +597,12 @@ export function BackupsTab({ server }: BackupsTabProps) {
                         className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                         value={settings.customExcludePaths.join("\n")}
                         onChange={(e) =>
+                          setSettings({
+                            ...settings,
+                            customExcludePaths: e.target.value.split("\n"),
+                          })
+                        }
+                        onBlur={(e) =>
                           setSettings({
                             ...settings,
                             customExcludePaths: e.target.value
