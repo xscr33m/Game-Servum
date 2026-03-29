@@ -126,7 +126,7 @@ function TreeNode({
           onDragOver={handleDragOver}
           onDrop={handleDrop}
           className={cn(
-            "flex items-center gap-1.5 w-full text-left py-1 px-2 text-sm rounded-sm hover:bg-accent/50 transition-colors",
+            "flex items-center gap-1.5 w-full text-left py-2 lg:py-1 px-2 text-sm rounded-sm hover:bg-accent/50 transition-colors",
             isSelected && "bg-accent text-accent-foreground",
             !isEditable && !isDirectory && "opacity-50 cursor-not-allowed",
             isDragTarget && "bg-primary/20 ring-1 ring-primary/50",

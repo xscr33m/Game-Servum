@@ -1,6 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
-import { FaFolderOpen, FaTriangleExclamation } from "react-icons/fa6";
+import {
+  FaFolderOpen,
+  FaTriangleExclamation,
+  FaChevronDown,
+  FaChevronRight,
+  FaFolder,
+} from "react-icons/fa6";
 import { useBackend } from "@/hooks/useBackend";
 import { toastSuccess, toastError } from "@/lib/toast";
 import type { BrowseTreeEntry } from "@/lib/api";
@@ -52,6 +58,9 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
   const SIDEBAR_DEFAULT = 256;
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
   const isResizing = useRef(false);
+
+  // Mobile collapsible sidebar
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   useEffect(() => {
     function handleMouseMove(e: MouseEvent) {
@@ -313,14 +322,37 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
         onDownload={handleDownload}
         onUpload={handleUpload}
         uploading={uploading}
+        isLargeFile={openFile != null && openFile.size > 512 * 1024}
       />
 
+      {/* Mobile toggle for file tree */}
+      <button
+        type="button"
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        className="lg:hidden flex items-center gap-2 px-3 py-2 border-b bg-muted/30 text-sm font-medium hover:bg-muted/50 transition-colors w-full text-left"
+      >
+        {sidebarOpen ? (
+          <FaChevronDown className="h-3 w-3 text-muted-foreground" />
+        ) : (
+          <FaChevronRight className="h-3 w-3 text-muted-foreground" />
+        )}
+        <FaFolder className="h-3.5 w-3.5 text-ring/70" />
+        Files
+      </button>
+
       {/* Main content area */}
-      <div ref={containerRef} className="flex flex-1 min-h-0">
+      <div
+        ref={containerRef}
+        className="flex flex-col lg:flex-row flex-1 min-h-0"
+      >
         {/* Sidebar */}
         <div
-          className="border-r shrink-0 overflow-hidden flex flex-col"
-          style={{ width: `${sidebarWidth}px` }}
+          className={`border-b lg:border-b-0 lg:border-r shrink-0 overflow-hidden flex flex-col lg:w-[var(--sidebar-w)] ${
+            sidebarOpen
+              ? "max-h-64 lg:max-h-none overflow-y-auto"
+              : "hidden lg:flex"
+          }`}
+          style={{ "--sidebar-w": `${sidebarWidth}px` } as React.CSSProperties}
         >
           {loading ? (
             <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
@@ -337,14 +369,14 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
           )}
         </div>
 
-        {/* Resize handle */}
+        {/* Resize handle — desktop only */}
         <div
-          className="w-1 shrink-0 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
+          className="hidden lg:block w-1 shrink-0 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
           onMouseDown={handleResizeStart}
         />
 
         {/* Editor area */}
-        <div className="flex-1 min-w-0 flex flex-col">
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col">
           {fileLoading ? (
             <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
               Loading file...

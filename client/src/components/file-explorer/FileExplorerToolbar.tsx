@@ -8,6 +8,7 @@ import {
   FaChevronRight,
   FaDownload,
   FaUpload,
+  FaTriangleExclamation,
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +34,7 @@ interface FileExplorerToolbarProps {
   onDownload: (path: string) => void;
   onUpload: (files: FileList, targetDir: string) => void;
   uploading?: boolean;
+  isLargeFile?: boolean;
 }
 
 function BreadcrumbPath({ path }: { path: string | null }) {
@@ -73,6 +75,7 @@ export function FileExplorerToolbar({
   onDownload,
   onUpload,
   uploading,
+  isLargeFile,
 }: FileExplorerToolbarProps) {
   const [newFileOpen, setNewFileOpen] = useState(false);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
@@ -141,14 +144,24 @@ export function FileExplorerToolbar({
 
   return (
     <>
-      <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/30">
-        <BreadcrumbPath path={selectedPath} />
-        <div className="flex items-center gap-1 shrink-0">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/30 gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="hidden lg:block min-w-0">
+            <BreadcrumbPath path={selectedPath} />
+          </div>
+          {isLargeFile && (
+            <span className="flex items-center gap-1 text-yellow-500 text-xs font-medium whitespace-nowrap">
+              <FaTriangleExclamation className="h-3.5 w-3.5 shrink-0" />
+              Large file
+            </span>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-1 shrink-0">
           <Tip content="New File">
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
+              className="h-8 w-8 lg:h-7 lg:w-7"
               onClick={() => setNewFileOpen(true)}
             >
               <FaFileCirclePlus className="h-3.5 w-3.5" />
@@ -158,7 +171,7 @@ export function FileExplorerToolbar({
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
+              className="h-8 w-8 lg:h-7 lg:w-7"
               onClick={() => setNewFolderOpen(true)}
             >
               <FaFolderPlus className="h-3.5 w-3.5" />
@@ -168,7 +181,7 @@ export function FileExplorerToolbar({
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
+              className="h-8 w-8 lg:h-7 lg:w-7"
               onClick={openRenameDialog}
               disabled={!selectedPath}
             >
@@ -179,19 +192,19 @@ export function FileExplorerToolbar({
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
+              className="h-8 w-8 lg:h-7 lg:w-7"
               onClick={() => setDeleteOpen(true)}
               disabled={!selectedPath}
             >
               <FaTrash className="h-3.5 w-3.5" />
             </Button>
           </Tip>
-          <div className="w-px h-5 bg-border mx-0.5" />
+          <div className="w-px h-5 bg-border mx-0.5 hidden lg:block" />
           <Tip content="Download">
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
+              className="h-8 w-8 lg:h-7 lg:w-7"
               onClick={() => selectedPath && onDownload(selectedPath)}
               disabled={!selectedPath}
             >
@@ -202,7 +215,7 @@ export function FileExplorerToolbar({
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
+              className="h-8 w-8 lg:h-7 lg:w-7"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
             >
@@ -221,12 +234,12 @@ export function FileExplorerToolbar({
               }
             }}
           />
-          <div className="w-px h-5 bg-border mx-0.5" />
+          <div className="w-px h-5 bg-border mx-0.5 hidden lg:block" />
           <Tip content="Refresh">
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
+              className="h-8 w-8 lg:h-7 lg:w-7"
               onClick={onRefresh}
             >
               <FaArrowsRotate className="h-3.5 w-3.5" />

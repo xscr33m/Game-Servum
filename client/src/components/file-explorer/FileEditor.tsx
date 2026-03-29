@@ -1,12 +1,7 @@
 import { useMemo, useCallback } from "react";
-import {
-  FaFloppyDisk,
-  FaRotateLeft,
-  FaTriangleExclamation,
-} from "react-icons/fa6";
+import { FaFloppyDisk, FaRotateLeft } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tip } from "@/components/ui/tooltip";
 import { CodeMirrorEditor } from "@/components/ui/code-editor";
 
 interface FileEditorProps {
@@ -20,8 +15,6 @@ interface FileEditorProps {
   onContentChange: (content: string) => void;
 }
 
-const LARGE_FILE_THRESHOLD = 512 * 1024; // 500KB
-
 export function FileEditor({
   content,
   originalContent,
@@ -32,8 +25,6 @@ export function FileEditor({
   onReset,
   onContentChange,
 }: FileEditorProps) {
-  const isLargeFile = (fileSize ?? 0) > LARGE_FILE_THRESHOLD;
-
   const hasChanges = useMemo(() => {
     const normalizedContent = content.replace(/\r\n/g, "\n");
     const normalizedOriginal = originalContent.replace(/\r\n/g, "\n");
@@ -59,25 +50,14 @@ export function FileEditor({
   }, [onReset]);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/30">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 border-b bg-muted/30">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-sm font-medium truncate">{fileName}</span>
           {hasChanges && <Badge variant="warning">Unsaved</Badge>}
-          {isLargeFile && (
-            <Tip content="This file is large. Editor performance may be affected.">
-              <Badge
-                variant="outline"
-                className="gap-1 text-yellow-500 border-yellow-500/50 cursor-help"
-              >
-                <FaTriangleExclamation className="h-3 w-3" />
-                Large file
-              </Badge>
-            </Tip>
-          )}
           {fileSize != null && (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-muted-foreground hidden sm:inline">
               {fileSize < 1024
                 ? `${fileSize} B`
                 : fileSize < 1024 * 1024
