@@ -18,7 +18,7 @@ const steps = [
     icon: FaPlug,
     title: "2. Connect the Dashboard",
     description:
-      "Open the Dashboard (this app) and connect it to your Agent by entering the Agent's IP address and port. You can connect to multiple Agents from a single Dashboard.",
+      "Open the Dashboard (this app) and connect it to your Agent by entering the Agent's IP address, port, API-key and password. You can connect to multiple Agents from a single Dashboard.",
   },
   {
     icon: FaSteam,

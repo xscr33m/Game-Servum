@@ -39,7 +39,7 @@ const faqs = [
   {
     question: "Is Game-Servum free?",
     answer:
-      "Yes, Game-Servum is completely free and open source under the GPL-3.0 license. You can use it, modify it, and distribute it freely.",
+      "Yes, Game-Servum is completely free and open source under the GPL-3.0 license. You can use and modify it freely.",
   },
 ];
 

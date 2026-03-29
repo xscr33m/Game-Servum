@@ -36,7 +36,8 @@ function ContentWidthSetting() {
           <Label className="text-sm font-medium">Content Width</Label>
         </div>
         <p className="text-xs text-muted-foreground">
-          Page content width for server detail tabs
+          Content area width: Full width stretches to edges of window, Centered
+          adds margins on wide screens
         </p>
       </div>
       <div className="flex gap-2">
