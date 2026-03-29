@@ -137,13 +137,18 @@ export function ServerDetailSidebar({
                   onChange(item.id);
                   onItemClick?.();
                 }}
-                className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors ${
+                className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors relative ${
                   active === item.id
-                    ? "bg-accent text-accent-foreground font-medium"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent/50 hover:cursor-pointer"
+                    ? "bg-ring/10 text-foreground font-medium"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted hover:cursor-pointer"
                 }`}
               >
-                <item.icon className="h-3.5 w-3.5 shrink-0" />
+                {active === item.id && (
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-ring rounded-r-full" />
+                )}
+                <item.icon
+                  className={`h-3.5 w-3.5 shrink-0 ${active === item.id ? "text-ring" : ""}`}
+                />
                 {item.label}
               </button>
             ))}
@@ -203,21 +208,22 @@ export function ServerDetailSidebar({
                   )}
                   <div className="space-y-0.5">
                     {group.items.map((item) => (
-                      <Tip
-                        key={item.id}
-                        content={item.label}
-                        side="right"
-                      >
+                      <Tip key={item.id} content={item.label} side="right">
                         <button
                           onClick={() => onChange(item.id)}
                           aria-label={item.label}
-                          className={`flex w-full items-center justify-center rounded-md p-2.5 transition-colors ${
+                          className={`flex w-full items-center justify-center rounded-md p-2.5 transition-colors relative ${
                             active === item.id
-                              ? "bg-accent text-accent-foreground"
-                              : "text-muted-foreground hover:text-foreground hover:bg-accent/50 hover:cursor-pointer"
+                              ? "bg-ring/10 text-foreground"
+                              : "text-muted-foreground hover:text-foreground hover:bg-muted hover:cursor-pointer"
                           }`}
                         >
-                          <item.icon className="h-4 w-4" />
+                          {active === item.id && (
+                            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-ring rounded-r-full" />
+                          )}
+                          <item.icon
+                            className={`h-4 w-4 ${active === item.id ? "text-ring" : ""}`}
+                          />
                         </button>
                       </Tip>
                     ))}
@@ -233,10 +239,7 @@ export function ServerDetailSidebar({
 
         {/* Collapse toggle */}
         <div className="border-t p-2">
-          <Tip
-            content={collapsed ? "Expand sidebar" : ""}
-            side="right"
-          >
+          <Tip content={collapsed ? "Expand sidebar" : ""} side="right">
             <button
               onClick={toggleCollapsed}
               aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
