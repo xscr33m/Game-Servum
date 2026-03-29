@@ -131,45 +131,45 @@ export function SystemMonitor() {
             <div className="h-3 w-32 rounded bg-muted/30 animate-pulse" />
           </div>
         )}
-        <div className="grid grid-cols-4 gap-2 sm:gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 xl:gap-4">
           {/* CPU, Memory, Disk skeletons */}
           {["CPU", "Memory", "Disk"].map((label) => (
             <div
               key={label}
-              className="rounded-lg sm:rounded-xl border border-border/50 bg-card/60 p-2 sm:p-3.5 lg:p-5 flex flex-col min-w-0 overflow-hidden animate-pulse"
+              className="rounded-lg sm:rounded-xl border border-border/50 bg-card/60 p-2 sm:p-3.5 lg:p-5 xl:p-6 flex flex-col min-w-0 overflow-hidden animate-pulse"
             >
-              <div className="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3 lg:mb-4">
+              <div className="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3 lg:mb-4 xl:mb-5">
                 <div className="h-3 w-3 sm:h-3.5 sm:w-3.5 rounded bg-muted/30 animate-pulse" />
                 <div className="h-3 w-12 sm:w-16 rounded bg-muted/30 animate-pulse" />
               </div>
-              <div className="flex items-end justify-between gap-2 mb-1 sm:mb-2 lg:mb-3">
-                <div className="h-[22px] sm:h-[32px] lg:h-[42px] w-16 sm:w-24 rounded bg-muted/30 animate-pulse" />
-                <div className="relative shrink-0 hidden md:block">
+              <div className="flex items-end justify-between gap-2 mb-1 sm:mb-2 lg:mb-3 xl:mb-4">
+                <div className="h-[22px] sm:h-[32px] lg:h-[42px] xl:h-[52px] w-16 sm:w-24 xl:w-28 rounded bg-muted/30 animate-pulse" />
+                <div className="relative shrink-0 hidden sm:block xl:scale-125">
                   <div className="h-12 w-12 rounded-full bg-muted/30 animate-pulse" />
                 </div>
               </div>
-              <div className="h-[10px] sm:h-[11px] w-full rounded bg-muted/30 mt-1.5 hidden sm:block animate-pulse" />
+              <div className="h-[10px] sm:h-[11px] xl:h-3 w-full rounded bg-muted/30 mt-1.5 hidden sm:block animate-pulse" />
             </div>
           ))}
 
           {/* Network skeleton - different structure */}
-          <div className="rounded-lg sm:rounded-xl border border-border/50 bg-card/60 p-3 sm:p-3.5 lg:p-5 flex flex-col min-w-0 overflow-hidden">
-            <div className="mb-2 sm:mb-3 lg:mb-4">
+          <div className="rounded-lg sm:rounded-xl border border-border/50 bg-card/60 p-3 sm:p-3.5 lg:p-5 xl:p-6 flex flex-col min-w-0 overflow-hidden">
+            <div className="mb-2 sm:mb-3 lg:mb-4 xl:mb-5">
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <div className="h-3 w-3 sm:h-3.5 sm:w-3.5 rounded bg-muted/30 animate-pulse" />
                 <div className="h-3 w-16 rounded bg-muted/30" />
                 <div className="h-[9px] sm:h-[10px] w-12 rounded bg-muted/30 ml-auto hidden sm:block animate-pulse" />
               </div>
             </div>
-            <div className="space-y-1 sm:space-y-2 lg:space-y-2.5 flex-1 min-w-0">
+            <div className="space-y-1 sm:space-y-2 lg:space-y-2.5 xl:space-y-3 flex-1 min-w-0">
               <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                 <div className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded bg-muted/30 animate-pulse" />
-                <div className="h-3 sm:h-4 lg:h-[22px] w-20 sm:w-24 rounded bg-muted/30 animate-pulse" />
+                <div className="h-3 sm:h-4 lg:h-[22px] xl:h-[26px] w-20 sm:w-24 xl:w-28 rounded bg-muted/30 animate-pulse" />
               </div>
               <div className="border-t border-border/30" />
               <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                 <div className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded bg-muted/30 animate-pulse" />
-                <div className="h-3 sm:h-4 lg:h-[22px] w-20 sm:w-24 rounded bg-muted/30 animate-pulse" />
+                <div className="h-3 sm:h-4 lg:h-[22px] xl:h-[26px] w-20 sm:w-24 xl:w-28 rounded bg-muted/30 animate-pulse" />
               </div>
             </div>
           </div>
@@ -193,7 +193,7 @@ export function SystemMonitor() {
         </div>
       )}
 
-      <div className="grid grid-cols-4 gap-2 sm:gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
         {/* CPU */}
         <div className="rounded-lg sm:rounded-xl border border-border/50 bg-card/60 p-2.5 sm:p-3.5 lg:p-5 flex flex-col min-w-0 overflow-hidden">
           <div className="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3 lg:mb-4">
@@ -209,7 +209,7 @@ export function SystemMonitor() {
                 %
               </span>
             </p>
-            <div className="relative shrink-0 hidden md:block">
+            <div className="relative shrink-0 hidden sm:block">
               <UsageRing
                 percent={metrics.cpu.usagePercent}
                 size={48}
@@ -227,21 +227,21 @@ export function SystemMonitor() {
         </div>
 
         {/* Memory */}
-        <div className="rounded-lg sm:rounded-xl border border-border/50 bg-card/60 p-2.5 sm:p-3.5 lg:p-5 flex flex-col min-w-0 overflow-hidden">
-          <div className="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3 lg:mb-4">
+        <div className="rounded-lg sm:rounded-xl border border-border/50 bg-card/60 p-2.5 sm:p-3.5 lg:p-5 xl:p-6 flex flex-col min-w-0 overflow-hidden">
+          <div className="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3 lg:mb-4 xl:mb-5">
             <FaMemory className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-ring shrink-0" />
             <span className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider">
               Memory
             </span>
           </div>
-          <div className="flex items-end justify-between gap-2 mb-1 sm:mb-2 lg:mb-3">
-            <p className="text-lg sm:text-2xl lg:text-3xl font-semibold tabular-nums text-foreground leading-none">
+          <div className="flex items-end justify-between gap-2 mb-1 sm:mb-2 lg:mb-3 xl:mb-4">
+            <p className="text-lg sm:text-2xl lg:text-3xl xl:text-4xl font-semibold tabular-nums text-foreground leading-none">
               {metrics.memory.usagePercent.toFixed(1)}
-              <span className="text-xs sm:text-base lg:text-lg text-muted-foreground ml-0.5">
+              <span className="text-xs sm:text-base lg:text-lg xl:text-xl text-muted-foreground ml-0.5">
                 %
               </span>
             </p>
-            <div className="relative shrink-0 hidden md:block">
+            <div className="relative shrink-0 hidden sm:block xl:scale-125">
               <UsageRing
                 percent={metrics.memory.usagePercent}
                 size={48}
@@ -250,7 +250,7 @@ export function SystemMonitor() {
               <FaMemory className="absolute inset-0 m-auto h-3.5 w-3.5 text-ring/40" />
             </div>
           </div>
-          <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-auto truncate min-w-0 hidden sm:block">
+          <p className="text-[10px] sm:text-[11px] xl:text-xs text-muted-foreground mt-auto truncate min-w-0 hidden sm:block">
             {formatBytes(metrics.memory.usedBytes)} used{" "}
             <span className="text-muted-foreground/50">
               / {formatBytes(metrics.memory.totalBytes)}
@@ -259,21 +259,21 @@ export function SystemMonitor() {
         </div>
 
         {/* Disk */}
-        <div className="rounded-lg sm:rounded-xl border border-border/50 bg-card/60 p-2.5 sm:p-3.5 lg:p-5 flex flex-col min-w-0 overflow-hidden">
-          <div className="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3 lg:mb-4">
+        <div className="rounded-lg sm:rounded-xl border border-border/50 bg-card/60 p-2.5 sm:p-3.5 lg:p-5 xl:p-6 flex flex-col min-w-0 overflow-hidden">
+          <div className="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3 lg:mb-4 xl:mb-5">
             <FaHardDrive className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-ring shrink-0" />
             <span className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider truncate">
               Disk ({metrics.disk.drive})
             </span>
           </div>
-          <div className="flex items-end justify-between gap-2 mb-1 sm:mb-2 lg:mb-3">
-            <p className="text-lg sm:text-2xl lg:text-3xl font-semibold tabular-nums text-foreground leading-none">
+          <div className="flex items-end justify-between gap-2 mb-1 sm:mb-2 lg:mb-3 xl:mb-4">
+            <p className="text-lg sm:text-2xl lg:text-3xl xl:text-4xl font-semibold tabular-nums text-foreground leading-none">
               {metrics.disk.usagePercent.toFixed(1)}
-              <span className="text-xs sm:text-base lg:text-lg text-muted-foreground ml-0.5">
+              <span className="text-xs sm:text-base lg:text-lg xl:text-xl text-muted-foreground ml-0.5">
                 %
               </span>
             </p>
-            <div className="relative shrink-0 hidden md:block">
+            <div className="relative shrink-0 hidden sm:block xl:scale-125">
               <UsageRing
                 percent={metrics.disk.usagePercent}
                 size={48}
@@ -282,7 +282,7 @@ export function SystemMonitor() {
               <FaHardDrive className="absolute inset-0 m-auto h-3.5 w-3.5 text-ring/40" />
             </div>
           </div>
-          <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-auto truncate min-w-0 hidden sm:block">
+          <p className="text-[10px] sm:text-[11px] xl:text-xs text-muted-foreground mt-auto truncate min-w-0 hidden sm:block">
             {formatBytes(metrics.disk.freeBytes)} free{" "}
             <span className="text-muted-foreground/50">
               / {formatBytes(metrics.disk.totalBytes)}
@@ -291,8 +291,8 @@ export function SystemMonitor() {
         </div>
 
         {/* Network */}
-        <div className="rounded-lg sm:rounded-xl border border-border/50 bg-card/60 p-2.5 sm:p-3.5 lg:p-5 flex flex-col min-w-0 overflow-hidden">
-          <div className="mb-2 sm:mb-3 lg:mb-4">
+        <div className="rounded-lg sm:rounded-xl border border-border/50 bg-card/60 p-2.5 sm:p-3.5 lg:p-5 xl:p-6 flex flex-col min-w-0 overflow-hidden">
+          <div className="mb-2 sm:mb-3 lg:mb-4 xl:mb-5">
             <div className="flex items-center gap-1.5 sm:gap-2">
               <FaNetworkWired className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-ring shrink-0" />
               <span className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider">
@@ -303,17 +303,17 @@ export function SystemMonitor() {
               </span>
             </div>
           </div>
-          <div className="space-y-1 sm:space-y-2 lg:space-y-2.5 flex-1 min-w-0">
+          <div className="space-y-1 sm:space-y-2 lg:space-y-2.5 xl:space-y-3 flex-1 min-w-0">
             <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
               <FaArrowUp className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-ring/60 shrink-0" />
-              <span className="text-xs sm:text-base lg:text-lg font-semibold tabular-nums text-foreground truncate">
+              <span className="text-xs sm:text-base lg:text-lg xl:text-xl font-semibold tabular-nums text-foreground truncate">
                 {formatRate(metrics.network.sendRate)}
               </span>
             </div>
             <div className="border-t border-border/30" />
             <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
               <FaArrowDown className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-ring/60 shrink-0" />
-              <span className="text-xs sm:text-base lg:text-lg font-semibold tabular-nums text-foreground truncate">
+              <span className="text-xs sm:text-base lg:text-lg xl:text-xl font-semibold tabular-nums text-foreground truncate">
                 {formatRate(metrics.network.receiveRate)}
               </span>
             </div>

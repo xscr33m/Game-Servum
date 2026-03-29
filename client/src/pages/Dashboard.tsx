@@ -30,6 +30,8 @@ import { AppHeader } from "@/components/AppHeader";
 import { publicAsset } from "@/lib/assets";
 import { toastSuccess, toastError, showDependencyError } from "@/lib/toast";
 import { Tip } from "@/components/ui/tooltip";
+import { useContentWidth } from "@/hooks/useContentWidth";
+import { cn } from "@/lib/utils";
 import type { GameServer, SteamCMDStatus } from "@/types";
 import { APP_VERSION } from "@game-servum/shared";
 
@@ -63,6 +65,7 @@ export function Dashboard() {
 
   const { api, subscribe, isConnected, activeConnection, connections } =
     useBackend();
+  const { contentClass } = useContentWidth();
 
   // Restore from navigation cache if the active agent matches
   useEffect(() => {
@@ -527,7 +530,9 @@ export function Dashboard() {
 
       <div className="flex-1 flex overflow-hidden">
         <main className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
-          <div className="container mx-auto px-4 py-4 space-y-8">
+          <div
+            className={cn("mx-auto w-full px-4 py-4 space-y-8", contentClass)}
+          >
             {/* System Monitoring */}
             {monitoringEnabled && !noAgents && (
               <SystemMonitor key={activeConnection?.id} />
@@ -610,7 +615,7 @@ export function Dashboard() {
                     </div>
                   )
                 ) : (
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
                     {servers.map((server) => (
                       <ServerCard
                         key={server.id}

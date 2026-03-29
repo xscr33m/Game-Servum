@@ -88,12 +88,12 @@ export function ServerCard({
       )}
 
       {/* Top section — Logo banner + Status */}
-      <div className="relative h-28 bg-gradient-to-br from-secondary/80 to-muted/60 flex items-center px-5">
+      <div className="relative h-20 sm:h-28 bg-gradient-to-br from-secondary/80 to-muted/60 flex items-center px-3 sm:px-5">
         {gameLogo ? (
           <img
             src={publicAsset(gameLogo)}
             alt={gameName}
-            className="h-16 w-auto object-contain drop-shadow-lg"
+            className="h-12 sm:h-16 w-auto object-contain drop-shadow-lg"
           />
         ) : (
           <span className="text-lg font-bold text-muted-foreground/60">
@@ -112,7 +112,7 @@ export function ServerCard({
       </div>
 
       {/* Server info */}
-      <div className="px-5 pt-4 pb-2 space-y-3">
+      <div className="px-3 sm:px-5 pt-3 sm:pt-4 pb-2 space-y-2 sm:space-y-3">
         <div>
           <h3 className="font-semibold text-base leading-tight truncate">
             {server.name}
@@ -120,7 +120,7 @@ export function ServerCard({
           <p className="text-xs text-muted-foreground mt-1">{gameName}</p>
         </div>
 
-        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 sm:gap-4 text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <span className="uppercase tracking-wider font-medium">Port</span>
             <span className="text-foreground font-mono">{server.port}</span>
@@ -149,11 +149,11 @@ export function ServerCard({
       </div>
 
       {/* Separator */}
-      <div className="mx-5 border-t border-border/50" />
+      <div className="mx-3 sm:mx-5 border-t border-border/50" />
 
       {/* Actions bar */}
       <div
-        className="flex items-center gap-2 px-5 py-3"
+        className="flex items-center gap-2 px-3 sm:px-5 py-2.5 sm:py-3"
         onClick={(e) => e.stopPropagation()}
       >
         {isBusy ? (
