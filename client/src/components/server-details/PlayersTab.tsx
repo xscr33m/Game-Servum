@@ -561,182 +561,185 @@ export function PlayersTab({ server }: PlayersTabProps) {
                   {onlinePlayers.map((player) => (
                     <div
                       key={player.steamId}
-                      className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 rounded-lg border bg-muted/50 border-border"
+                      className="flex flex-col gap-2 p-3 rounded-lg border bg-muted/50 border-border"
                     >
-                      {/* Player info */}
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div className="h-2 w-2 rounded-full bg-ring shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium truncate text-sm">
-                              {player.playerName}
-                            </p>
-                            {getPlayerId(player) &&
-                              isWhitelisted(getPlayerId(player)) && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-[10px] px-1.5 py-0 border-blue-500 text-blue-500 shrink-0"
-                                >
-                                  <FaShield className="h-2.5 w-2.5 mr-0.5" />
-                                  WL
-                                </Badge>
-                              )}
-                            {getPlayerId(player) &&
-                              isBanned(getPlayerId(player)) && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-[10px] px-1.5 py-0 border-red-500 text-red-500 shrink-0"
-                                >
-                                  <FaBan className="h-2.5 w-2.5 mr-0.5" />
-                                  Banned
-                                </Badge>
-                              )}
+                      {/* Row 1: Name + Badges + Actions */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="h-2 w-2 rounded-full bg-ring shrink-0" />
+                          <p className="font-medium truncate text-sm">
+                            {player.playerName}
+                          </p>
+                          {getPlayerId(player) &&
+                            isWhitelisted(getPlayerId(player)) && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] px-1.5 py-0 border-blue-500 text-blue-500 shrink-0"
+                              >
+                                <FaShield className="h-2.5 w-2.5 mr-0.5" />
+                                WL
+                              </Badge>
+                            )}
+                          {getPlayerId(player) &&
+                            isBanned(getPlayerId(player)) && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] px-1.5 py-0 border-red-500 text-red-500 shrink-0"
+                              >
+                                <FaBan className="h-2.5 w-2.5 mr-0.5" />
+                                Banned
+                              </Badge>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <div className="flex items-center gap-1 text-sm text-muted-foreground mr-1">
+                            <FaClock className="h-3.5 w-3.5" />
+                            {player.currentSessionStart
+                              ? formatSessionDuration(
+                                  player.currentSessionStart,
+                                )
+                              : "—"}
                           </div>
-                          {getPlayerId(player) ? (
-                            <div className="flex items-center gap-1 mt-0.5">
-                              <Tip content={getPlayerId(player)!} side="right">
-                                <span className="font-mono text-xs text-muted-foreground truncate max-w-[200px] sm:max-w-[300px]">
-                                  {getPlayerId(player)}
-                                </span>
-                              </Tip>
-                              <Tip content={`Copy ${playerIdLabel}`}>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-5 w-5 p-0"
-                                  onClick={() =>
-                                    handleCopyId(getPlayerId(player)!)
-                                  }
-                                >
-                                  <FaCopy className="h-3 w-3" />
-                                </Button>
-                              </Tip>
-                              {player.steam64Id && (
-                                <>
-                                  <span className="text-xs text-muted-foreground/40 mx-0.5">
-                                    |
-                                  </span>
-                                  <Tip content={player.steam64Id} side="right">
-                                    <span className="font-mono text-xs text-muted-foreground truncate max-w-[140px] sm:max-w-[180px]">
-                                      {player.steam64Id}
-                                    </span>
-                                  </Tip>
-                                  <Tip content="Copy Steam ID">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-5 w-5 p-0"
-                                      onClick={() =>
-                                        handleCopyId(player.steam64Id!)
-                                      }
-                                    >
-                                      <FaCopy className="h-3 w-3" />
-                                    </Button>
-                                  </Tip>
-                                </>
+                          {getPlayerId(player) && (
+                            <div className="flex items-center gap-0.5">
+                              {hasDirectMessage && (
+                                <Tip content="Send message">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-ring"
+                                    onClick={() => openMessageDialog(player)}
+                                    disabled={actionLoading !== null}
+                                  >
+                                    <FaMessage className="h-3.5 w-3.5" />
+                                  </Button>
+                                </Tip>
+                              )}
+                              {isWhitelisted(getPlayerId(player)) ? (
+                                <Tip content="Remove from whitelist">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-blue-500 hover:text-blue-600"
+                                    onClick={() =>
+                                      handleRemoveFromWhitelist(
+                                        getPlayerId(player)!,
+                                        player.playerName,
+                                      )
+                                    }
+                                    disabled={actionLoading !== null}
+                                  >
+                                    <FaShieldHalved className="h-4 w-4" />
+                                  </Button>
+                                </Tip>
+                              ) : (
+                                <Tip content="Add to whitelist">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-blue-500"
+                                    onClick={() =>
+                                      handleAddToWhitelist(
+                                        getPlayerId(player)!,
+                                        player.playerName,
+                                      )
+                                    }
+                                    disabled={actionLoading !== null}
+                                  >
+                                    <FaUserShield className="h-4 w-4" />
+                                  </Button>
+                                </Tip>
+                              )}
+                              {isBanned(getPlayerId(player)) ? (
+                                <Tip content="Remove from ban list">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-red-500 hover:text-red-600"
+                                    onClick={() =>
+                                      handleRemoveFromBanList(
+                                        getPlayerId(player)!,
+                                        player.playerName,
+                                      )
+                                    }
+                                    disabled={actionLoading !== null}
+                                  >
+                                    <FaUserMinus className="h-4 w-4" />
+                                  </Button>
+                                </Tip>
+                              ) : (
+                                <Tip content="Add to ban list">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500"
+                                    onClick={() =>
+                                      handleAddToBanList(
+                                        getPlayerId(player)!,
+                                        player.playerName,
+                                      )
+                                    }
+                                    disabled={actionLoading !== null}
+                                  >
+                                    <FaUserPlus className="h-4 w-4" />
+                                  </Button>
+                                </Tip>
                               )}
                             </div>
-                          ) : (
-                            <span className="font-mono text-xs text-muted-foreground/50 mt-0.5">
-                              {playerIdLabel} pending...
-                            </span>
                           )}
                         </div>
                       </div>
 
-                      {/* Session duration + action buttons */}
-                      <div className="flex items-center gap-2 sm:shrink-0 justify-end sm:justify-start pl-5 sm:pl-0">
-                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                          <FaClock className="h-3.5 w-3.5" />
-                          {player.currentSessionStart
-                            ? formatSessionDuration(player.currentSessionStart)
-                            : "—"}
-                        </div>
-                        {getPlayerId(player) && (
-                          <div className="flex items-center gap-0.5 ml-1">
-                            {hasDirectMessage && (
-                              <Tip content="Send message">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 w-7 p-0 text-muted-foreground hover:text-ring"
-                                  onClick={() => openMessageDialog(player)}
-                                  disabled={actionLoading !== null}
-                                >
-                                  <FaMessage className="h-3.5 w-3.5" />
-                                </Button>
-                              </Tip>
-                            )}
-                            {isWhitelisted(getPlayerId(player)) ? (
-                              <Tip content="Remove from whitelist">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 w-7 p-0 text-blue-500 hover:text-blue-600"
-                                  onClick={() =>
-                                    handleRemoveFromWhitelist(
-                                      getPlayerId(player)!,
-                                      player.playerName,
-                                    )
-                                  }
-                                  disabled={actionLoading !== null}
-                                >
-                                  <FaShieldHalved className="h-4 w-4" />
-                                </Button>
-                              </Tip>
-                            ) : (
-                              <Tip content="Add to whitelist">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 w-7 p-0 text-muted-foreground hover:text-blue-500"
-                                  onClick={() =>
-                                    handleAddToWhitelist(
-                                      getPlayerId(player)!,
-                                      player.playerName,
-                                    )
-                                  }
-                                  disabled={actionLoading !== null}
-                                >
-                                  <FaUserShield className="h-4 w-4" />
-                                </Button>
-                              </Tip>
-                            )}
-                            {isBanned(getPlayerId(player)) ? (
-                              <Tip content="Remove from ban list">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 w-7 p-0 text-red-500 hover:text-red-600"
-                                  onClick={() =>
-                                    handleRemoveFromBanList(
-                                      getPlayerId(player)!,
-                                      player.playerName,
-                                    )
-                                  }
-                                  disabled={actionLoading !== null}
-                                >
-                                  <FaUserMinus className="h-4 w-4" />
-                                </Button>
-                              </Tip>
-                            ) : (
-                              <Tip content="Add to ban list">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500"
-                                  onClick={() =>
-                                    handleAddToBanList(
-                                      getPlayerId(player)!,
-                                      player.playerName,
-                                    )
-                                  }
-                                  disabled={actionLoading !== null}
-                                >
-                                  <FaUserPlus className="h-4 w-4" />
-                                </Button>
-                              </Tip>
-                            )}
+                      {/* Row 2: IDs */}
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pl-5 text-xs">
+                        {getPlayerId(player) ? (
+                          <div className="flex items-center gap-1">
+                            <span className="text-muted-foreground">
+                              {playerIdLabel}:
+                            </span>
+                            <Tip content={getPlayerId(player)!} side="right">
+                              <span className="font-mono text-foreground/80 truncate max-w-[200px] sm:max-w-[300px]">
+                                {getPlayerId(player)}
+                              </span>
+                            </Tip>
+                            <Tip content={`Copy ${playerIdLabel}`}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-5 w-5 p-0"
+                                onClick={() =>
+                                  handleCopyId(getPlayerId(player)!)
+                                }
+                              >
+                                <FaCopy className="h-3 w-3" />
+                              </Button>
+                            </Tip>
+                          </div>
+                        ) : (
+                          <span className="font-mono text-muted-foreground/50">
+                            {playerIdLabel} pending...
+                          </span>
+                        )}
+                        {player.steam64Id && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-muted-foreground">
+                              Steam ID:
+                            </span>
+                            <Tip content={player.steam64Id} side="right">
+                              <span className="font-mono text-foreground/80">
+                                {player.steam64Id}
+                              </span>
+                            </Tip>
+                            <Tip content="Copy Steam ID">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-5 w-5 p-0"
+                                onClick={() => handleCopyId(player.steam64Id!)}
+                              >
+                                <FaCopy className="h-3 w-3" />
+                              </Button>
+                            </Tip>
                           </div>
                         )}
                       </div>
@@ -772,203 +775,235 @@ export function PlayersTab({ server }: PlayersTabProps) {
                   {[...onlinePlayers, ...offlinePlayers].map((player) => (
                     <div
                       key={player.steamId}
-                      className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 rounded-lg border ${
+                      className={`flex flex-col gap-2 p-3 rounded-lg border ${
                         player.isOnline
                           ? "bg-muted/50 border-border"
-                          : "bg-muted/20 border-border/50 opacity-60"
+                          : "bg-muted/20 border-border/50"
                       }`}
                     >
-                      {/* Row 1: Status + Name + Badges */}
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        {player.isOnline ? (
-                          <Badge variant="success" className="text-xs shrink-0">
-                            Online
-                          </Badge>
-                        ) : (
-                          <Badge
-                            variant="secondary"
-                            className="text-xs shrink-0"
-                          >
-                            Offline
-                          </Badge>
-                        )}
-                        <p className="font-medium truncate text-sm">
-                          {player.playerName}
-                        </p>
-                        {getPlayerId(player) &&
-                          isWhitelisted(getPlayerId(player)) && (
+                      {/* Row 1: Status + Name + Badges + Stats + Actions */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {player.isOnline ? (
                             <Badge
-                              variant="outline"
-                              className="text-[10px] px-1 py-0 border-blue-500 text-blue-500 shrink-0"
+                              variant="success"
+                              className="text-xs shrink-0"
                             >
-                              WL
+                              Online
+                            </Badge>
+                          ) : (
+                            <Badge
+                              variant="secondary"
+                              className="text-xs shrink-0"
+                            >
+                              Offline
                             </Badge>
                           )}
-                        {getPlayerId(player) &&
-                          isBanned(getPlayerId(player)) && (
-                            <Badge
-                              variant="outline"
-                              className="text-[10px] px-1 py-0 border-red-500 text-red-500 shrink-0"
-                            >
-                              Ban
-                            </Badge>
-                          )}
-                      </div>
-
-                      {/* Row 2: Character ID + Steam64 ID (if applicable) */}
-                      {capabilities?.logParsing && (
-                        <div className="flex items-center gap-1 sm:shrink-0 pl-0 sm:pl-0">
-                          {player.characterId ? (
-                            <>
-                              <Tip content={player.characterId} side="right">
-                                <span className="font-mono text-xs text-muted-foreground truncate max-w-[180px] sm:max-w-[200px]">
-                                  {player.characterId}
-                                </span>
-                              </Tip>
-                              <Tip content="Copy Character ID">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-5 w-5 p-0"
-                                  onClick={() =>
-                                    handleCopyId(player.characterId!)
-                                  }
-                                >
-                                  <FaCopy className="h-3 w-3" />
-                                </Button>
-                              </Tip>
-                              {player.steam64Id && (
-                                <>
-                                  <span className="text-xs text-muted-foreground/40 mx-0.5">
-                                    |
-                                  </span>
-                                  <Tip content={player.steam64Id} side="right">
-                                    <span className="font-mono text-xs text-muted-foreground truncate max-w-[140px] sm:max-w-[180px]">
-                                      {player.steam64Id}
-                                    </span>
-                                  </Tip>
-                                  <Tip content="Copy Steam ID">
+                          <p className="font-medium truncate text-sm">
+                            {player.playerName}
+                          </p>
+                          {getPlayerId(player) &&
+                            isWhitelisted(getPlayerId(player)) && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] px-1 py-0 border-blue-500 text-blue-500 shrink-0"
+                              >
+                                WL
+                              </Badge>
+                            )}
+                          {getPlayerId(player) &&
+                            isBanned(getPlayerId(player)) && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] px-1 py-0 border-red-500 text-red-500 shrink-0"
+                              >
+                                Ban
+                              </Badge>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <div className="hidden sm:flex items-center gap-3 text-xs">
+                            <span>
+                              <span className="text-muted-foreground">
+                                Playtime:
+                              </span>{" "}
+                              <span className="text-foreground/80">
+                                {formatPlaytime(player.totalPlaytimeSeconds)}
+                              </span>
+                            </span>
+                            <span>
+                              <span className="text-muted-foreground">
+                                Sessions:
+                              </span>{" "}
+                              <span className="text-foreground/80">
+                                {player.sessionCount}
+                              </span>
+                            </span>
+                            <span>
+                              <span className="text-muted-foreground">
+                                Last seen:
+                              </span>{" "}
+                              <span className="text-foreground/80">
+                                {player.isOnline
+                                  ? "Now"
+                                  : formatLastSeen(player.lastSeen)}
+                              </span>
+                            </span>
+                          </div>
+                          {(hasWhitelist || hasBanList) &&
+                            getPlayerId(player) && (
+                              <div className="flex items-center gap-0.5">
+                                {isWhitelisted(getPlayerId(player)) ? (
+                                  <Tip content="Remove from whitelist">
                                     <Button
                                       variant="ghost"
                                       size="sm"
-                                      className="h-5 w-5 p-0"
+                                      className="h-7 w-7 p-0 text-blue-500 hover:text-blue-600"
                                       onClick={() =>
-                                        handleCopyId(player.steam64Id!)
+                                        handleRemoveFromWhitelist(
+                                          getPlayerId(player)!,
+                                          player.playerName,
+                                        )
                                       }
+                                      disabled={actionLoading !== null}
                                     >
-                                      <FaCopy className="h-3 w-3" />
+                                      <FaShieldHalved className="h-3.5 w-3.5" />
                                     </Button>
                                   </Tip>
-                                </>
-                              )}
-                            </>
-                          ) : (
-                            <span className="text-xs text-muted-foreground/50">
-                              —
-                            </span>
-                          )}
+                                ) : (
+                                  <Tip content="Add to whitelist">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 w-7 p-0 text-muted-foreground hover:text-blue-500"
+                                      onClick={() =>
+                                        handleAddToWhitelist(
+                                          getPlayerId(player)!,
+                                          player.playerName,
+                                        )
+                                      }
+                                      disabled={actionLoading !== null}
+                                    >
+                                      <FaUserShield className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </Tip>
+                                )}
+                                {isBanned(getPlayerId(player)) ? (
+                                  <Tip content="Remove from ban list">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 w-7 p-0 text-red-500 hover:text-red-600"
+                                      onClick={() =>
+                                        handleRemoveFromBanList(
+                                          getPlayerId(player)!,
+                                          player.playerName,
+                                        )
+                                      }
+                                      disabled={actionLoading !== null}
+                                    >
+                                      <FaUserMinus className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </Tip>
+                                ) : (
+                                  <Tip content="Add to ban list">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500"
+                                      onClick={() =>
+                                        handleAddToBanList(
+                                          getPlayerId(player)!,
+                                          player.playerName,
+                                        )
+                                      }
+                                      disabled={actionLoading !== null}
+                                    >
+                                      <FaUserPlus className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </Tip>
+                                )}
+                              </div>
+                            )}
                         </div>
-                      )}
+                      </div>
 
-                      {/* Row 3: Stats + Actions */}
-                      <div className="flex items-center gap-3 sm:shrink-0 justify-between sm:justify-start text-xs text-muted-foreground">
-                        <div className="flex items-center gap-3">
-                          <Tip content="Total playtime">
-                            <span>
+                      {/* Row 2: IDs + Stats (mobile) */}
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                        {getPlayerId(player) && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-muted-foreground">
+                              {playerIdLabel}:
+                            </span>
+                            <Tip content={getPlayerId(player)!} side="right">
+                              <span className="font-mono text-foreground/80 truncate max-w-[180px] sm:max-w-[200px]">
+                                {getPlayerId(player)}
+                              </span>
+                            </Tip>
+                            <Tip content={`Copy ${playerIdLabel}`}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-5 w-5 p-0"
+                                onClick={() =>
+                                  handleCopyId(getPlayerId(player)!)
+                                }
+                              >
+                                <FaCopy className="h-3 w-3" />
+                              </Button>
+                            </Tip>
+                          </div>
+                        )}
+                        {player.steam64Id && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-muted-foreground">
+                              Steam ID:
+                            </span>
+                            <Tip content={player.steam64Id} side="right">
+                              <span className="font-mono text-foreground/80">
+                                {player.steam64Id}
+                              </span>
+                            </Tip>
+                            <Tip content="Copy Steam ID">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-5 w-5 p-0"
+                                onClick={() => handleCopyId(player.steam64Id!)}
+                              >
+                                <FaCopy className="h-3 w-3" />
+                              </Button>
+                            </Tip>
+                          </div>
+                        )}
+                        <div className="flex sm:hidden items-center gap-3">
+                          <span>
+                            <span className="text-muted-foreground">
+                              Playtime:
+                            </span>{" "}
+                            <span className="text-foreground/80">
                               {formatPlaytime(player.totalPlaytimeSeconds)}
                             </span>
-                          </Tip>
-                          <Tip content="Sessions">
-                            <span>
-                              {player.sessionCount}{" "}
-                              {player.sessionCount === 1
-                                ? "session"
-                                : "sessions"}
+                          </span>
+                          <span>
+                            <span className="text-muted-foreground">
+                              Sessions:
+                            </span>{" "}
+                            <span className="text-foreground/80">
+                              {player.sessionCount}
                             </span>
-                          </Tip>
-                          <Tip content="Last seen">
-                            <span>
+                          </span>
+                          <span>
+                            <span className="text-muted-foreground">
+                              Last seen:
+                            </span>{" "}
+                            <span className="text-foreground/80">
                               {player.isOnline
                                 ? "Now"
                                 : formatLastSeen(player.lastSeen)}
                             </span>
-                          </Tip>
+                          </span>
                         </div>
-                        {(hasWhitelist || hasBanList) &&
-                          getPlayerId(player) && (
-                            <div className="flex items-center gap-0.5">
-                              {isWhitelisted(getPlayerId(player)) ? (
-                                <Tip content="Remove from whitelist">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 w-7 p-0 text-blue-500 hover:text-blue-600"
-                                    onClick={() =>
-                                      handleRemoveFromWhitelist(
-                                        getPlayerId(player)!,
-                                        player.playerName,
-                                      )
-                                    }
-                                    disabled={actionLoading !== null}
-                                  >
-                                    <FaShieldHalved className="h-3.5 w-3.5" />
-                                  </Button>
-                                </Tip>
-                              ) : (
-                                <Tip content="Add to whitelist">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-blue-500"
-                                    onClick={() =>
-                                      handleAddToWhitelist(
-                                        getPlayerId(player)!,
-                                        player.playerName,
-                                      )
-                                    }
-                                    disabled={actionLoading !== null}
-                                  >
-                                    <FaUserShield className="h-3.5 w-3.5" />
-                                  </Button>
-                                </Tip>
-                              )}
-                              {isBanned(getPlayerId(player)) ? (
-                                <Tip content="Remove from ban list">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 w-7 p-0 text-red-500 hover:text-red-600"
-                                    onClick={() =>
-                                      handleRemoveFromBanList(
-                                        getPlayerId(player)!,
-                                        player.playerName,
-                                      )
-                                    }
-                                    disabled={actionLoading !== null}
-                                  >
-                                    <FaUserMinus className="h-3.5 w-3.5" />
-                                  </Button>
-                                </Tip>
-                              ) : (
-                                <Tip content="Add to ban list">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500"
-                                    onClick={() =>
-                                      handleAddToBanList(
-                                        getPlayerId(player)!,
-                                        player.playerName,
-                                      )
-                                    }
-                                    disabled={actionLoading !== null}
-                                  >
-                                    <FaUserPlus className="h-3.5 w-3.5" />
-                                  </Button>
-                                </Tip>
-                              )}
-                            </div>
-                          )}
                       </div>
                     </div>
                   ))}
