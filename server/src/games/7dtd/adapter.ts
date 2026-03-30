@@ -24,6 +24,7 @@ import type {
   BackupPathConfig,
 } from "../types.js";
 import type { GameServer } from "../../types/index.js";
+import type { RconClient } from "../../core/rcon/types.js";
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -86,6 +87,7 @@ export class SevenDaysAdapter extends BaseGameAdapter {
       logParsing: false,
       playerListEditable: false,
       profilesPath: false,
+      directMessage: true,
     },
     broadcastCommand: 'say "{MESSAGE}"',
     playerListCommand: "listplayers",
@@ -184,6 +186,16 @@ export class SevenDaysAdapter extends BaseGameAdapter {
     }
 
     return null;
+  }
+
+  async sendDirectMessage(
+    rcon: RconClient,
+    playerId: string,
+    message: string,
+  ): Promise<boolean> {
+    // playerId is Steam64 ID
+    await rcon.sendCommand(`pm ${playerId} "${message}"`);
+    return true;
   }
 
   // ── Mods (not supported via Workshop) ────────────────────────────

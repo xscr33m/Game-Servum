@@ -30,6 +30,8 @@ import type {
 } from "../types.js";
 import type { GameServer } from "../../types/index.js";
 import type { ServerMod } from "../../types/index.js";
+import type { RconClient } from "../../core/rcon/types.js";
+import { parseBattlEyePlayersResponse } from "../../core/rcon/battleye.js";
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -126,8 +128,9 @@ export class DayZAdapter extends BaseGameAdapter {
       logParsing: true,
       playerListEditable: true,
       profilesPath: true,
+      directMessage: true,
     },
-    broadcastCommand: "#broadcast {MESSAGE}",
+    broadcastCommand: "say -1 {MESSAGE}",
     playerListCommand: "players",
   };
 
@@ -266,6 +269,20 @@ export class DayZAdapter extends BaseGameAdapter {
       `[DayZ] No BattlEye config found in: ${possibleDirs.join(", ")}`,
     );
     return null;
+  }
+
+  async sendDirectMessage(
+    rcon: RconClient,
+    playerId: string,
+    message: string,
+  ): Promise<boolean> {
+    // playerId is BattlEye GUID — need to resolve the current player index
+    const response = await rcon.sendCommand("players");
+    const players = parseBattlEyePlayersResponse(response);
+    const player = players.find((p) => p.guid === playerId);
+    if (!player) return false;
+    await rcon.sendCommand(`say ${player.index} ${message}`);
+    return true;
   }
 
   // ── Mods ─────────────────────────────────────────────────────────

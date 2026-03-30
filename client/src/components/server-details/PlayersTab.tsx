@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   FaShieldHalved,
   FaUserShield,
@@ -14,12 +14,22 @@ import {
   FaCopy,
   FaUserPlus,
   FaUserMinus,
+  FaMessage,
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useBackend } from "@/hooks/useBackend";
 import { useGameCapabilities } from "@/hooks/useGameCapabilities";
 import { useContentWidth } from "@/hooks/useContentWidth";
@@ -96,6 +106,15 @@ export function PlayersTab({ server }: PlayersTabProps) {
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
+  // Direct message dialog state
+  const [messageDialogOpen, setMessageDialogOpen] = useState(false);
+  const [messageTarget, setMessageTarget] = useState<PlayerSummary | null>(
+    null,
+  );
+  const [messageText, setMessageText] = useState("");
+  const [messageSending, setMessageSending] = useState(false);
+  const messageInputRef = useRef<HTMLInputElement>(null);
+
   const { api, subscribe, isConnected } = useBackend();
   const { capabilities } = useGameCapabilities(server.gameId);
   const { contentClass } = useContentWidth();
@@ -103,6 +122,7 @@ export function PlayersTab({ server }: PlayersTabProps) {
   const hasWhitelist = capabilities?.whitelist !== false;
   const hasBanList = capabilities?.banList !== false;
   const isPlayerListEditable = capabilities?.playerListEditable !== false;
+  const hasDirectMessage = capabilities?.directMessage === true;
 
   // Resolve the effective player ID for whitelist/ban based on game type:
   // DayZ uses BattlEye GUID (characterId from ADM logs), ARK/7DTD use SteamID64.
@@ -319,6 +339,32 @@ export function PlayersTab({ server }: PlayersTabProps) {
       toastSuccess(`${playerIdLabel} copied to clipboard`);
     } catch {
       toastError("Failed to copy to clipboard");
+    }
+  }
+
+  function openMessageDialog(player: PlayerSummary) {
+    setMessageTarget(player);
+    setMessageText("");
+    setMessageDialogOpen(true);
+    // Focus input after dialog opens
+    setTimeout(() => messageInputRef.current?.focus(), 100);
+  }
+
+  async function handleSendDirectMessage() {
+    if (!messageTarget || !messageText.trim()) return;
+    setMessageSending(true);
+    try {
+      await api.servers.sendDirectMessage(
+        server.id,
+        messageTarget.steamId,
+        messageText.trim(),
+      );
+      toastSuccess(`Message sent to ${messageTarget.playerName}`);
+      setMessageDialogOpen(false);
+    } catch (err) {
+      toastError((err as Error).message);
+    } finally {
+      setMessageSending(false);
     }
   }
 
@@ -583,6 +629,19 @@ export function PlayersTab({ server }: PlayersTabProps) {
                         </div>
                         {getPlayerId(player) && (
                           <div className="flex items-center gap-0.5 ml-1">
+                            {hasDirectMessage && (
+                              <Tip content="Send message">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0 text-muted-foreground hover:text-ring"
+                                  onClick={() => openMessageDialog(player)}
+                                  disabled={actionLoading !== null}
+                                >
+                                  <FaMessage className="h-3.5 w-3.5" />
+                                </Button>
+                              </Tip>
+                            )}
                             {isWhitelisted(getPlayerId(player)) ? (
                               <Tip content="Remove from whitelist">
                                 <Button
@@ -921,6 +980,52 @@ export function PlayersTab({ server }: PlayersTabProps) {
           </TabsContent>
         )}
       </Tabs>
+
+      {/* Direct Message Dialog */}
+      <Dialog open={messageDialogOpen} onOpenChange={setMessageDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Send Message</DialogTitle>
+            <DialogDescription>
+              Send a direct message to{" "}
+              <span className="font-medium text-foreground">
+                {messageTarget?.playerName}
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSendDirectMessage();
+            }}
+          >
+            <Input
+              ref={messageInputRef}
+              value={messageText}
+              onChange={(e) => setMessageText(e.target.value)}
+              placeholder="Type your message..."
+              disabled={messageSending}
+              autoFocus
+            />
+            <DialogFooter className="mt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setMessageDialogOpen(false)}
+                disabled={messageSending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={!messageText.trim() || messageSending}
+              >
+                {messageSending ? "Sending..." : "Send"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

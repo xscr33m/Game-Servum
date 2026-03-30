@@ -337,6 +337,11 @@ export interface ServersApiClient {
   ) => Promise<{ success: boolean; message: string }>;
   getWhitelistContent: (serverId: number) => Promise<{ content: string }>;
   getBanContent: (serverId: number) => Promise<{ content: string }>;
+  sendDirectMessage: (
+    serverId: number,
+    playerId: string,
+    message: string,
+  ) => Promise<{ success: boolean; message: string }>;
   // File browser
   browseRoots: (
     id: number,
@@ -1037,6 +1042,14 @@ function createServersApi(
       ),
     getBanContent: (serverId: number) =>
       fetchApi<{ content: string }>(`/servers/${serverId}/players/ban-content`),
+    sendDirectMessage: (serverId: number, playerId: string, message: string) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${serverId}/players/${encodeURIComponent(playerId)}/message`,
+        {
+          method: "POST",
+          body: JSON.stringify({ message }),
+        },
+      ),
     // File browser
     browseRoots: (id: number) =>
       fetchApi<{ roots: Array<{ key: string; label: string }> }>(

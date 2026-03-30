@@ -79,6 +79,7 @@ import {
 } from "../services/serverProcess.js";
 import { startSchedule, clearSchedule } from "../services/scheduler.js";
 import { reloadMessageBroadcaster } from "../services/messageBroadcaster.js";
+import { getRconConnection } from "../services/playerTracker.js";
 import { BUILTIN_VARIABLES } from "../services/variableResolver.js";
 import {
   triggerUpdateCheck,
@@ -2250,6 +2251,65 @@ router.get("/:id/players/ban-content", (req: Request, res: Response) => {
   const content = adapter.getPlayerListContent(server, "ban");
   res.json({ content });
 });
+
+// POST /api/servers/:id/players/:playerId/message - Send a direct message to a player
+router.post(
+  "/:id/players/:playerId/message",
+  async (req: Request, res: Response) => {
+    const id = parseInt(req.params.id, 10);
+    const { playerId } = req.params;
+    const { message } = req.body as { message: string };
+    const server = getServerById(id);
+
+    if (!server) {
+      return res.status(404).json({ error: "Server not found" });
+    }
+
+    if (
+      !message ||
+      typeof message !== "string" ||
+      message.trim().length === 0
+    ) {
+      return res.status(400).json({ error: "Message is required" });
+    }
+
+    if (server.status !== "running") {
+      return res.status(400).json({ error: "Server is not running" });
+    }
+
+    const adapter = getGameAdapter(server.gameId);
+    if (!adapter?.sendDirectMessage) {
+      return res
+        .status(400)
+        .json({ error: "This game does not support direct messages" });
+    }
+
+    const rcon = getRconConnection(server.id);
+    if (!rcon || !rcon.isConnected()) {
+      return res.status(400).json({ error: "RCON is not connected" });
+    }
+
+    try {
+      const sent = await adapter.sendDirectMessage(
+        rcon,
+        playerId,
+        message.trim(),
+      );
+      if (!sent) {
+        return res.status(404).json({ error: "Player not found on server" });
+      }
+      res.json({ success: true, message: "Message sent" });
+    } catch (err) {
+      logger.error(
+        `[Servers] Failed to send direct message to ${playerId} on server ${id}:`,
+        err,
+      );
+      res.status(500).json({
+        error: `Failed to send message: ${(err as Error).message}`,
+      });
+    }
+  },
+);
 
 // ==================== FIREWALL ROUTES ====================
 

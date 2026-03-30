@@ -15,6 +15,7 @@ import type {
 } from "@game-servum/shared";
 import type { GameServer } from "../types/index.js";
 import type { ServerMod } from "../types/index.js";
+import type { RconClient } from "../core/rcon/types.js";
 
 export type { GameMetadata, StartupDetector };
 
@@ -154,6 +155,18 @@ export interface GameAdapter {
    * Returns null if RCON is not available or config cannot be determined.
    */
   readRconConfig(server: GameServer): RconConfig | null;
+
+  /**
+   * Send a direct message to a specific online player via RCON.
+   * `playerId` is the game-specific identifier (BattlEye GUID for DayZ, Steam64 for 7DTD).
+   * Returns true if the message was sent, false if the player was not found.
+   * Undefined means the game does not support direct messages.
+   */
+  sendDirectMessage?(
+    rcon: RconClient,
+    playerId: string,
+    message: string,
+  ): Promise<boolean>;
 
   // ── Mods ─────────────────────────────────────────────────────────
 

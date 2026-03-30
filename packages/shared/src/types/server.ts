@@ -37,6 +37,8 @@ export interface GameCapabilities {
   playerListEditable: boolean;
   /** Whether this game uses a configurable profiles path (e.g., DayZ -profiles= parameter) */
   profilesPath: boolean;
+  /** Whether direct messages to individual players are supported via RCON */
+  directMessage: boolean;
 }
 
 // Database models

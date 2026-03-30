@@ -185,6 +185,7 @@ export class ArkAdapter extends BaseGameAdapter {
       logParsing: true,
       playerListEditable: true,
       profilesPath: false,
+      directMessage: false,
     },
     broadcastCommand: "ServerChat {MESSAGE}",
     playerListCommand: "ListPlayers",
