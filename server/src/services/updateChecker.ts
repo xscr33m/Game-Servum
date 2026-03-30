@@ -24,7 +24,7 @@ import {
 } from "../db/index.js";
 import { checkModsForUpdates, installMod } from "./modManager.js";
 import { stopServer, startServer, isServerRunning } from "./serverProcess.js";
-import { getRconConnection } from "./playerTracker.js";
+import { sendGameBroadcast } from "./messageBroadcaster.js";
 import { resolveVariables } from "./variableResolver.js";
 import { getGameDefinition } from "../games/index.js";
 import { getConfig, getSteamCMDExecutable } from "./config.js";
@@ -563,17 +563,8 @@ async function sendUpdateWarning(
   );
 
   // Send via RCON
-  const rcon = getRconConnection(serverId);
-  if (rcon && rcon.isConnected()) {
-    try {
-      await rcon.broadcastMessage(message);
-    } catch (err) {
-      logger.error(
-        `[UpdateChecker] Server ${serverId}: failed to send RCON warning:`,
-        err,
-      );
-    }
-  } else {
+  const sent = await sendGameBroadcast(serverId, message);
+  if (!sent) {
     logger.warn(
       `[UpdateChecker] Server ${serverId}: RCON not connected, cannot send update warning`,
     );

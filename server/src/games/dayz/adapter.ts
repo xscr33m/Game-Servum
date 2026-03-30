@@ -127,7 +127,7 @@ export class DayZAdapter extends BaseGameAdapter {
       playerListEditable: true,
       profilesPath: true,
     },
-    broadcastCommand: "say -1 {MESSAGE}",
+    broadcastCommand: "#broadcast {MESSAGE}",
     playerListCommand: "players",
   };
 

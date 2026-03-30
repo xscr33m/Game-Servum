@@ -7,7 +7,7 @@
  * - Warning times before restart (minutes)
  * - Warning message template with {MINUTES} placeholder
  *
- * Warnings are sent via BattlEye RCON using `say -1 <message>`.
+ * Warnings are sent via the game-specific broadcast command (e.g. `#broadcast` for DayZ).
  * After the final warning, the server is stopped and restarted.
  */
 
@@ -20,7 +20,7 @@ import {
   getBackupSettings,
 } from "../db/index.js";
 import { stopServer, startServer } from "./serverProcess.js";
-import { getRconConnection } from "./playerTracker.js";
+import { sendGameBroadcast } from "./messageBroadcaster.js";
 import { resolveVariables } from "./variableResolver.js";
 import { createBackup } from "./backupManager.js";
 import type { ServerSchedule } from "../types/index.js";
@@ -133,17 +133,8 @@ async function sendWarning(
   logger.info(`[Scheduler] Server ${serverId}: sending warning - "${message}"`);
 
   // Send via RCON
-  const rcon = getRconConnection(serverId);
-  if (rcon && rcon.isConnected()) {
-    try {
-      await rcon.broadcastMessage(message);
-    } catch (err) {
-      logger.error(
-        `[Scheduler] Server ${serverId}: failed to send RCON warning:`,
-        err,
-      );
-    }
-  } else {
+  const sent = await sendGameBroadcast(serverId, message);
+  if (!sent) {
     logger.warn(
       `[Scheduler] Server ${serverId}: RCON not connected, cannot send warning`,
     );
