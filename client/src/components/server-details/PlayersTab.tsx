@@ -611,6 +611,30 @@ export function PlayersTab({ server }: PlayersTabProps) {
                                   <FaCopy className="h-3 w-3" />
                                 </Button>
                               </Tip>
+                              {player.steam64Id && (
+                                <>
+                                  <span className="text-xs text-muted-foreground/40 mx-0.5">
+                                    |
+                                  </span>
+                                  <Tip content={player.steam64Id} side="right">
+                                    <span className="font-mono text-xs text-muted-foreground truncate max-w-[140px] sm:max-w-[180px]">
+                                      {player.steam64Id}
+                                    </span>
+                                  </Tip>
+                                  <Tip content="Copy Steam ID">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-5 w-5 p-0"
+                                      onClick={() =>
+                                        handleCopyId(player.steam64Id!)
+                                      }
+                                    >
+                                      <FaCopy className="h-3 w-3" />
+                                    </Button>
+                                  </Tip>
+                                </>
+                              )}
                             </div>
                           ) : (
                             <span className="font-mono text-xs text-muted-foreground/50 mt-0.5">
@@ -791,7 +815,7 @@ export function PlayersTab({ server }: PlayersTabProps) {
                           )}
                       </div>
 
-                      {/* Row 2: Character ID (if applicable) */}
+                      {/* Row 2: Character ID + Steam64 ID (if applicable) */}
                       {capabilities?.logParsing && (
                         <div className="flex items-center gap-1 sm:shrink-0 pl-0 sm:pl-0">
                           {player.characterId ? (
@@ -813,6 +837,30 @@ export function PlayersTab({ server }: PlayersTabProps) {
                                   <FaCopy className="h-3 w-3" />
                                 </Button>
                               </Tip>
+                              {player.steam64Id && (
+                                <>
+                                  <span className="text-xs text-muted-foreground/40 mx-0.5">
+                                    |
+                                  </span>
+                                  <Tip content={player.steam64Id} side="right">
+                                    <span className="font-mono text-xs text-muted-foreground truncate max-w-[140px] sm:max-w-[180px]">
+                                      {player.steam64Id}
+                                    </span>
+                                  </Tip>
+                                  <Tip content="Copy Steam ID">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-5 w-5 p-0"
+                                      onClick={() =>
+                                        handleCopyId(player.steam64Id!)
+                                      }
+                                    >
+                                      <FaCopy className="h-3 w-3" />
+                                    </Button>
+                                  </Tip>
+                                </>
+                              )}
                             </>
                           ) : (
                             <span className="text-xs text-muted-foreground/50">
