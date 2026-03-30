@@ -23,6 +23,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useBackend } from "@/hooks/useBackend";
 import { useGameCapabilities } from "@/hooks/useGameCapabilities";
 import { useContentWidth } from "@/hooks/useContentWidth";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { toastSuccess, toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { Tip } from "@/components/ui/tooltip";
@@ -324,6 +325,32 @@ export function PlayersTab({ server }: PlayersTabProps) {
   const whitelistChanged = whitelistContent !== originalWhitelist;
   const banChanged = banContent !== originalBan;
 
+  // ─── Unsaved changes guard ───
+  useUnsavedChanges(
+    `players-tab-${server.id}`,
+    whitelistChanged || banChanged,
+    {
+      onSave: async () => {
+        if (whitelistChanged) {
+          await api.servers.saveFile(
+            server.id,
+            "whitelist.txt",
+            whitelistContent,
+          );
+          setOriginalWhitelist(whitelistContent);
+        }
+        if (banChanged) {
+          await api.servers.saveFile(server.id, "ban.txt", banContent);
+          setOriginalBan(banContent);
+        }
+      },
+      onDiscard: () => {
+        setWhitelistContent(originalWhitelist);
+        setBanContent(originalBan);
+      },
+    },
+  );
+
   const onlinePlayers = players.filter((p) => p.isOnline);
   const offlinePlayers = players.filter((p) => !p.isOnline);
 
@@ -520,10 +547,7 @@ export function PlayersTab({ server }: PlayersTabProps) {
                           </div>
                           {getPlayerId(player) ? (
                             <div className="flex items-center gap-1 mt-0.5">
-                              <Tip
-                                content={getPlayerId(player)!}
-                                side="right"
-                              >
+                              <Tip content={getPlayerId(player)!} side="right">
                                 <span className="font-mono text-xs text-muted-foreground truncate max-w-[200px] sm:max-w-[300px]">
                                   {getPlayerId(player)}
                                 </span>
@@ -712,10 +736,7 @@ export function PlayersTab({ server }: PlayersTabProps) {
                         <div className="flex items-center gap-1 sm:shrink-0 pl-0 sm:pl-0">
                           {player.characterId ? (
                             <>
-                              <Tip
-                                content={player.characterId}
-                                side="right"
-                              >
+                              <Tip content={player.characterId} side="right">
                                 <span className="font-mono text-xs text-muted-foreground truncate max-w-[180px] sm:max-w-[200px]">
                                   {player.characterId}
                                 </span>

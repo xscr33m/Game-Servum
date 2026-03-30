@@ -1,4 +1,11 @@
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import {
+  useEffect,
+  useState,
+  useCallback,
+  useRef,
+  useMemo,
+  useContext,
+} from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   FaArrowLeft,
@@ -26,6 +33,7 @@ import { ServerDetailSidebar } from "@/components/server-details/ServerDetailSid
 import type { ServerSection } from "@/components/server-details/ServerDetailSidebar";
 import { useBackend } from "@/hooks/useBackend";
 import { useGameCapabilities } from "@/hooks/useGameCapabilities";
+import { UnsavedChangesContext } from "@/contexts/UnsavedChangesContextDef";
 import { AgentControlPanel } from "@/components/agent/AgentControlPanel";
 import { MobileAgentSection } from "@/components/agent/MobileAgentSection";
 import { AppHeader } from "@/components/AppHeader";
@@ -91,15 +99,18 @@ export function ServerDetail() {
     [hasPlayers],
   );
 
-  function handleSectionChange(section: ServerSection) {
-    navigate(`/server/${id}/${section}`, { replace: true });
-  }
-
   const terminalRef = useRef<HTMLDivElement>(null);
   const hasFetchedInstallOutput = useRef(false);
 
+  const unsavedCtx = useContext(UnsavedChangesContext);
   const { api, subscribe, isConnected, activeConnection, connections } =
     useBackend();
+
+  function handleSectionChange(section: ServerSection) {
+    unsavedCtx?.requestNavigation(() =>
+      navigate(`/server/${id}/${section}`, { replace: true }),
+    );
+  }
 
   // Redirect to Dashboard when no agents are configured
   useEffect(() => {

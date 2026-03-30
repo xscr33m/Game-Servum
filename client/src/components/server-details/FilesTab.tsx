@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useContext } from "react";
 import { FaFolderTree } from "react-icons/fa6";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileExplorer } from "@/components/file-explorer/FileExplorer";
 import { useBackend } from "@/hooks/useBackend";
 import { useContentWidth } from "@/hooks/useContentWidth";
+import { UnsavedChangesContext } from "@/contexts/UnsavedChangesContextDef";
 import { cn } from "@/lib/utils";
 import type { GameServer } from "@/types";
 
@@ -19,9 +20,18 @@ interface FilesTabProps {
 export function FilesTab({ server }: FilesTabProps) {
   const { api, isConnected } = useBackend();
   const { contentClass } = useContentWidth();
+  const unsavedCtx = useContext(UnsavedChangesContext);
   const [roots, setRoots] = useState<BrowsableRoot[]>([]);
   const [selectedRoot, setSelectedRoot] = useState<string>("");
   const [loading, setLoading] = useState(true);
+
+  const handleRootChange = useCallback(
+    (newRoot: string) => {
+      if (newRoot === selectedRoot) return;
+      unsavedCtx?.requestNavigation(() => setSelectedRoot(newRoot));
+    },
+    [selectedRoot, unsavedCtx],
+  );
 
   const loadRoots = useCallback(async () => {
     setLoading(true);
@@ -72,7 +82,7 @@ export function FilesTab({ server }: FilesTabProps) {
   return (
     <Tabs
       value={selectedRoot}
-      onValueChange={setSelectedRoot}
+      onValueChange={handleRootChange}
       className="flex flex-col flex-1 min-h-0 pt-2"
     >
       {/* ── Header toolbar ── */}

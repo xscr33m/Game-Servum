@@ -23,6 +23,7 @@ import { CodeMirrorEditor } from "@/components/ui/code-editor";
 import { useBackend } from "@/hooks/useBackend";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useContentWidth } from "@/hooks/useContentWidth";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { toastSuccess } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { getConfigEditor } from "@/components/server-details/games/registry";
@@ -135,10 +136,21 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
   }, [subscribe, server.id, loadFile]);
 
   function handleFileSwitch(fileName: string) {
-    setActiveFile(fileName);
-    const state = fileStates.current.get(fileName);
-    if (!state?.loaded) {
-      loadFile(fileName);
+    const currentHasChanges = fileStates.current.get(activeFile)?.hasChanges;
+    if (currentHasChanges) {
+      requestNavigation(() => {
+        setActiveFile(fileName);
+        const state = fileStates.current.get(fileName);
+        if (!state?.loaded) {
+          loadFile(fileName);
+        }
+      });
+    } else {
+      setActiveFile(fileName);
+      const state = fileStates.current.get(fileName);
+      if (!state?.loaded) {
+        loadFile(fileName);
+      }
     }
   }
 
@@ -179,9 +191,43 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
     }
   }
 
+  // Save all dirty files (used by the unsaved-changes guard dialog)
+  async function handleSaveAllFiles() {
+    setError(null);
+    for (const [fileName, state] of fileStates.current.entries()) {
+      if (state.hasChanges) {
+        await api.servers.saveConfig(server.id, state.rawContent, fileName);
+        state.originalContent = state.rawContent;
+        state.hasChanges = false;
+      }
+    }
+    setRenderKey((k) => k + 1);
+  }
+
+  // Reset all dirty files (used by the unsaved-changes guard dialog)
+  function handleResetAllFiles() {
+    for (const state of fileStates.current.values()) {
+      if (state.hasChanges) {
+        state.rawContent = state.originalContent;
+        state.hasChanges = false;
+      }
+    }
+    setRenderKey((k) => k + 1);
+  }
+
   const currentState = fileStates.current.get(activeFile);
   const anyUnsaved = Array.from(fileStates.current.values()).some(
     (s) => s.hasChanges,
+  );
+
+  // ─── Unsaved changes guard ───
+  const { requestNavigation } = useUnsavedChanges(
+    `config-tab-${server.id}`,
+    anyUnsaved,
+    {
+      onSave: handleSaveAllFiles,
+      onDiscard: handleResetAllFiles,
+    },
   );
 
   if (

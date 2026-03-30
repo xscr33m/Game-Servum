@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useBackend } from "@/hooks/useBackend";
 import { useGameCapabilities } from "@/hooks/useGameCapabilities";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { toastSuccess } from "@/lib/toast";
 import { UpdateCheckDialog } from "@/components/server-details/UpdateCheckDialog";
 import { logger } from "@/lib/logger";
@@ -359,6 +360,31 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
     urMessage,
     urCheckGameUpdates,
   ]);
+
+  // ─── Unsaved changes guard ───
+  const msgFormDirty =
+    (addingMessage && msgText.trim() !== "") || editingMessageId !== null;
+  const varFormDirty =
+    (addingVar && varName.trim() !== "") || editingVarId !== null;
+
+  useUnsavedChanges(
+    `settings-tab-${server.id}`,
+    scheduleChanged || urChanged || msgFormDirty || varFormDirty,
+    {
+      onSave: async () => {
+        if (msgFormDirty) await handleSaveMessage();
+        if (varFormDirty) await handleSaveVariable();
+        if (scheduleChanged) await handleSaveSchedule();
+        if (urChanged) await handleSaveUpdateRestart();
+      },
+      onDiscard: () => {
+        if (msgFormDirty) cancelEditMessage();
+        if (varFormDirty) cancelEditVar();
+        if (scheduleChanged) handleRevertSchedule();
+        if (urChanged) handleRevertUpdateRestart();
+      },
+    },
+  );
 
   // Load update restart settings
   const loadUpdateRestart = useCallback(async () => {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   FaBoxArchive,
   FaPlus,
@@ -33,6 +33,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useBackend } from "@/hooks/useBackend";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { toastSuccess, toastError } from "@/lib/toast";
 import { logger } from "@/lib/logger";
 import { Tip } from "@/components/ui/tooltip";
@@ -137,6 +138,26 @@ export function BackupsTab({ server }: BackupsTabProps) {
   const [editName, setEditName] = useState("");
   const [editTag, setEditTag] = useState("");
   const [editSaving, setEditSaving] = useState(false);
+
+  // ─── Unsaved changes guard ───
+  const settingsChanged = useMemo(
+    () =>
+      settings !== null &&
+      savedSettings !== null &&
+      JSON.stringify(settings) !== JSON.stringify(savedSettings),
+    [settings, savedSettings],
+  );
+
+  useUnsavedChanges(`backup-settings-${server.id}`, settingsChanged, {
+    onSave: async () => {
+      await handleSaveSettings();
+    },
+    onDiscard: () => {
+      if (savedSettings) {
+        setSettings({ ...savedSettings });
+      }
+    },
+  });
 
   // ── Data loading ──
 

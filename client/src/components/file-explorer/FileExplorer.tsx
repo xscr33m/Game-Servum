@@ -8,6 +8,7 @@ import {
   FaFolder,
 } from "react-icons/fa6";
 import { useBackend } from "@/hooks/useBackend";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { toastSuccess, toastError } from "@/lib/toast";
 import type { BrowseTreeEntry } from "@/lib/api";
 import { FileTree } from "./FileTree";
@@ -44,6 +45,23 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
   const [fileLoading, setFileLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+
+  // ─── Unsaved changes guard ───
+  const hasUnsavedChanges =
+    openFile !== null &&
+    openFile.content.replace(/\r\n/g, "\n") !==
+      openFile.originalContent.replace(/\r\n/g, "\n");
+
+  const { requestNavigation } = useUnsavedChanges(
+    `file-editor-${serverId}-${rootKey}`,
+    hasUnsavedChanges,
+    {
+      onSave: async () => {
+        if (openFile) await handleSave(openFile.content);
+      },
+      onDiscard: () => handleReset(),
+    },
+  );
 
   // Overwrite confirmation dialog state
   const [overwriteDialog, setOverwriteDialog] = useState<{
@@ -110,7 +128,7 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
     loadTree();
   }, [loadTree]);
 
-  async function handleFileSelect(relativePath: string) {
+  async function doFileSelect(relativePath: string) {
     setSelectedPath(relativePath);
     setSelectedIsDirectory(false);
     try {
@@ -131,6 +149,10 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
     } finally {
       setFileLoading(false);
     }
+  }
+
+  function handleFileSelect(relativePath: string) {
+    requestNavigation(() => doFileSelect(relativePath));
   }
 
   function handleDirectorySelect(relativePath: string) {

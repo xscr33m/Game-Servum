@@ -18,6 +18,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useBackend } from "@/hooks/useBackend";
 import { useUptime } from "@/hooks/useUptime";
 import { useGameCapabilities } from "@/hooks/useGameCapabilities";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { toastSuccess } from "@/lib/toast";
 import { getGameName } from "@/components/server-details/games/registry";
 import { Tip } from "@/components/ui/tooltip";
@@ -252,6 +253,41 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
   const createdDate = new Date(server.createdAt).toLocaleDateString();
   const isRunning = server.status === "running";
   const uptime = useUptime(isRunning ? server.startedAt : null);
+
+  // ─── Unsaved changes guard ───
+  const isAnyFieldDirty =
+    (editingName && nameChanged) ||
+    (editingParams && paramsChanged) ||
+    (editingProfilesPath && profilesPathChanged) ||
+    (editingPorts && portsChanged);
+
+  useUnsavedChanges(`overview-tab-${server.id}`, !!isAnyFieldDirty, {
+    onSave: async () => {
+      if (editingName && nameChanged) await handleSaveName();
+      if (editingParams && paramsChanged) await handleSaveLaunchParams();
+      if (editingProfilesPath && profilesPathChanged)
+        await handleSaveProfilesPath();
+      if (editingPorts && portsChanged) await handleSavePorts();
+    },
+    onDiscard: () => {
+      if (editingName && nameChanged) {
+        handleRevertName();
+        setEditingName(false);
+      }
+      if (editingParams && paramsChanged) {
+        handleRevertParams();
+        setEditingParams(false);
+      }
+      if (editingProfilesPath && profilesPathChanged) {
+        handleRevertProfilesPath();
+        setEditingProfilesPath(false);
+      }
+      if (editingPorts && portsChanged) {
+        handleRevertPorts();
+        setEditingPorts(false);
+      }
+    },
+  });
 
   return (
     <div className="space-y-0">
