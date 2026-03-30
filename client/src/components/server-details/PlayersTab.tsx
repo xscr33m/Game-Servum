@@ -357,6 +357,7 @@ export function PlayersTab({ server }: PlayersTabProps) {
       await api.servers.sendDirectMessage(
         server.id,
         messageTarget.steamId,
+        messageTarget.playerName,
         messageText.trim(),
       );
       toastSuccess(`Message sent to ${messageTarget.playerName}`);

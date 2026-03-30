@@ -158,13 +158,15 @@ export interface GameAdapter {
 
   /**
    * Send a direct message to a specific online player via RCON.
-   * `playerId` is the game-specific identifier (BattlEye GUID for DayZ, Steam64 for 7DTD).
+   * `playerId` is the game-specific identifier (Steam64 for 7DTD).
+   * `playerName` is the in-game name (used by BattlEye games to resolve the player index).
    * Returns true if the message was sent, false if the player was not found.
    * Undefined means the game does not support direct messages.
    */
   sendDirectMessage?(
     rcon: RconClient,
     playerId: string,
+    playerName: string,
     message: string,
   ): Promise<boolean>;
 

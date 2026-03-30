@@ -548,6 +548,7 @@ export function recordPlayerConnect(
   playerName: string,
   connectedAt?: string,
   characterId?: string,
+  steam64Id?: string,
 ): number {
   const timestamp = connectedAt || new Date().toISOString();
 
@@ -559,9 +560,16 @@ export function recordPlayerConnect(
   );
 
   getDb().run(
-    `INSERT INTO player_sessions (server_id, steam_id, player_name, character_id, connected_at, is_online)
-     VALUES (?, ?, ?, ?, ?, 1)`,
-    [serverId, steamId, playerName, characterId || null, timestamp],
+    `INSERT INTO player_sessions (server_id, steam_id, player_name, character_id, steam64_id, connected_at, is_online)
+     VALUES (?, ?, ?, ?, ?, ?, 1)`,
+    [
+      serverId,
+      steamId,
+      playerName,
+      characterId || null,
+      steam64Id || null,
+      timestamp,
+    ],
   );
 
   const result = getDb().exec("SELECT last_insert_rowid()");
@@ -581,6 +589,24 @@ export function lookupCharacterId(
   const result = getDb().exec(
     `SELECT character_id FROM player_sessions
      WHERE server_id = ? AND player_name = ? AND character_id IS NOT NULL
+     ORDER BY connected_at DESC LIMIT 1`,
+    [serverId, playerName],
+  );
+
+  if (result.length === 0 || result[0].values.length === 0) return null;
+  return result[0].values[0][0] as string;
+}
+
+/**
+ * Look up the Steam64 ID for a player by name from previous sessions
+ */
+export function lookupSteam64Id(
+  serverId: number,
+  playerName: string,
+): string | null {
+  const result = getDb().exec(
+    `SELECT steam64_id FROM player_sessions
+     WHERE server_id = ? AND player_name = ? AND steam64_id IS NOT NULL
      ORDER BY connected_at DESC LIMIT 1`,
     [serverId, playerName],
   );
@@ -610,6 +636,34 @@ export function updateCharacterIds(
         `UPDATE player_sessions SET character_id = ?
          WHERE server_id = ? AND player_name = ? AND character_id IS NULL`,
         [characterId, serverId, playerName],
+      );
+      updated += count;
+    }
+  }
+  if (updated > 0) saveDatabase();
+  return updated;
+}
+
+/**
+ * Bulk update Steam64 IDs for sessions matching player names
+ */
+export function updateSteam64Ids(
+  serverId: number,
+  mappings: Map<string, string>,
+): number {
+  let updated = 0;
+  for (const [playerName, steam64Id] of mappings) {
+    const check = getDb().exec(
+      `SELECT COUNT(*) FROM player_sessions
+       WHERE server_id = ? AND player_name = ? AND steam64_id IS NULL`,
+      [serverId, playerName],
+    );
+    const count = check.length > 0 ? (check[0].values[0][0] as number) : 0;
+    if (count > 0) {
+      getDb().run(
+        `UPDATE player_sessions SET steam64_id = ?
+         WHERE server_id = ? AND player_name = ? AND steam64_id IS NULL`,
+        [steam64Id, serverId, playerName],
       );
       updated += count;
     }
@@ -657,7 +711,7 @@ export function disconnectAllPlayers(serverId: number): void {
  */
 export function getOnlinePlayers(serverId: number): PlayerSession[] {
   const result = getDb().exec(
-    `SELECT id, server_id, steam_id, player_name, character_id, connected_at, disconnected_at, is_online
+    `SELECT id, server_id, steam_id, player_name, character_id, steam64_id, connected_at, disconnected_at, is_online
      FROM player_sessions
      WHERE server_id = ? AND is_online = 1
      ORDER BY connected_at ASC`,
@@ -672,9 +726,10 @@ export function getOnlinePlayers(serverId: number): PlayerSession[] {
     steamId: row[2] as string,
     playerName: row[3] as string,
     characterId: row[4] as string | null,
-    connectedAt: row[5] as string,
-    disconnectedAt: row[6] as string | null,
-    isOnline: row[7] === 1,
+    steam64Id: row[5] as string | null,
+    connectedAt: row[6] as string,
+    disconnectedAt: row[7] as string | null,
+    isOnline: row[8] === 1,
   }));
 }
 
@@ -691,6 +746,7 @@ export function getPlayerSummaries(serverId: number): PlayerSummary[] {
        COALESCE(character_id, steam_id) as primary_id,
        player_name,
        MAX(character_id) as character_id,
+       MAX(steam64_id) as steam64_id,
        MAX(is_online) as is_online,
        MAX(CASE WHEN is_online = 1 THEN connected_at ELSE NULL END) as current_session_start,
        COUNT(*) as session_count,
@@ -717,11 +773,12 @@ export function getPlayerSummaries(serverId: number): PlayerSummary[] {
     steamId: row[0] as string,
     playerName: row[1] as string,
     characterId: row[2] as string | null,
-    isOnline: (row[3] as number) === 1,
-    currentSessionStart: row[4] as string | null,
-    sessionCount: row[5] as number,
-    lastSeen: row[6] as string,
-    totalPlaytimeSeconds: Math.max(0, row[7] as number),
+    steam64Id: row[3] as string | null,
+    isOnline: (row[4] as number) === 1,
+    currentSessionStart: row[5] as string | null,
+    sessionCount: row[6] as number,
+    lastSeen: row[7] as string,
+    totalPlaytimeSeconds: Math.max(0, row[8] as number),
   }));
 }
 

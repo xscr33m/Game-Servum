@@ -2258,7 +2258,10 @@ router.post(
   async (req: Request, res: Response) => {
     const id = parseInt(req.params.id, 10);
     const { playerId } = req.params;
-    const { message } = req.body as { message: string };
+    const { message, playerName } = req.body as {
+      message: string;
+      playerName?: string;
+    };
     const server = getServerById(id);
 
     if (!server) {
@@ -2293,6 +2296,7 @@ router.post(
       const sent = await adapter.sendDirectMessage(
         rcon,
         playerId,
+        playerName || "",
         message.trim(),
       );
       if (!sent) {

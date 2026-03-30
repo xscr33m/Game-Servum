@@ -14,7 +14,7 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import { logger } from "../../index.js";
-import { updateCharacterIds } from "../../db/index.js";
+import { updateCharacterIds, updateSteam64Ids } from "../../db/index.js";
 import { recordPlayerConnect, recordPlayerDisconnect } from "../../db/index.js";
 import { BaseGameAdapter } from "../base.js";
 import type {
@@ -274,12 +274,13 @@ export class DayZAdapter extends BaseGameAdapter {
   async sendDirectMessage(
     rcon: RconClient,
     playerId: string,
+    playerName: string,
     message: string,
   ): Promise<boolean> {
-    // playerId is BattlEye GUID — need to resolve the current player index
+    // Resolve the player's current index from the BattlEye players list by name
     const response = await rcon.sendCommand("players");
     const players = parseBattlEyePlayersResponse(response);
-    const player = players.find((p) => p.guid === playerId);
+    const player = players.find((p) => p.name === playerName);
     if (!player) return false;
     await rcon.sendCommand(`say ${player.index} ${message}`);
     return true;
@@ -546,14 +547,28 @@ export class DayZAdapter extends BaseGameAdapter {
   }
 
   syncPlayerDataFromLogs(serverId: number, installPath: string): void {
-    const mappings = this.extractPlayerMappingsFromLogs(installPath);
-    if (mappings.size === 0) return;
+    const profilesPath = path.join(installPath, "profiles");
 
-    const updated = updateCharacterIds(serverId, mappings);
-    if (updated > 0) {
-      logger.info(
-        `[DayZ] Synced ${updated} character IDs from ADM log for server ${serverId}`,
-      );
+    // Sync character IDs from ADM logs
+    const charMappings = this.extractPlayerMappingsFromLogs(installPath);
+    if (charMappings.size > 0) {
+      const updated = updateCharacterIds(serverId, charMappings);
+      if (updated > 0) {
+        logger.info(
+          `[DayZ] Synced ${updated} character IDs from ADM log for server ${serverId}`,
+        );
+      }
+    }
+
+    // Sync Steam64 IDs from RPT logs
+    const steam64Mappings = this.extractSteam64MappingsFromLogs(profilesPath);
+    if (steam64Mappings.size > 0) {
+      const updated = updateSteam64Ids(serverId, steam64Mappings);
+      if (updated > 0) {
+        logger.info(
+          `[DayZ] Synced ${updated} Steam64 IDs from RPT log for server ${serverId}`,
+        );
+      }
     }
   }
 
@@ -665,5 +680,50 @@ export class DayZAdapter extends BaseGameAdapter {
     } catch {
       return null;
     }
+  }
+
+  private findLatestRptFile(profilesPath: string): string | null {
+    try {
+      const files = fs
+        .readdirSync(profilesPath)
+        .filter((f) => f.toLowerCase().endsWith(".rpt"));
+      if (files.length === 0) return null;
+      files.sort();
+      return path.join(profilesPath, files[files.length - 1]);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Extract player name → Steam64 ID mappings from RPT log files.
+   * RPT lines contain: Player "Name"(steamID=76561198012345678) is connected
+   */
+  private extractSteam64MappingsFromLogs(
+    profilesPath: string,
+  ): Map<string, string> {
+    const mappings = new Map<string, string>();
+    if (!fs.existsSync(profilesPath)) return mappings;
+
+    const rptFile = this.findLatestRptFile(profilesPath);
+    if (!rptFile) return mappings;
+
+    try {
+      const content = fs.readFileSync(rptFile, "utf-8");
+      const lines = content.split("\n");
+
+      for (const line of lines) {
+        const match = line.match(
+          /Player "(.+?)"\(steamID=(\d+)\) is connected/,
+        );
+        if (match) {
+          mappings.set(match[1], match[2]);
+        }
+      }
+    } catch {
+      // File may be locked — expected during server runtime
+    }
+
+    return mappings;
   }
 }

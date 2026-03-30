@@ -36,6 +36,7 @@ export interface PlayerSession {
   steamId: string;
   playerName: string;
   characterId: string | null;
+  steam64Id: string | null;
   connectedAt: string;
   disconnectedAt: string | null;
   isOnline: boolean;

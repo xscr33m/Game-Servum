@@ -191,6 +191,7 @@ export class SevenDaysAdapter extends BaseGameAdapter {
   async sendDirectMessage(
     rcon: RconClient,
     playerId: string,
+    _playerName: string,
     message: string,
   ): Promise<boolean> {
     // playerId is Steam64 ID

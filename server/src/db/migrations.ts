@@ -241,6 +241,13 @@ const migrations: Migration[] = [
       db.run(`ALTER TABLE server_backups ADD COLUMN name TEXT`);
     },
   },
+  {
+    version: 9,
+    name: "player_sessions_steam64_id",
+    up: (db) => {
+      db.run(`ALTER TABLE player_sessions ADD COLUMN steam64_id TEXT`);
+    },
+  },
 ];
 
 // ── Migration Runner ───────────────────────────────────────────────
