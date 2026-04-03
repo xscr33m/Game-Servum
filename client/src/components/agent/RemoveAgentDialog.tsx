@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { FaTriangleExclamation, FaSpinner } from "react-icons/fa6";
-import type { BackendConnection } from "@/lib/config";
+import type { BackendConnection } from "@/types";
 
 interface RemoveAgentDialogProps {
   open: boolean;

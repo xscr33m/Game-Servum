@@ -1,5 +1,5 @@
-import type { WSMessage } from "@/types";
-import { getWsUrl, type BackendConnection } from "@/lib/config";
+import type { WSMessage, BackendConnection } from "@/types";
+import { getWsUrl } from "@/lib/config";
 import { logger } from "@/lib/logger";
 
 type MessageHandler = (message: WSMessage) => void;

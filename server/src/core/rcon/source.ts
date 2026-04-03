@@ -19,7 +19,7 @@
  */
 
 import net from "net";
-import { logger } from "../../index.js";
+import { logger } from "../logger.js";
 import type {
   RconClient,
   GenericRconPlayer,
@@ -291,9 +291,7 @@ export class SourceRcon implements RconClient {
  * Or no players:
  *   No Players Connected
  */
-function parseSourcePlayersResponse(
-  response: string,
-): GenericRconPlayer[] {
+function parseSourcePlayersResponse(response: string): GenericRconPlayer[] {
   const players: GenericRconPlayer[] = [];
   const lines = response.split("\n");
 

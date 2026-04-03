@@ -8,7 +8,8 @@
 
 import fs from "fs";
 import fsPromises from "fs/promises";
-import { broadcast, logger } from "../index.js";
+import { broadcast } from "../core/broadcast.js";
+import { logger } from "../core/logger.js";
 import { deleteServer, updateServerStatus } from "../db/index.js";
 import {
   isInstalling,

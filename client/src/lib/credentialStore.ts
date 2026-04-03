@@ -2,7 +2,7 @@
 // Pluggable storage backends for persisting agent credentials.
 // Current: localStorage (plaintext) + Electron IPC (plaintext file in Documents/Game-Servum/data/).
 
-import type { BackendConnection } from "./config";
+import type { BackendConnection } from "@/types";
 
 // ── Storage Backend Interface ──
 

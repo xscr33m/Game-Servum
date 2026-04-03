@@ -14,7 +14,8 @@
  * via WebSocket.
  */
 
-import { broadcast, logger } from "../index.js";
+import { broadcast } from "../core/broadcast.js";
+import { logger } from "../core/logger.js";
 import {
   recordPlayerConnect,
   recordPlayerDisconnect,

@@ -5,7 +5,8 @@ import { execFileSync } from "child_process";
 import { APP_VERSION, compareSemVer } from "@game-servum/shared";
 import type { UpdateState } from "@game-servum/shared";
 import { getConfig } from "./config.js";
-import { logger, broadcast } from "../index.js";
+import { broadcast } from "../core/broadcast.js";
+import { logger } from "../core/logger.js";
 import { getRunningServerIds } from "./serverProcess.js";
 import { setAppSetting } from "../db/index.js";
 

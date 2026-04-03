@@ -1,6 +1,6 @@
 import { createContext } from "react";
 import type { WSMessage } from "@/types";
-import type { BackendConnection } from "@/lib/config";
+import type { BackendConnection } from "@/types";
 import type { ApiClient } from "@/lib/api";
 
 export interface BackendContextValue {

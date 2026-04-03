@@ -12,14 +12,14 @@ import { spawn, exec, type ChildProcess } from "child_process";
 import path from "path";
 import fs from "fs";
 import { getConfig, getSteamCMDExecutable } from "./config.js";
-import { broadcast, logger } from "../index.js";
+import { broadcast } from "../core/broadcast.js";
+import { logger } from "../core/logger.js";
 import {
   updateServerStatus,
   getSteamConfig,
   getServerById,
 } from "../db/index.js";
 import { getGameDefinition, runPostInstall } from "../games/index.js";
-import { performBackgroundDeletion } from "./serverDelete.js";
 
 // Track active installations with buffered output & progress
 interface ActiveInstallation {
@@ -498,12 +498,15 @@ export function cancelAndCleanupInstallation(serverId: number): boolean {
           serverName: server.name,
         });
 
-        return performBackgroundDeletion(
-          serverId,
-          server.name,
-          server.gameId,
-          server.port,
-          server.installPath,
+        return import("./serverDelete.js").then(
+          ({ performBackgroundDeletion }) =>
+            performBackgroundDeletion(
+              serverId,
+              server.name,
+              server.gameId,
+              server.port,
+              server.installPath,
+            ),
         );
       })
       .catch((err) => {
@@ -520,17 +523,21 @@ export function cancelAndCleanupInstallation(serverId: number): boolean {
       serverName: server.name,
     });
 
-    performBackgroundDeletion(
-      serverId,
-      server.name,
-      server.gameId,
-      server.port,
-      server.installPath,
-    ).catch((err) => {
-      logger.error(
-        `[Install] Cleanup failed for dequeued server ${serverId}: ${err}`,
-      );
-    });
+    import("./serverDelete.js")
+      .then(({ performBackgroundDeletion }) =>
+        performBackgroundDeletion(
+          serverId,
+          server.name,
+          server.gameId,
+          server.port,
+          server.installPath,
+        ),
+      )
+      .catch((err) => {
+        logger.error(
+          `[Install] Cleanup failed for dequeued server ${serverId}: ${err}`,
+        );
+      });
   }
 
   logger.info(

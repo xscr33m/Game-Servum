@@ -13,7 +13,7 @@
 
 import path from "path";
 import fs from "fs";
-import { logger } from "../index.js";
+import { logger } from "../core/logger.js";
 import { readGameFile } from "../games/encoding.js";
 import type { LogPaths } from "../games/index.js";
 

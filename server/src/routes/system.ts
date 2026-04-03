@@ -14,7 +14,7 @@ import {
   installUpdate,
 } from "../services/agentUpdater.js";
 import { APP_VERSION } from "@game-servum/shared";
-import { logger } from "../index.js";
+import { logger } from "../core/logger.js";
 
 const router = Router();
 

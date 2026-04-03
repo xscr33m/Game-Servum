@@ -15,7 +15,7 @@ import type {
   UpdateState,
   AgentSystemInfo,
 } from "@/types";
-import type { BackendConnection } from "./config";
+import type { BackendConnection } from "@/types";
 import { getApiBase } from "./config";
 
 // ── Types for the API client ──

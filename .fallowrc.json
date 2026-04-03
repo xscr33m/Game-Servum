@@ -10,7 +10,8 @@
   "ignorePatterns": ["**/*.d.ts"],
   "ignoreExports": [
     { "file": "client/src/components/ui/**", "exports": ["*"] },
-    { "file": "packages/shared/src/**", "exports": ["*"] }
+    { "file": "packages/shared/src/**", "exports": ["*"] },
+    { "file": "client/src/types/index.ts", "exports": ["FirewallResult"] }
   ],
   "ignoreDependencies": ["electron", "electron-updater"],
   "rules": {

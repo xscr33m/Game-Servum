@@ -4,7 +4,8 @@ import path from "path";
 import { spawn, type ChildProcess } from "child_process";
 import AdmZip from "adm-zip";
 import { getConfig, getSteamCMDExecutable } from "./config.js";
-import { broadcast, logger } from "../index.js";
+import { broadcast } from "../core/broadcast.js";
+import { logger } from "../core/logger.js";
 import { updateSteamConfig, getSteamConfig } from "../db/index.js";
 
 const STEAMCMD_URL =

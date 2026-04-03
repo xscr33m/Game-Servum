@@ -11,7 +11,8 @@ import fs from "fs";
 import crypto from "crypto";
 import archiver from "archiver";
 import AdmZip from "adm-zip";
-import { broadcast, logger } from "../index.js";
+import { broadcast } from "../core/broadcast.js";
+import { logger } from "../core/logger.js";
 import { getConfig } from "./config.js";
 import {
   getServerById,

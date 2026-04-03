@@ -5,7 +5,7 @@
 
 import { Router } from "express";
 import type { Request, Response } from "express";
-import { logger } from "../index.js";
+import { logger } from "../core/logger.js";
 import path from "path";
 import fs from "fs";
 import { getConfig } from "../services/config.js";

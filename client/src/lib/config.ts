@@ -1,34 +1,7 @@
 // ── Backend Connection Configuration ──
-// Defines the connection model for multi-agent support.
+// Connection model and helpers for multi-agent support.
 
-export interface BackendConnection {
-  id: string;
-  name: string;
-  url: string; // z.B. "http://192.168.1.100:3001"
-  apiKey: string;
-  password: string; // stored in plaintext locally
-  sessionToken?: string;
-  tokenExpiresAt?: number;
-  isActive: boolean;
-  status?:
-    | "connected"
-    | "disconnected"
-    | "error"
-    | "authenticating"
-    | "reconnecting"
-    | "updating"
-    | "restarting";
-  reconnectAttempts?: number; // Track number of reconnection attempts
-  lastError?: string; // Last error message for UI display
-  statusUpdatedAt?: number; // Timestamp when status was last set (for stale status detection)
-  agentInfo?: {
-    version: string;
-    hostname: string;
-    platform: string;
-    serverCount: number;
-    compatibilityWarning?: string;
-  };
-}
+import type { BackendConnection } from "@/types";
 
 /**
  * Returns the API base URL for a given connection.

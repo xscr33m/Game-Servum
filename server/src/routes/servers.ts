@@ -6,7 +6,8 @@ import fsPromises from "fs/promises";
 import { exec } from "child_process";
 import multer from "multer";
 import AdmZip from "adm-zip";
-import { logger, broadcast } from "../index.js";
+import { logger } from "../core/logger.js";
+import { broadcast } from "../core/broadcast.js";
 import {
   getAllServers,
   getServerById,

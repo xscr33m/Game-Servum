@@ -18,14 +18,46 @@ export type {
   AgentSettings,
   UpdateState,
   FirewallStatus,
-  FirewallResult,
   GameCapabilities,
   BackupMetadata,
   BackupSettings,
   BackupProgress,
 } from "@game-servum/shared";
 
+// Used via inline import("@/types").FirewallResult in api.ts — fallow can't trace dynamic type references
+export type { FirewallResult } from "@game-servum/shared";
+
 // Client-only types
+
+// Backend connection model for multi-agent support
+export interface BackendConnection {
+  id: string;
+  name: string;
+  url: string; // z.B. "http://192.168.1.100:3001"
+  apiKey: string;
+  password: string; // stored in plaintext locally
+  sessionToken?: string;
+  tokenExpiresAt?: number;
+  isActive: boolean;
+  status?:
+    | "connected"
+    | "disconnected"
+    | "error"
+    | "authenticating"
+    | "reconnecting"
+    | "updating"
+    | "restarting";
+  reconnectAttempts?: number; // Track number of reconnection attempts
+  lastError?: string; // Last error message for UI display
+  statusUpdatedAt?: number; // Timestamp when status was last set (for stale status detection)
+  agentInfo?: {
+    version: string;
+    hostname: string;
+    platform: string;
+    serverCount: number;
+    compatibilityWarning?: string;
+  };
+}
 
 // Agent system info (from /api/v1/system/info)
 export interface AgentSystemInfo {

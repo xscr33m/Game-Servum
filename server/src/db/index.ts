@@ -2,7 +2,7 @@ import initSqlJs, { Database as SqlJsDatabase } from "sql.js";
 import path from "path";
 import fs from "fs";
 import { getConfig } from "../services/config.js";
-import { logger } from "../index.js";
+import { logger } from "../core/logger.js";
 import { runMigrations } from "./migrations/index.js";
 import type {
   GameServer,

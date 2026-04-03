@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import jwt from "jsonwebtoken";
 import { getConfig } from "./config.js";
-import { logger } from "../index.js";
+import { logger } from "../core/logger.js";
 import type { AppConfig } from "../types/index.js";
 import {
   findApiKeyByHash,

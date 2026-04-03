@@ -14,7 +14,7 @@ import { authRouter } from "./routes/auth.js";
 import logsRouter from "./routes/logs.js";
 import { agentAuth } from "./middleware/auth.js";
 import { getConfig } from "./services/config.js";
-import { logger } from "./index.js";
+import { logger } from "./core/logger.js";
 
 const app = express();
 const config = getConfig();

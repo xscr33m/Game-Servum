@@ -11,7 +11,7 @@
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { logger } from "../../index.js";
+import { logger } from "../../core/logger.js";
 import { BaseGameAdapter } from "../base.js";
 import type {
   GameDefinition,

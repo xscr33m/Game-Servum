@@ -14,7 +14,8 @@
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
-import { broadcast, logger } from "../index.js";
+import { broadcast } from "../core/broadcast.js";
+import { logger } from "../core/logger.js";
 import {
   getUpdateRestartSettings,
   getServerById,

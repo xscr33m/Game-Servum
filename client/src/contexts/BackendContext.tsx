@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import type { WSMessage } from "@/types";
-import type { BackendConnection } from "@/lib/config";
+import type { BackendConnection } from "@/types";
 import { loadConnections, saveConnectionsAsync } from "@/lib/config";
 import { createApiClient, type ApiClient } from "@/lib/api";
 import {
