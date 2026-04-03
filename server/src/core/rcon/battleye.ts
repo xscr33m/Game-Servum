@@ -212,12 +212,6 @@ export class BattlEyeRcon implements RconClient {
     }));
   }
 
-  /** Get BattlEye-specific player data (includes guid, index, verified status) */
-  async getBattlEyePlayers(): Promise<BattlEyePlayer[]> {
-    const response = await this.sendCommand("players");
-    return parseBattlEyePlayersResponse(response);
-  }
-
   async broadcastMessage(message: string): Promise<void> {
     await this.sendCommand(`say -1 ${message}`);
   }
