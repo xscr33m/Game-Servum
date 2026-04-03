@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="client/public/dashboard-icon.png" alt="Game-Servum Logo" width="120" height="120">
+  <img src="client/public/commander-icon.png" alt="Game-Servum Logo" width="120" height="120">
 </p>
 
 <h1 align="center">Game-Servum</h1>
@@ -7,7 +7,7 @@
 <p align="center">
   <strong>Professional Game Server Management</strong>
   </br>
-  <strong>Manage DayZ, 7 Days to Die, ARK, and other dedicated game servers from a modern dashboard — locally or across multiple machines<strong>
+  <strong>Manage DayZ, 7 Days to Die, ARK, and other dedicated game servers from a modern Commander — locally or across multiple machines<strong>
 </p>
 
 <p align="center">
@@ -36,22 +36,22 @@
 - **RCON Support** — BattlEye (DayZ), Source (ARK), and Telnet (7DTD) protocols with scheduled broadcast messages
 - **Player Tracking** — Live player monitoring via RCON polling with log-based session backfill per game
 - **Game-Specific Config Editors** — INI, XML, and text-based editors tailored to each game's configuration format
-- **File Explorer** — Browse, edit, and upload server files directly from the Dashboard
+- **File Explorer** — Browse, edit, and upload server files directly from the Commander
 - **Scheduled Restarts** — Automatic server restarts with configurable pre-restart RCON warnings
 - **Auto-Update Detection** — Checks for game and mod updates, auto-restarts with configurable delays
-- **System Monitoring** — Real-time CPU, memory, disk, and network Agent metrics on the Dashboard
+- **System Monitoring** — Real-time CPU, memory, disk, and network Agent metrics on the Commander
 - **Firewall Management** — Automatic Windows Firewall rules per server
 - **Log Management** — Automatic log archiving with configurable retention policies
 - **Template Variables** — Built-in and custom variables for launch params and broadcast messages
-- **Multi-Agent Architecture** — One dashboard, multiple agents on different machines
+- **Multi-Agent Architecture** — One Commander, multiple agents on different machines
 - **Secure by Design** — API-Key + Password auth, JWT sessions, encrypted credential storage
-- **App Auto-Update** — Agent updates triggered from the Dashboard, Electron auto-updater for the Dashboard itself
+- **App Auto-Update** — Agent updates triggered from the Commander, Electron auto-updater for the Commander itself
 
 ## Architecture
 
 ```
 ┌──────────────────────────────────────────────────┐
-│              Dashboard (React SPA)               │
+│              Commander (React SPA)               │
 │           Electron App / Browser                 │
 └─────────┬──────────────┬──────────────┬──────────┘
           │ REST + WS    │ REST + WS    │ REST + WS
@@ -87,29 +87,29 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ```bash
 npm run build:agent        # Agent-only installer (~40 MB)
-npm run build:dashboard    # Dashboard-only installer (~90 MB)
+npm run build:commander    # Commander-only installer (~90 MB)
 ```
 
 **Outputs:**
 
 - `dist/v{version}/agent/Game-Servum-Agent-Setup-v{version}.exe` — Agent installer + update ZIP
-- `dist/v{version}/dashboard/Game-Servum-Dashboard-Setup-{version}.exe` — Dashboard installer
+- `dist/v{version}/commander/Game-Servum-Commander-Setup-{version}.exe` — Dashboard installer
 
 | Installer     | Contents                          | Use Case                                    |
 | ------------- | --------------------------------- | ------------------------------------------- |
 | **Agent**     | Windows Service (Node.js + WinSW) | Headless game server host, managed remotely |
-| **Dashboard** | Electron app (Dashboard UI only)  | Remote management (connects to Agents)      |
+| **Commander** | Electron app (Commander UI only)  | Remote management (connects to Agents)      |
 
-### Linux Dashboard
+### Linux Commander
 
 **Build on Linux:** AppImages must be built on a Linux system (CachyOS, Ubuntu, etc.)
 
 ```bash
 npm run build:linux
-# → dist/v{version}/dashboard/Game-Servum-Dashboard-{version}.AppImage
+# → dist/v{version}/commander/Game-Servum-Commander-{version}.AppImage
 ```
 
-The Linux build contains **only the Dashboard** for remote management of Windows Agents. No Agent included.
+The Linux build contains **only the Commander** for remote management of Windows Agents. No Agent included.
 
 **Requirements:**
 
@@ -119,10 +119,10 @@ The Linux build contains **only the Dashboard** for remote management of Windows
 
 ## Auto-Update System
 
-Both Agent and Dashboard include automatic updates via GitHub Releases:
+Both Agent and Commander include automatic updates via GitHub Releases:
 
 - **Agent**: Self-updater checks GitHub Releases API, downloads update ZIP, installs via PowerShell (stop service → extract → restart)
-- **Dashboard**: Electron auto-updater with in-app notifications and one-click install
+- **Commander**: Electron auto-updater with in-app notifications and one-click install
 - **Automatic checks** every 4 hours (configurable)
 - **Preserves all data** during upgrades (servers, mods, connections, settings)
 
@@ -134,10 +134,10 @@ npm run build              # Build all packages (shared → server → client)
 
 # Windows builds (requires Windows)
 npm run build:agent        # Build Agent installer (NSIS)
-npm run build:dashboard    # Build Dashboard installer (NSIS)
+npm run build:commander    # Build Commander installer (NSIS)
 
 # Linux build (requires Linux)
-npm run build:linux        # Build Dashboard AppImage
+npm run build:linux        # Build Commander AppImage
 ```
 
 ## Tech Stack
@@ -154,7 +154,7 @@ npm run build:linux        # Build Dashboard AppImage
 
 ```
 Game-Servum/
-├── client/              # React dashboard (Vite)
+├── client/              # React Commander (Vite)
 ├── docs/                # Documentation about the project
 ├── electron/            # Electron shell (main + preload)
 ├── server/              # Agent backend (Express)

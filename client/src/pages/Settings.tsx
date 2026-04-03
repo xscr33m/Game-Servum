@@ -176,7 +176,7 @@ export function Settings() {
             <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
               <FaArrowLeft className="h-4 w-4 mr-2" />
               <img
-                src={publicAsset("dashboard-icon.png")}
+                src={publicAsset("commander-icon.png")}
                 alt=""
                 className="h-7 w-auto mr-1"
               />
@@ -211,7 +211,7 @@ export function Settings() {
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Show real-time CPU, memory, disk, and network usage on
-                    Dashboard
+                    Commander
                   </p>
                 </div>
                 <Switch

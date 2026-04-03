@@ -48,7 +48,7 @@ interface AgentControlPanelProps {
 }
 
 /**
- * Unified agent control panel for the Dashboard header.
+ * Unified agent control panel for the Commander header.
  * Combines agent selection, actions, and management in one component.
  */
 export function AgentControlPanel({ onAddAgent }: AgentControlPanelProps) {

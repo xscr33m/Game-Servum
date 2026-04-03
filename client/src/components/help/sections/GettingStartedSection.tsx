@@ -16,21 +16,21 @@ const steps = [
   },
   {
     icon: FaPlug,
-    title: "2. Connect the Dashboard",
+    title: "2. Connect the Commander",
     description:
-      "Open the Dashboard (this app) and connect it to your Agent by entering the Agent's IP address, port, API-key and password. You can connect to multiple Agents from a single Dashboard.",
+      "Open the Commander (this app) and connect it to your Agent by entering the Agent's IP address, port, API-key and password. You can connect to multiple Agents from a single Commander.",
   },
   {
     icon: FaSteam,
     title: "3. Set up SteamCMD",
     description:
-      "Install SteamCMD through the Dashboard and log in with your Steam account. Some games require a logged-in Steam account, while others work with anonymous access.",
+      "Install SteamCMD through the Commander and log in with your Steam account. Some games require a logged-in Steam account, while others work with anonymous access.",
   },
   {
     icon: FaServer,
     title: "4. Create a server",
     description:
-      'Click "Add Server" on the Dashboard, choose a game, configure the port, and start the installation. SteamCMD will download and set up the dedicated server files automatically.',
+      'Click "Add Server" on the Commander, choose a game, configure the port, and start the installation. SteamCMD will download and set up the dedicated server files automatically.',
   },
 ];
 
@@ -51,7 +51,7 @@ export function GettingStartedSection() {
           Game-Servum is an open source tool for managing dedicated game
           servers. It uses SteamCMD to install and update servers, provides
           real-time monitoring, mod management, scheduled restarts, and more —
-          all through a modern web-based dashboard.
+          all through a modern web-based Commander.
         </p>
       </div>
 
@@ -77,7 +77,7 @@ export function GettingStartedSection() {
           <div className="rounded-md border bg-muted/30 p-4">
             <div className="flex items-center gap-2 mb-2">
               <FaDesktop className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-semibold">Dashboard</span>
+              <span className="text-sm font-semibold">Commander</span>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
               Runs on Windows, Linux, or macOS — either as a desktop app or in

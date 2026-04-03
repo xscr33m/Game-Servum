@@ -30,7 +30,7 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
       <CardHeader className="text-center pb-4">
         <div className="flex justify-center mb-4">
           <img
-            src={publicAsset("dashboard-icon.png")}
+            src={publicAsset("commander-icon.png")}
             alt="Game-Servum"
             className="h-24 w-auto drop-shadow-xl"
           />

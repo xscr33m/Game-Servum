@@ -125,7 +125,7 @@ export function ensureInitialCredentials(): void {
 
 /**
  * Write credentials to a CREDENTIALS.txt file in the data directory.
- * This file is created on first start so the user can connect a Dashboard.
+ * This file is created on first start so the user can connect a Commander.
  */
 function writeCredentialsFile(
   apiKey: string,
@@ -139,7 +139,7 @@ function writeCredentialsFile(
 
 Generated: ${new Date().toLocaleString()}
 
-Use these credentials to connect a Game-Servum Dashboard
+Use these credentials to connect a Game-Servum Commander
 to this Agent.
 
   API-Key:    ${apiKey}

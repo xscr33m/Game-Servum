@@ -365,13 +365,18 @@ export function Dashboard() {
         left={
           <>
             <img
-              src={publicAsset("dashboard-icon.png")}
-              alt="Game-Servum"
+              src={publicAsset("commander-icon.png")}
+              alt="Game-Servum Commander"
               className="h-7 w-auto"
             />
-            <div className="flex items-baseline gap-2">
-              <h1 className="text-xl font-bold">Game-Servum</h1>
-              <span className="text-xs text-muted-foreground font-mono hidden md:inline">
+            <div className="flex items-end gap-2">
+              <div className="flex flex-col leading-tight">
+                <span className="text-[10px] font-semibold text-muted-foreground tracking-wide uppercase">
+                  Game-Servum
+                </span>
+                <span className="text-xl font-bold -mt-0.5">Commander</span>
+              </div>
+              <span className="text-xs text-muted-foreground font-mono hidden md:inline mb-0.5">
                 v{APP_VERSION}
               </span>
             </div>
@@ -444,7 +449,7 @@ export function Dashboard() {
             </Tip>
           </>
         }
-        mobileMenuTitle="Game-Servum"
+        mobileMenuTitle="Commander"
         mobileMenu={
           <div className="space-y-5">
             {/* Agent section */}

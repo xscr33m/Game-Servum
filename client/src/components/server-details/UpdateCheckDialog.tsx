@@ -214,8 +214,8 @@ export function UpdateCheckDialog({
                 </p>
                 <p className="text-xs text-muted-foreground">
                   This game server requires a logged-in Steam account to check
-                  for updates. Please log in via the SteamCMD Setup on the
-                  Dashboard and try again.
+                  for updates. Please log in via the SteamCMD Setup on the home
+                  page and try again.
                 </p>
                 <Button
                   size="sm"
@@ -224,7 +224,7 @@ export function UpdateCheckDialog({
                   className="mt-1"
                 >
                   <FaRightToBracket className="h-3 w-3 mr-1.5" />
-                  Go to Dashboard
+                  Go to Home
                 </Button>
               </div>
             </div>

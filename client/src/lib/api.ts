@@ -1485,14 +1485,3 @@ export function createApiClient(
     logs: createLogsApi(fetchApi),
   };
 }
-
-// ── Backward-compatible static exports ──
-// These use the default (same-origin) API client.
-// Components should migrate to useBackend() context hook over time.
-
-const defaultClient = createApiClient();
-
-export const steamcmdApi = defaultClient.steamcmd;
-export const serversApi = defaultClient.servers;
-export const systemApi = defaultClient.system;
-export const healthApi = defaultClient.health;

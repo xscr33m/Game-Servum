@@ -1,4 +1,3 @@
-import { useEffect, useState, useCallback } from "react";
 import type { WSMessage } from "@/types";
 import { getWsUrl, type BackendConnection } from "@/lib/config";
 import { logger } from "@/lib/logger";
@@ -7,7 +6,6 @@ type MessageHandler = (message: WSMessage) => void;
 type ConnectionHandler = (connected: boolean) => void;
 
 // ── WebSocket Manager ──
-// Manages WebSocket connections (single or multi-backend).
 
 class WebSocketManager {
   private ws: WebSocket | null = null;
@@ -110,8 +108,8 @@ class WebSocketManager {
   }
 }
 
-// ── Default singleton instance (backward compatible) ──
-// Used for development fallback when no connection is specified.
+// ── Default singleton instance ──
+// Used as development fallback when no connection is specified.
 const defaultManager = new WebSocketManager();
 
 /**
@@ -130,23 +128,6 @@ export function createWsManager(
   const manager = new WebSocketManager();
   manager.connect(connection);
   return manager;
-}
-
-// ── React Hook ──
-// Backward-compatible hook for components that use useWebSocket().
-
-export function useWebSocket() {
-  const [isConnected, setIsConnected] = useState(defaultManager.isConnected);
-
-  useEffect(() => {
-    return defaultManager.onConnectionChange((state) => setIsConnected(state));
-  }, []);
-
-  const subscribe = useCallback((handler: MessageHandler) => {
-    return defaultManager.subscribe(handler);
-  }, []);
-
-  return { isConnected, subscribe };
 }
 
 export { WebSocketManager };

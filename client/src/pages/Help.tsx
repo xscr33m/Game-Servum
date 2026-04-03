@@ -37,7 +37,7 @@ export function Help() {
             <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
               <FaArrowLeft className="h-4 w-4 mr-2" />
               <img
-                src={publicAsset("dashboard-icon.png")}
+                src={publicAsset("commander-icon.png")}
                 alt=""
                 className="h-7 w-auto mr-1"
               />

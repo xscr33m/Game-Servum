@@ -25,7 +25,7 @@ const DEFAULT_LOG_SETTINGS = {
 
 class SimpleLogger {
   constructor(context, logsDir, settings) {
-    this.context = context; // 'agent', or 'dashboard'
+    this.context = context; // 'agent', or 'commander'
     this.logsDir = logsDir;
     this.currentDate = this.getDate();
     this.buffer = [];

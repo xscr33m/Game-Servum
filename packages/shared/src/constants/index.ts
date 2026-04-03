@@ -8,12 +8,12 @@ export const APP_VERSION = "0.9.9";
 /** API version identifier */
 export const API_VERSION = "v1";
 
-/** Minimum agent version the dashboard is compatible with */
+/** Minimum agent version the Commander is compatible with */
 export const MIN_COMPATIBLE_AGENT_VERSION = "0.9.9";
 
 /** Default ports */
 export const DEFAULT_AGENT_PORT = 3001;
-export const DEFAULT_DASHBOARD_PORT = 5173;
+export const DEFAULT_COMMANDER_PORT = 5173;
 
 /** API path prefixes */
 export const API_PREFIX = "/api";
@@ -51,7 +51,7 @@ export function compareSemVer(a: string, b: string): -1 | 0 | 1 {
 }
 
 /**
- * Check whether an agent version is compatible with the dashboard.
+ * Check whether an agent version is compatible with the Commander.
  * Compatible if agent >= MIN_COMPATIBLE_AGENT_VERSION and same major.
  */
 export function isAgentCompatible(agentVersion: string): boolean {

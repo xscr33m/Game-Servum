@@ -18,8 +18,8 @@
     "dev:client": "npm run dev --workspace=client",
     "build": "npm run build -w @game-servum/shared && npm run build --workspace=server && npm run build --workspace=client",
     "build:agent": "npm run build -w @game-servum/shared && npm run build --workspace=server && node scripts/build-agent-windows.mjs",
-    "build:dashboard": "npm run build -w @game-servum/shared && npm run build --workspace=client && node scripts/build-dashboard-windows.mjs",
-    "build:linux": "npm run build -w @game-servum/shared && npm run build --workspace=client && node scripts/build-dashboard-linux.mjs",
+    "build:commander": "npm run build -w @game-servum/shared && npm run build --workspace=client && node scripts/build-commander-windows.mjs",
+    "build:linux": "npm run build -w @game-servum/shared && npm run build --workspace=client && node scripts/build-commander-linux.mjs",
     "version:bump": "node scripts/bump-version.mjs"
   },
   "devDependencies": {

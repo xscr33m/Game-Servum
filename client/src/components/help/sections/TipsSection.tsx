@@ -35,7 +35,7 @@ const tips = [
     icon: FaShieldHalved,
     title: "Authentication & Security",
     description:
-      "Game-Servum uses API-Key + JWT authentication by default. The Agent generates initial credentials on first start — check CREDENTIALS.txt in the data directory. Delete the file for safety after connecting the Dashboard.",
+      "Game-Servum uses API-Key + JWT authentication by default. The Agent generates initial credentials on first start — check CREDENTIALS.txt in the data directory. Delete the file for safety after connecting the Commander.",
   },
 ];
 

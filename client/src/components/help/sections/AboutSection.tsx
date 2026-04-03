@@ -22,7 +22,7 @@ export function AboutSection() {
       <div className="rounded-lg border bg-card p-6">
         <div className="flex items-center gap-4 mb-4">
           <img
-            src={publicAsset("dashboard-icon.png")}
+            src={publicAsset("commander-icon.png")}
             alt="Game-Servum"
             className="h-14 w-auto"
           />
@@ -47,7 +47,7 @@ export function AboutSection() {
         <p className="text-sm text-muted-foreground leading-relaxed">
           Open Source Game Server Manager powered by SteamCMD. Manage DayZ, 7
           Days to Die, ARK, and other dedicated game servers from a modern
-          dashboard — locally or across multiple machines.
+          Commander — locally or across multiple machines.
         </p>
       </div>
 

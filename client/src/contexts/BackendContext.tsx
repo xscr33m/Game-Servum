@@ -8,7 +8,7 @@ import {
 } from "react";
 import type { WSMessage } from "@/types";
 import type { BackendConnection } from "@/lib/config";
-import { loadConnections, saveConnections } from "@/lib/config";
+import { loadConnections, saveConnectionsAsync } from "@/lib/config";
 import { createApiClient, type ApiClient } from "@/lib/api";
 import {
   WebSocketManager,
@@ -94,7 +94,7 @@ export function BackendProvider({ children }: { children: ReactNode }) {
   const activeConnection = connections.find((c) => c.id === activeId) || null;
 
   // ── Persist connections (only when credentials/tokens change, not status) ──
-  // Exception: "updating" / "restarting" status IS persisted so the Dashboard
+  // Exception: "updating" / "restarting" status IS persisted so the Commander
   // continues unlimited reconnect polling after a page refresh.
   const persistableSnapshot = useMemo(() => {
     const persistable = connections.map((c) => ({
@@ -116,7 +116,7 @@ export function BackendProvider({ children }: { children: ReactNode }) {
   }, [connections]);
 
   useEffect(() => {
-    saveConnections(connections);
+    saveConnectionsAsync(connections);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [persistableSnapshot]);
 

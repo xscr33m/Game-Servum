@@ -42,11 +42,11 @@ export function GuidesSection() {
               Installing SteamCMD
             </h4>
             <ol className="list-decimal list-inside space-y-1 ml-1">
-              <li>Open the Dashboard and connect to an Agent.</li>
+              <li>Open the Commander and connect to an Agent.</li>
               <li>
                 If SteamCMD is not installed, the onboarding wizard will prompt
                 you to install it. You can also install it later from the
-                Dashboard.
+                Commander.
               </li>
               <li>
                 Click <strong>Install SteamCMD</strong> and wait for the
@@ -60,7 +60,7 @@ export function GuidesSection() {
             </h4>
             <ol className="list-decimal list-inside space-y-1 ml-1">
               <li>
-                Click the Steam account badge in the Dashboard header (shows
+                Click the Steam account badge in the Commander header (shows
                 &quot;Anonymous&quot; when not logged in).
               </li>
               <li>Enter your Steam username and password.</li>
@@ -89,12 +89,12 @@ export function GuidesSection() {
             <h4 className="font-semibold text-foreground">Steps</h4>
             <ol className="list-decimal list-inside space-y-1 ml-1">
               <li>
-                Click <strong>Add Server</strong> on the Dashboard.
+                Click <strong>Add Server</strong> on the Commander.
               </li>
               <li>Select the game you want to host from the list.</li>
               <li>
                 Choose a name for your server and configure the port. The
-                Dashboard will suggest an available port and warn about
+                Commander will suggest an available port and warn about
                 conflicts.
               </li>
               <li>
@@ -114,7 +114,7 @@ export function GuidesSection() {
           </div>
           <div className="rounded-md bg-muted/50 p-3 text-xs">
             <strong>Tip:</strong> Each game server needs a set of consecutive
-            ports. The Dashboard automatically checks for port conflicts with
+            ports. The Commander automatically checks for port conflicts with
             your existing servers.
           </div>
         </Guide>
@@ -123,7 +123,7 @@ export function GuidesSection() {
         <Guide title="Starting & Stopping a Server">
           <p>
             Once a server is installed, you can start and stop it directly from
-            the Dashboard or the server detail page.
+            the Commander or the server detail page.
           </p>
           <div className="space-y-2">
             <h4 className="font-semibold text-foreground">Starting a server</h4>

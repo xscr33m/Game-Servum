@@ -4,8 +4,8 @@
  * Central registry for all game adapters. Provides:
  * - getGameAdapter(gameId) — returns the adapter for a game
  * - getAllGameAdapters() — returns all registered adapters
- * - getGameDefinition(gameId) — backward-compatible definition lookup
- * - GAME_DEFINITIONS — backward-compatible record of all definitions
+ * - getGameDefinition(gameId) — definition lookup by game ID
+ * - getAllGameDefinitions() — all game definitions
  */
 
 import type { GameAdapter, GameDefinition, GameMetadata } from "./types.js";
@@ -44,7 +44,7 @@ export function getAllGameAdapters(): GameAdapter[] {
 }
 
 /**
- * Get a game definition by ID (backward-compatible wrapper).
+ * Get a game definition by ID.
  */
 export function getGameDefinition(gameId: string): GameDefinition | undefined {
   return adapters.get(gameId)?.definition;
@@ -77,18 +77,6 @@ export function getAllGameDefinitions(): GameDefinition[] {
 export function getAllGameMetadata(): GameMetadata[] {
   return Array.from(adapters.values()).map((a) => a.getMetadata());
 }
-
-/**
- * Backward-compatible GAME_DEFINITIONS record.
- * Prefer getGameAdapter() / getGameDefinition() in new code.
- */
-export const GAME_DEFINITIONS: Record<string, GameDefinition> =
-  Object.fromEntries(
-    Array.from(adapters.entries()).map(([id, adapter]) => [
-      id,
-      adapter.definition,
-    ]),
-  );
 
 /**
  * Run post-install hook for a game (if the adapter defines one).

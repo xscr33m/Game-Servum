@@ -9,7 +9,7 @@ const faqs = [
   {
     question: "Do I need a Steam account?",
     answer:
-      "It depends on the game. Some games (like 7 Days to Die) can be downloaded with anonymous SteamCMD access. Others (like DayZ) require a Steam account that owns the game. The Dashboard will tell you when a login is required.",
+      "It depends on the game. Some games (like 7 Days to Die) can be downloaded with anonymous SteamCMD access. Others (like DayZ) require a Steam account that owns the game. The Commander will tell you when a login is required.",
   },
   {
     question: "Can I run multiple servers at the same time?",
@@ -17,9 +17,9 @@ const faqs = [
       "Yes! You can create and run as many servers as your hardware supports. Each server uses its own set of ports, and Game-Servum checks for port conflicts automatically.",
   },
   {
-    question: "How do I connect the Dashboard to a remote Agent?",
+    question: "How do I connect the Commander to a remote Agent?",
     answer:
-      'Click the "+" button in the header bar to add a new Agent connection. Enter the Agent\'s IP address and port (default: 3001). The Dashboard communicates with the Agent over HTTP and WebSocket. Make sure the port is open in your firewall.',
+      'Click the "+" button in the header bar to add a new Agent connection. Enter the Agent\'s IP address and port (default: 3001). The Commander communicates with the Agent over HTTP and WebSocket. Make sure the port is open in your firewall.',
   },
   {
     question: "What happens if my server crashes?",
@@ -34,7 +34,7 @@ const faqs = [
   {
     question: "Where is my data stored?",
     answer:
-      "The Agent stores its database and configuration in the data directory (default: C:\\ProgramData\\Game-Servum\\ on Windows). Game server files are stored in the servers directory. The Dashboard stores connection credentials in localStorage (browser) or a local JSON file (Electron app).",
+      "The Agent stores its database and configuration in the data directory (default: C:\\ProgramData\\Game-Servum\\ on Windows). Game server files are stored in the servers directory. The Commander stores connection credentials in localStorage (browser) or a local JSON file (Electron app).",
   },
   {
     question: "Is Game-Servum free?",

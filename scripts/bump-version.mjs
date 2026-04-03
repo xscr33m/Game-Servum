@@ -172,6 +172,6 @@ console.log(
   "\nNext steps:\n" +
     "  1. Review the changes\n" +
     "  2. Commit and push\n" +
-    "  3. Build on Windows: npm run build:agent && npm run build:dashboard\n" +
+    "  3. Build on Windows: npm run build:agent && npm run build:commander\n" +
     "  4. Build on Linux:   npm run build:linux\n",
 );

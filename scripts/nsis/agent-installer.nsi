@@ -132,14 +132,14 @@ Function .onInit
 
   ; If already installed, restore previous data directory
   ReadRegStr $0 HKLM "${UNINSTALL_REG_KEY}" "DataDirectory"
-  StrCmp $0 "" check_legacy
+  StrCmp $0 "" done_init
     StrCpy $DataDir $0
     Goto check_upgrade
 
   check_upgrade:
   ; Check if an older version is installed — offer upgrade
   ReadRegStr $0 HKLM "${UNINSTALL_REG_KEY}" "InstallLocation"
-  StrCmp $0 "" check_legacy
+  StrCmp $0 "" done_init
 
   ; Use existing install location for upgrade (may differ from new default)
   StrCpy $INSTDIR $0
@@ -168,23 +168,6 @@ Function .onInit
     ; Send stop signal now — the Install section will wait for completion
     nsExec::ExecToLog 'sc stop ${SERVICE_NAME}'
     Goto done_init
-
-  check_legacy:
-  ; Check for legacy Electron Agent installation
-  ReadRegStr $1 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\GameServumAgent" "InstallLocation"
-  StrCmp $1 "" done_init
-
-  MessageBox MB_YESNO|MB_ICONQUESTION \
-    "A legacy Electron-based Agent installation was detected.$\n$\nWould you like to migrate data from:$\n$DOCUMENTS\Game Servum$\n$\nto the new data directory?" \
-    IDYES do_migrate IDNO done_init
-
-  do_migrate:
-    ; Copy data from Documents\Game Servum to $DataDir
-    CreateDirectory "$DataDir"
-    CopyFiles /SILENT "$DOCUMENTS\Game Servum\data\*.*" "$DataDir\data\"
-    CopyFiles /SILENT "$DOCUMENTS\Game Servum\servers\*.*" "$DataDir\servers\"
-    CopyFiles /SILENT "$DOCUMENTS\Game Servum\steamcmd\*.*" "$DataDir\steamcmd\"
-    CopyFiles /SILENT "$DOCUMENTS\Game Servum\logs\*.*" "$DataDir\logs\"
 
   done_init:
 FunctionEnd

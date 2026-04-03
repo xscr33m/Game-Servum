@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  /** API base URL for dashboard development (e.g. "http://localhost:3001/api") */
+  /** API base URL for Commander development (e.g. "http://localhost:3001/api") */
   readonly VITE_API_URL?: string;
 }
 

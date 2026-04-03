@@ -112,7 +112,7 @@ export function ServerDetail() {
     );
   }
 
-  // Redirect to Dashboard when no agents are configured
+  // Redirect to home when no agents are configured
   useEffect(() => {
     if (connections.length === 0) {
       navigate("/", { replace: true });
@@ -157,7 +157,7 @@ export function ServerDetail() {
     prevConnected.current = isConnected;
   }, [isConnected, id, loadServer]);
 
-  // Redirect to dashboard when agent is switched on server detail page
+  // Redirect to home when agent is switched on server detail page
   const initialAgentId = useRef(activeConnection?.id);
 
   // Fetch buffered installation output when opening page during an active install
@@ -200,21 +200,21 @@ export function ServerDetail() {
       return;
     }
 
-    // Redirect to dashboard if active agent changed
+    // Redirect to home if active agent changed
     if (
       activeConnection?.id &&
       initialAgentId.current !== activeConnection.id
     ) {
-      console.log("[ServerDetail] Agent switched, redirecting to dashboard...");
-      toastInfo("Agent switched - returning to dashboard");
+      console.log("[ServerDetail] Agent switched, redirecting to home...");
+      toastInfo("Agent switched - returning to home");
       navigate("/");
     }
   }, [activeConnection?.id, navigate]);
 
-  // Redirect to Dashboard when agent is not connected.
+  // Redirect to home when agent is not connected.
   // ServerDetail requires a live agent connection — all data and actions
   // depend on it.  When the agent restarts, updates, or drops, we redirect
-  // so the Dashboard (with AgentStatusBanner) handles the reconnect UX.
+  // so the home page (with AgentStatusBanner) handles the reconnect UX.
   // Skip undefined status (initial state before BackendContext authenticates)
   // and "authenticating" (connection handshake in progress).
   useEffect(() => {
@@ -346,7 +346,7 @@ export function ServerDetail() {
       await api.servers.cancelInstall(serverToCancel.id);
       toastSuccess(`Cancelling installation of ${serverToCancel.name}...`);
       // server:status WS event updates to "deleting",
-      // server:deleted WS event will navigate to dashboard
+      // server:deleted WS event will navigate to home
       await loadServer();
     } catch (err) {
       toastError((err as Error).message);
@@ -377,7 +377,7 @@ export function ServerDetail() {
             <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
               <FaArrowLeft className="h-4 w-4 mr-2" />
               <img
-                src={publicAsset("dashboard-icon.png")}
+                src={publicAsset("commander-icon.png")}
                 alt=""
                 className="h-7 w-auto mr-1"
               />
@@ -421,7 +421,7 @@ export function ServerDetail() {
             <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
               <FaArrowLeft className="h-4 w-4 mr-2" />
               <img
-                src={publicAsset("dashboard-icon.png")}
+                src={publicAsset("commander-icon.png")}
                 alt=""
                 className="h-7 w-auto mr-1"
               />

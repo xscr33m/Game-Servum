@@ -16,7 +16,7 @@
 - [`server/src/db/index.ts`](../server/src/db/index.ts) — Database CRUD operations
 - [`server/src/db/migrations.ts`](../server/src/db/migrations.ts) — Versioned DB schema migrations
 - [`client/src/contexts/BackendContext.tsx`](../client/src/contexts/BackendContext.tsx) — Multi-agent connection management
-- [`electron/main/main-unified.js`](../electron/main/main-unified.js) — Electron entry point (Dashboard only)
+- [`electron/main/main-unified.js`](../electron/main/main-unified.js) — Electron entry point (Commander only)
 - [`service/winsw/GameServumAgent.xml`](../service/winsw/GameServumAgent.xml) — WinSW Windows Service configuration for Agent
 - [`client/src/pages/Settings.tsx`](../client/src/pages/Settings.tsx) — Settings page with Data Management section
 
@@ -33,7 +33,7 @@ Monorepo for a web-based game server management tool using SteamCMD.
 **Platform Support:**
 
 - **Agent (backend)**: Windows only (game servers require Windows)
-- **Dashboard (frontend)**: Windows, Linux, macOS (browser or Electron)
+- **Commander (frontend)**: Windows, Linux, macOS (browser or Electron)
 - **Development**: Any platform with Node.js 20+
 
 | Layer         | Stack                                                                 | Location              |
@@ -42,7 +42,7 @@ Monorepo for a web-based game server management tool using SteamCMD.
 | Backend       | Node.js + Express + TypeScript + sql.js (SQLite in-memory)            | `server/`             |
 | Shared Types  | TypeScript types & constants package                                  | `packages/shared/`    |
 | Agent Service | WinSW Windows Service + Node.js + esbuild bundle                      | `service/`, `server/` |
-| Desktop       | Electron 40 (Dashboard only)                                          | `electron/`           |
+| Desktop       | Electron 40 (Commander only)                                          | `electron/`           |
 | Communication | REST (`/api/*` + `/api/v1/*`) + WebSocket (`/ws`) + optional JWT auth | —                     |
 
 ## Development Commands
@@ -53,8 +53,8 @@ npm run dev:client           # Vite dev server with HMR + proxy to backend
 npm run dev:server           # tsx watch mode
 npm run build                # Build shared → server (tsc) → client (vite build)
 npm run build:agent          # Build Agent-only Windows installer (~100 MB) — Windows only
-npm run build:dashboard      # Build Dashboard-only Windows installer (~90 MB) — Windows only
-npm run build:linux          # Build Dashboard AppImage for Linux (Dashboard-only, no Agent) — Linux only
+npm run build:commander      # Build Commander-only Windows installer (~90 MB) — Windows only
+npm run build:linux          # Build Commander AppImage for Linux (Commander-only, no Agent) — Linux only
 npm run update:check         # Check all workspace packages for available updates (dry-run)
 npm run update:install       # Update workspace packages to latest versions
 npm run clean                # Clear build caches and dist folders
@@ -63,11 +63,11 @@ npm run clean                # Clear build caches and dist folders
 **Platform-Specific Build Requirements:**
 
 - `build:agent` requires Windows (uses NSIS installer, bundles Node.js runtime + WinSW service wrapper)
-- `build:dashboard` requires Windows (uses Squirrel.Windows installer, Electron only)
+- `build:commander` requires Windows (uses Squirrel.Windows installer, Electron only)
 - `build:linux` requires Linux build environment (uses `mksquashfs`, `AppImage` tools)
 - `dev` and `build` work on any platform but agent runtime is Windows-only
 
-**⚠️ Important:** For a full release, build Windows installers (`build:agent` + `build:dashboard`) on Windows, then build Linux AppImage (`build:linux`) on Linux separately.
+**⚠️ Important:** For a full release, build Windows installers (`build:agent` + `build:commander`) on Windows, then build Linux AppImage (`build:linux`) on Linux separately.
 
 **Testing & Linting:**
 
@@ -211,7 +211,7 @@ npm run clean                # Clear build caches and dist folders
 
 ### Credential Store (`client/src/lib/credentialStore.ts`)
 
-- Plaintext storage: localStorage for browser/Dashboard, JSON file for Electron (via IPC)
+- Plaintext storage: localStorage for browser/Commander, JSON file for Electron (via IPC)
 - Strips session tokens before persisting to reduce exposure
 - ElectronCredentialStore: pre-loads connections synchronously before React renders
 
@@ -224,7 +224,7 @@ npm run clean                # Clear build caches and dist folders
 ### Routing (`client/src/App.tsx`)
 
 - Uses `HashRouter` in Electron (`window.electronAPI` detected) for `file://` compat, otherwise `BrowserRouter`
-- Routes: `/` → Dashboard, `/server/:id` → ServerDetail, `/server/:id/:tab` → ServerDetail with tab, `/settings` → Settings, `/logs` → Logs
+- Routes: `/` → Dashboard (home page), `/server/:id` → ServerDetail, `/server/:id/:tab` → ServerDetail with tab, `/settings` → Settings, `/logs` → Logs
 
 ### Platform-Specific Features (`client/src/pages/Settings.tsx`)
 
@@ -236,7 +236,7 @@ npm run clean                # Clear build caches and dist folders
 
 ## Shared Package (`packages/shared/`)
 
-- **Constants**: `APP_VERSION`, `API_VERSION`, `MIN_COMPATIBLE_AGENT_VERSION`, `compareSemVer()`, `isAgentCompatible()`, `DEFAULT_AGENT_PORT`, `DEFAULT_DASHBOARD_PORT`, `TOKEN_LIFETIME_SECONDS`
+- **Constants**: `APP_VERSION`, `API_VERSION`, `MIN_COMPATIBLE_AGENT_VERSION`, `compareSemVer()`, `isAgentCompatible()`, `DEFAULT_AGENT_PORT`, `DEFAULT_COMMANDER_PORT`, `TOKEN_LIFETIME_SECONDS`
 - **Types**: `ServerStatus` (7 states: `installing`, `stopped`, `starting`, `running`, `stopping`, `error`, `updating`), `GameServer`, `ServerMod`, `ModStatus`, `WSMessageType` (28 event types), API request/response types
 - **Game types**: `GameMetadata` (id, name, logo, description), `StartupDetector` (type: stdout|logfile, pattern, logFile, timeoutMs)
 
@@ -251,16 +251,16 @@ The Agent runs as a native Windows Service via WinSW (v3.0.0-alpha.11):
 - **Auto-start**: managed via `sc.exe` (AUTO_START/DEMAND_ONLY), exposed through REST API
 - **Self-updater**: `agentUpdater.ts` checks GitHub Releases API, downloads update ZIP, runs PowerShell script to stop service → extract → restart
 - **Graceful shutdown**: 30s stop timeout in WinSW config
-- No Electron, no tray icon — fully managed via Dashboard over REST API
+- No Electron, no tray icon — fully managed via Commander over REST API
 
 ## Electron (`electron/main/main-unified.js`)
 
-Dashboard-only Electron app (no agent code):
+Commander-only Electron app (no agent code):
 
 - Single-instance lock, BrowserWindow + system tray
-- User data in `Documents/Game-Servum` (Windows) or `~/.config/game-servum-dashboard/` (Linux)
+- User data in `Documents/Game-Servum` (Windows) or `~/.config/game-servum-commander/` (Linux)
 - IPC handlers: credential storage, app settings, logger, local logs, auto-updater
-- Uses `electron-updater` for Dashboard self-updates (GitHub Releases)
+- Uses `electron-updater` for Commander self-updates (GitHub Releases)
 - `app-settings.json` stores `auto_update_enabled`, `minimize_to_tray` preferences
 
 ## Build System
@@ -276,26 +276,26 @@ Dashboard-only Electron app (no agent code):
 5. Create update ZIP (agent.mjs + sql-wasm.wasm only)
 6. Output: `Game-Servum-Agent-Setup-v{version}.exe` (~50 MB) + `Game-Servum-Agent-Update-v{version}.zip` (~20 MB)
 
-**Dashboard-only Windows (`scripts/build-dashboard-windows.mjs`):**
+**Commander-only Windows (`scripts/build-commander-windows.mjs`):**
 
 1. Build shared types
 2. Build client via Vite (`--base=./`)
 3. Stage Electron project (no agent code)
 4. Package with `electron-builder` (Squirrel target)
-5. Output: `Game-Servum-Dashboard-Setup-v{version}.exe` (~90 MB) + `.nupkg` files for auto-update
+5. Output: `Game-Servum-Commander-Setup-v{version}.exe` (~90 MB) + `.nupkg` files for auto-update
 
-**Dashboard-only Linux (`scripts/build-dashboard-linux.mjs`):**
+**Commander-only Linux (`scripts/build-commander-linux.mjs`):**
 
 1. Build shared types
 2. Build client via Vite
-3. Stage Electron project (Dashboard components only)
+3. Stage Electron project (Commander components only)
 4. Package with `electron-builder` (AppImage target)
-5. Output: `Game-Servum-Dashboard_v{version}.AppImage` (~80 MB)
+5. Output: `Game-Servum-Commander_v{version}.AppImage` (~80 MB)
 
 **Platform-specific paths:**
 
 - Windows: `Documents/Game-Servum/`
-- Linux: `~/.config/game-servum-dashboard/` (Dashboard-only)
+- Linux: `~/.config/game-servum-commander/` ( Commander-only)
 - macOS: `~/Library/Application Support/Game-Servum/`
 
 **Agent NSIS installer features:**
@@ -311,8 +311,8 @@ Dashboard-only Electron app (no agent code):
 **Important:**
 
 - Agent installer contains: Node.js runtime + agent.mjs + WinSW service wrapper (no Electron)
-- Dashboard installer contains: Electron + React frontend only
-- Linux builds contain ONLY the Dashboard. No Agent, no Node.js runtime, no game server management. Dashboard connects to remote Windows Agents over network.
+- Commander installer contains: Electron + React frontend only
+- Linux builds contain ONLY the Commander. No Agent, no Node.js runtime, no game server management. Commander connects to remote Windows Agents over network.
 - **Agent runtime is Windows-only** (game servers require Windows)
 
 ## Game Module System
@@ -454,7 +454,7 @@ GAME_PLUGINS.set("mygame", mygamePlugin);
 
 ## Version Management & Releases
 
-**Single shared version** for Agent + Dashboard — both always release together.
+**Single shared version** for Agent + Commander — both always release together.
 
 **Version bump** (replaces manual `npm version` + constant editing):
 
@@ -479,17 +479,17 @@ The script (`scripts/bump-version.mjs`) updates **all locations automatically**:
 
 **Compatibility checking:**
 
-- `MIN_COMPATIBLE_AGENT_VERSION` — the oldest agent version the dashboard can work with. Only bump when making breaking API changes
+- `MIN_COMPATIBLE_AGENT_VERSION` — the oldest agent version the Commander can work with. Only bump when making breaking API changes
 - `isAgentCompatible(agentVersion)` — checks major match + `>= MIN_COMPATIBLE_AGENT_VERSION`
-- Dashboard shows a warning banner (soft-block) when connecting to an outdated agent
+- Commander shows a warning banner (soft-block) when connecting to an outdated agent
 
 **Release process**:
 
 1. Run `npm run version:bump -- <version>` (e.g., `0.10.0`)
 2. Review changes, commit, and push
-3. Build Windows installers on Windows: `npm run build:agent && npm run build:dashboard`
+3. Build Windows installers on Windows: `npm run build:agent && npm run build:commander`
 4. Build Linux AppImage on Linux: `npm run build:linux`
-5. Test all installation scenarios (Agent + Dashboard on same or different machines)
+5. Test all installation scenarios (Agent + Commander on same or different machines)
 6. Create GitHub Release with tag `v{version}` (e.g., `v0.10.0`)
 7. Upload all installers as release assets
 8. Auto-updater polls GitHub Releases API every 4 hours (configurable)
@@ -497,10 +497,10 @@ The script (`scripts/bump-version.mjs`) updates **all locations automatically**:
 **Platform-specific builds:**
 
 - Agent Windows installer uses NSIS (requires `makensis` on PATH)
-- Dashboard Windows installer uses Squirrel.Windows (no additional dependencies required)
-- Linux Dashboard AppImage requires Linux build environment: `npm run build:linux`
+- Commander Windows installer uses Squirrel.Windows (no additional dependencies required)
+- Linux Commander AppImage requires Linux build environment: `npm run build:linux`
 - Agent runtime is Windows-only (game servers require Windows)
-- Dashboard works on Windows, Linux, macOS (connects to remote Windows Agents)
+- Commander works on Windows, Linux, macOS (connects to remote Windows Agents)
 
 ## Code Style
 

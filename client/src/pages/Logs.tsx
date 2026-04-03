@@ -79,8 +79,8 @@ export function Logs() {
   const navigate = useNavigate();
   const { api, connections, activeConnection } = useBackend();
 
-  // Active agent/dashboard selection
-  const [activeTab, setActiveTab] = useState<string>("dashboard");
+  // Active agent/commander selection
+  const [activeTab, setActiveTab] = useState<string>("commander");
 
   // Per-agent log viewer state
   const [logStates, setLogStates] = useState<Record<string, LogViewerState>>(
@@ -116,11 +116,11 @@ export function Logs() {
     },
   };
 
-  // Load log files for an agent or dashboard
+  // Load log files for an agent or Commander
   const loadLogFiles = useCallback(
     async (agentId: string) => {
-      // For dashboard: use local IPC
-      if (agentId === "dashboard") {
+      // For Commander: use local IPC
+      if (agentId === "commander") {
         const electronLogs = window.electronAPI?.logs;
         if (!electronLogs) {
           logger.debug("[Logs] No Electron logs API available");
@@ -226,8 +226,8 @@ export function Logs() {
   // Load log file content
   const loadLogContent = useCallback(
     async (agentId: string, filename: string) => {
-      // For dashboard: use local IPC
-      if (agentId === "dashboard") {
+      // For Commander: use local IPC
+      if (agentId === "commander") {
         const electronLogs = window.electronAPI?.logs;
         if (!electronLogs) return;
 
@@ -284,11 +284,11 @@ export function Logs() {
     [api.logs],
   );
 
-  // Load log settings for an agent or dashboard
+  // Load log settings for an agent or Commander
   const loadLogSettings = useCallback(
     async (agentId: string) => {
-      // For dashboard: use local IPC
-      if (agentId === "dashboard") {
+      // For Commander: use local IPC
+      if (agentId === "commander") {
         const electronLogs = window.electronAPI?.logs;
         if (!electronLogs) return;
 
@@ -336,12 +336,12 @@ export function Logs() {
     [api.logs, connections],
   );
 
-  // Initialize log states for all agents/dashboard - only on mount
+  // Initialize log states for all agents/Commander - only on mount
   useEffect(() => {
     const initialStates: Record<string, LogViewerState> = {};
 
-    // Always include dashboard
-    initialStates["dashboard"] = {
+    // Always include Commander
+    initialStates["commander"] = {
       files: [],
       selectedFile: null,
       content: "",
@@ -391,8 +391,8 @@ export function Logs() {
     // Skip if already loaded this tab
     if (hasLoadedTab.has(activeTab)) return;
 
-    // For dashboard tab: Always load (local Electron IPC)
-    if (activeTab === "dashboard") {
+    // For Commander tab: Always load (local Electron IPC)
+    if (activeTab === "commander") {
       setHasLoadedTab((prev) => new Set(prev).add(activeTab));
       loadLogFiles(activeTab);
       loadLogSettings(activeTab);
@@ -421,8 +421,8 @@ export function Logs() {
   ) {
     setSavingSettings(true);
     try {
-      // For dashboard: use local IPC
-      if (agentId === "dashboard") {
+      // For Commander: use local IPC
+      if (agentId === "commander") {
         const electronLogs = window.electronAPI?.logs;
         if (electronLogs) {
           const response = await electronLogs.updateSettings(updates);
@@ -467,8 +467,8 @@ export function Logs() {
     if (!state) return;
 
     try {
-      // For dashboard: use local IPC
-      if (agentId === "dashboard") {
+      // For Commander: use local IPC
+      if (agentId === "commander") {
         const electronLogs = window.electronAPI?.logs;
         if (electronLogs) {
           const response = await electronLogs.cleanup(
@@ -520,8 +520,8 @@ export function Logs() {
     try {
       let content: string;
 
-      // For dashboard: use local IPC
-      if (agentId === "dashboard") {
+      // For Commander: use local IPC
+      if (agentId === "commander") {
         const electronLogs = window.electronAPI?.logs;
         if (!electronLogs) return;
         const response = await electronLogs.getFileContent(state.selectedFile);
@@ -560,8 +560,8 @@ export function Logs() {
 
   async function executeDelete(agentId: string, fileName: string) {
     try {
-      // For dashboard: use local IPC
-      if (agentId === "dashboard") {
+      // For Commander: use local IPC
+      if (agentId === "commander") {
         const electronLogs = window.electronAPI?.logs;
         if (electronLogs) {
           const response = await electronLogs.deleteFile(fileName);
@@ -682,15 +682,15 @@ export function Logs() {
 
   // Get agent name
   function getAgentName(agentId: string): string {
-    if (agentId === "dashboard") return "Dashboard";
+    if (agentId === "commander") return "Commander";
     const conn = connections.find((c) => c.id === agentId);
     return conn?.name || agentId;
   }
 
   // Check if current tab is connected/available
   function isTabConnected(): boolean {
-    if (activeTab === "dashboard") {
-      // Dashboard is always "connected" if Electron logs API is available
+    if (activeTab === "commander") {
+      // Commander is always "connected" if Electron logs API is available
       return !!window.electronAPI?.logs;
     }
     const connection = connections.find((c) => c.id === activeTab);
@@ -703,7 +703,7 @@ export function Logs() {
 
   // Helper to get connection status
   function getConnectionStatus(agentId: string): keyof typeof STATUS_COLORS {
-    if (agentId === "dashboard") return "connected";
+    if (agentId === "commander") return "connected";
     const connection = connections.find((c) => c.id === agentId);
     return (connection?.status as keyof typeof STATUS_COLORS) || "disconnected";
   }
@@ -717,7 +717,7 @@ export function Logs() {
             <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
               <FaArrowLeft className="h-4 w-4 mr-2" />
               <img
-                src={publicAsset("dashboard-icon.png")}
+                src={publicAsset("commander-icon.png")}
                 alt=""
                 className="h-7 w-auto mr-1"
               />
@@ -771,10 +771,10 @@ export function Logs() {
             <Select value={activeTab} onValueChange={setActiveTab}>
               <SelectTrigger className="w-auto h-9">
                 <div className="flex items-center gap-2 min-w-0 me-1">
-                  {activeTab === "dashboard" ? (
+                  {activeTab === "commander" ? (
                     <>
                       <FaDesktop className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className="truncate">Dashboard</span>
+                      <span className="truncate">Commander</span>
                       <FaCircle className="h-2 w-2 text-green-500 shrink-0 ml-auto" />
                     </>
                   ) : (
@@ -791,10 +791,10 @@ export function Logs() {
                 </div>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="dashboard">
+                <SelectItem value="commander">
                   <div className="flex items-center gap-2">
                     <FaDesktop className="h-4 w-4 text-muted-foreground" />
-                    <span>Dashboard</span>
+                    <span>Commander</span>
                     <FaCircle className="h-2 w-2 text-green-500 ml-auto" />
                   </div>
                 </SelectItem>
@@ -981,11 +981,11 @@ export function Logs() {
               <div className="space-y-1">
                 <button
                   data-keep-open
-                  className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg transition-colors text-left ${activeTab === "dashboard" ? "bg-muted/70 font-medium" : "hover:bg-muted/50"}`}
-                  onClick={() => setActiveTab("dashboard")}
+                  className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg transition-colors text-left ${activeTab === "commander" ? "bg-muted/70 font-medium" : "hover:bg-muted/50"}`}
+                  onClick={() => setActiveTab("commander")}
                 >
                   <FaDesktop className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span className="text-sm truncate">Dashboard</span>
+                  <span className="text-sm truncate">Commander</span>
                   <FaCircle className="h-2 w-2 text-green-500 shrink-0 ml-auto" />
                 </button>
                 {connections.map((conn) => (
@@ -1201,7 +1201,7 @@ export function Logs() {
           <div className="flex-1 overflow-auto p-5 min-h-0 bg-terminal">
             {(() => {
               // Check if agent is disconnected
-              if (activeTab !== "dashboard") {
+              if (activeTab !== "commander") {
                 const connection = connections.find((c) => c.id === activeTab);
                 if (!connection || connection.status !== "connected") {
                   return (

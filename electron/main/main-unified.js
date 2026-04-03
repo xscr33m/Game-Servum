@@ -1,7 +1,7 @@
 /**
- * Game-Servum — Dashboard Electron Main Process
+ * Game-Servum — Commander Electron Main Process
  *
- * Standalone Dashboard SPA with credential storage, tray, and auto-updater.
+ * Standalone Commander SPA with credential storage, tray, and auto-updater.
  * The Agent runs as a native Windows Service — no agent code here.
  *
  * Runtime layout (packaged):
@@ -9,7 +9,7 @@
  *
  * Writable data:
  *   Windows:  Documents/Game-Servum/
- *   Linux:    ~/.config/game-servum-dashboard/
+ *   Linux:    ~/.config/game-servum-commander/
  *   macOS:    ~/Library/Application Support/Game-Servum/
  */
 
@@ -26,12 +26,12 @@ const {
 const path = require("path");
 const fs = require("fs");
 
-const MODE = "dashboard";
+const MODE = "commander";
 
-app.name = "game-servum-dashboard";
+app.name = "game-servum-commander";
 app.setPath(
   "userData",
-  path.join(app.getPath("appData"), "game-servum-dashboard"),
+  path.join(app.getPath("appData"), "game-servum-commander"),
 );
 
 // ─── Single Instance Lock ──────────────────────────────────────
@@ -45,14 +45,14 @@ if (!gotLock) {
 
 const isDev = !app.isPackaged;
 
-const DASHBOARD_ICON = isDev
-  ? path.join(__dirname, "..", "..", "client", "public", "dashboard-icon.png")
-  : path.join(__dirname, "..", "assets", "dashboard-icon.png");
+const COMMANDER_ICON = isDev
+  ? path.join(__dirname, "..", "..", "client", "public", "commander-icon.png")
+  : path.join(__dirname, "..", "assets", "commander-icon.png");
 
 // App home: writable data directory
 // Platform-specific paths:
 //   Windows: Documents/Game-Servum
-//   Linux:   ~/.config/game-servum-dashboard
+//   Linux:   ~/.config/game-servum-commander
 //   macOS:   ~/Library/Application Support/Game-Servum
 
 const APP_HOME = isDev
@@ -66,7 +66,7 @@ const APP_HOME = isDev
           "Application Support",
           "Game-Servum",
         )
-      : path.join(app.getPath("home"), ".config", "game-servum-dashboard");
+      : path.join(app.getPath("home"), ".config", "game-servum-commander");
 
 // ─── Logger Initialization ─────────────────────────────────────
 
@@ -95,7 +95,7 @@ let mainWindow = null;
 let tray = null;
 
 // ════════════════════════════════════════════════════════════════
-//  DASHBOARD MODE
+//  COMMANDER MODE
 // ════════════════════════════════════════════════════════════════
 
 function ensureDirectories() {
@@ -108,17 +108,17 @@ function ensureDirectories() {
   }
 }
 
-// Store dashboard connections in Documents/Game-Servum/data/ so they survive reinstalls.
+// Store commander connections in Documents/Game-Servum/data/ so they survive reinstalls.
 // (The NSIS uninstaller deletes %APPDATA% userData but preserves Documents.)
 const CREDENTIALS_DIR = path.join(APP_HOME, "data");
 const CONNECTIONS_FILE = path.join(
   CREDENTIALS_DIR,
-  "dashboard-connections.json",
+  "commander-connections.json",
 );
 const SETTINGS_FILE = path.join(CREDENTIALS_DIR, "app-settings.json");
 
-function dashboard_setupIPC() {
-  logger.info("[Dashboard] Setting up IPC handlers");
+function commander_setupIPC() {
+  logger.info("[Commander] Setting up IPC handlers");
   logger.debug("[Connections] Target directory:", { dir: CREDENTIALS_DIR });
   logger.debug("[Connections] Target file:", { file: CONNECTIONS_FILE });
 
@@ -138,38 +138,10 @@ function dashboard_setupIPC() {
     logger.debug("[Connections] No connections file found in Documents yet");
   }
 
-  // ── Migrate app-settings.json from legacy userData ──
-  if (!fs.existsSync(SETTINGS_FILE)) {
-    const legacySettings = [
-      path.join(app.getPath("userData"), "app-settings.json"),
-      path.join(
-        path.dirname(app.getPath("userData")),
-        "game-servum-dashboard",
-        "app-settings.json",
-      ),
-    ];
-
-    for (const legacyPath of legacySettings) {
-      if (fs.existsSync(legacyPath)) {
-        logger.info("[AppSettings] Found legacy file:", { path: legacyPath });
-        try {
-          fs.copyFileSync(legacyPath, SETTINGS_FILE);
-          logger.info("[AppSettings] ✓ Migrated to Documents");
-          fs.unlinkSync(legacyPath);
-          break;
-        } catch (err) {
-          logger.warn("[AppSettings] Migration failed:", {
-            error: err.message,
-          });
-        }
-      }
-    }
-  }
-
   logger.info("[Connections] Initialization complete");
 
-  // ── Dashboard Connection Storage (Simple Plaintext JSON) ──
-  // Stored in Documents/Game-Servum/data/dashboard-connections.json
+  // ── Commander Connection Storage (Simple Plaintext JSON) ──
+  // Stored in Documents/Game-Servum/data/commander-connections.json
   // No encryption, no database API - simple and reliable!
 
   ipcMain.handle("credentials:store", async (_event, data) => {
@@ -231,18 +203,6 @@ function dashboard_setupIPC() {
   // ── App Settings Storage (persists UI preferences across reinstalls) ──
   // (SETTINGS_FILE is declared at module level above)
 
-  // Migrate legacy localStorage settings on first launch after upgrade
-  const legacySettings = path.join(
-    app.getPath("userData"),
-    "legacy-migrated.flag",
-  );
-  if (!fs.existsSync(legacySettings)) {
-    logger.info(
-      "[AppSettings] First launch after upgrade - migration handled by renderer",
-    );
-    fs.writeFileSync(legacySettings, "1");
-  }
-
   ipcMain.handle("settings:load", async () => {
     try {
       if (!fs.existsSync(SETTINGS_FILE)) {
@@ -279,7 +239,7 @@ function dashboard_setupIPC() {
       app.setLoginItemSettings({
         openAtLogin: enabled,
         openAsHidden: false,
-        args: ["--mode=dashboard"], // Launch Dashboard by default on startup
+        args: ["--mode=commander"], // Launch Commander by default on startup
       });
       logger.info(`[AppSettings] Launch on startup: ${enabled}`);
       return { success: true };
@@ -321,7 +281,7 @@ function dashboard_setupIPC() {
     logger.error(message, data);
   });
 
-  // ── Local Logs IPC (Dashboard mode) ──
+  // ── Local Logs IPC (Commander mode) ──
 
   ipcMain.handle("logs:listFiles", async () => {
     try {
@@ -510,14 +470,14 @@ function dashboard_setupIPC() {
   });
 }
 
-function dashboard_createWindow() {
+function commander_createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 1024,
     minHeight: 700,
-    title: "Game-Servum Dashboard",
-    icon: DASHBOARD_ICON,
+    title: "Game-Servum Commander",
+    icon: COMMANDER_ICON,
     backgroundColor: "#0a0a0a",
     autoHideMenuBar: true,
     show: false,
@@ -594,16 +554,16 @@ function dashboard_createWindow() {
   });
 }
 
-function dashboard_createTray() {
+function commander_createTray() {
   const icon = nativeImage
-    .createFromPath(DASHBOARD_ICON)
+    .createFromPath(COMMANDER_ICON)
     .resize({ width: 16, height: 16 });
   tray = new Tray(icon);
-  tray.setToolTip("Game-Servum Dashboard");
+  tray.setToolTip("Game-Servum Commander");
 
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: "Open Dashboard",
+      label: "Open Commander",
       click: () => {
         if (mainWindow) {
           mainWindow.show();
@@ -640,7 +600,7 @@ function dashboard_createTray() {
   });
 }
 
-function dashboard_setupAutoUpdater() {
+function commander_setupAutoUpdater() {
   try {
     const { autoUpdater } = require("electron-updater");
     autoUpdater.autoDownload = false;
@@ -757,19 +717,19 @@ function dashboard_setupAutoUpdater() {
     // Expose manual check function
     global.checkForUpdates = () => autoUpdater.checkForUpdates();
   } catch (err) {
-    logger.error("[Dashboard] electron-updater not available:", {
+    logger.error("[Commander] electron-updater not available:", {
       error: err.message,
     });
   }
 }
 
-function dashboard_start() {
-  dashboard_setupIPC();
-  dashboard_createWindow();
-  dashboard_createTray();
+function commander_start() {
+  commander_setupIPC();
+  commander_createWindow();
+  commander_createTray();
 
   if (app.isPackaged) {
-    dashboard_setupAutoUpdater();
+    commander_setupAutoUpdater();
   }
 }
 
@@ -786,17 +746,17 @@ app.on("second-instance", () => {
 
 app.whenReady().then(async () => {
   ensureDirectories();
-  dashboard_start();
+  commander_start();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      dashboard_createWindow();
+      commander_createWindow();
     }
   });
 });
 
 app.on("window-all-closed", () => {
-  // Dashboard quits if tray was destroyed (minimize-to-tray disabled)
+  // Commander quits if tray was destroyed (minimize-to-tray disabled)
   if (!tray || tray.isDestroyed()) {
     app.quit();
   }
@@ -804,7 +764,7 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   app.isQuitting = true;
-  logger.info("[Dashboard] Application shutting down...");
+  logger.info("[Commander] Application shutting down...");
 
   // Ensure tray is destroyed
   if (tray && !tray.isDestroyed()) {

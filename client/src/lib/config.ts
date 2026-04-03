@@ -59,7 +59,6 @@ export function getWsUrl(connection?: BackendConnection | null): string {
 }
 
 // ── Connection persistence ──
-// Uses pluggable CredentialStore. Sync wrappers for backward compatibility.
 
 import {
   getCredentialStore,
@@ -137,12 +136,4 @@ export async function saveConnectionsAsync(
 ): Promise<void> {
   const store = getCredentialStore();
   await store.save(connections);
-}
-
-/**
- * Synchronous save — for backward compatibility during migration.
- * Delegates to async save (fire-and-forget).
- */
-export function saveConnections(connections: BackendConnection[]): void {
-  saveConnectionsAsync(connections);
 }
