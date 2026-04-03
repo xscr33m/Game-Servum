@@ -7,17 +7,12 @@
     "electron/main/preload.js",
     "scripts/*.mjs"
   ],
-  "ignorePatterns": [
-    "**/*.d.ts"
-  ],
+  "ignorePatterns": ["**/*.d.ts"],
   "ignoreExports": [
     { "file": "client/src/components/ui/**", "exports": ["*"] },
     { "file": "packages/shared/src/**", "exports": ["*"] }
   ],
-  "ignoreDependencies": [
-    "electron",
-    "electron-updater"
-  ],
+  "ignoreDependencies": ["electron", "electron-updater"],
   "rules": {
     "unused-files": "error",
     "unused-exports": "error",

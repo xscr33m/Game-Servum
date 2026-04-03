@@ -13,13 +13,6 @@ import {
   type UnsavedChangesContextValue,
 } from "./UnsavedChangesContextDef";
 
-// Re-export so consumers can import from a single module
-export { UnsavedChangesContext } from "./UnsavedChangesContextDef";
-export type {
-  DirtyEntry,
-  UnsavedChangesContextValue,
-} from "./UnsavedChangesContextDef";
-
 // ---------------------------------------------------------------------------
 // Provider
 // ---------------------------------------------------------------------------

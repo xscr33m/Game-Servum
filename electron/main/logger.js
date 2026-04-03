@@ -353,4 +353,4 @@ class SimpleLogger {
   }
 }
 
-module.exports = { SimpleLogger, LogLevel, DEFAULT_LOG_SETTINGS };
+module.exports = { SimpleLogger, DEFAULT_LOG_SETTINGS };

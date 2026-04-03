@@ -18,10 +18,7 @@ import {
   getSteamConfig,
   getServerById,
 } from "../db/index.js";
-import {
-  getGameDefinition,
-  runPostInstall,
-} from "../games/index.js";
+import { getGameDefinition, runPostInstall } from "../games/index.js";
 import { performBackgroundDeletion } from "./serverDelete.js";
 
 // Track active installations with buffered output & progress
@@ -64,9 +61,7 @@ export interface InstallResult {
 /**
  * Install a game server via SteamCMD
  */
-async function installServer(
-  options: InstallOptions,
-): Promise<InstallResult> {
+async function installServer(options: InstallOptions): Promise<InstallResult> {
   const { serverId, gameId, appId, installPath, serverName, useAnonymous } =
     options;
 

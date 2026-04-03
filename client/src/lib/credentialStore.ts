@@ -227,4 +227,3 @@ export function getCredentialStore(): CredentialStore {
   }
   return storeInstance;
 }
-
