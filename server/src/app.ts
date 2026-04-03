@@ -58,11 +58,6 @@ app.get("/api/v1/info", (_req, res) => {
   });
 });
 
-// Legacy health check (kept for backward compatibility)
-app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
-});
-
 // Agent Status Page (localhost only, no auth required)
 app.get("/", (req, res, next) => {
   // Security: Only allow access from localhost
@@ -275,11 +270,6 @@ app.use("/api/v1/steamcmd", steamcmdRouter);
 app.use("/api/v1/servers", serversRouter);
 app.use("/api/v1/system", systemRouter);
 app.use("/api/v1/logs", logsRouter);
-
-// Legacy routes (redirect to v1 — backward compatibility)
-app.use("/api/steamcmd", steamcmdRouter);
-app.use("/api/servers", serversRouter);
-app.use("/api/system", systemRouter);
 
 // 404 handler for unmatched routes
 app.use((req, res) => {

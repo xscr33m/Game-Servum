@@ -21,7 +21,6 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CodeMirrorEditor } from "@/components/ui/code-editor";
 import { useBackend } from "@/hooks/useBackend";
-import { useWebSocket } from "@/hooks/useWebSocket";
 import { useContentWidth } from "@/hooks/useContentWidth";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { toastSuccess } from "@/lib/toast";
@@ -42,8 +41,7 @@ interface ConfigTabProps {
 }
 
 export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
-  const { api, isConnected } = useBackend();
-  const { subscribe } = useWebSocket();
+  const { api, isConnected, subscribe } = useBackend();
   const { contentClass } = useContentWidth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

@@ -8,7 +8,7 @@ import {
 } from "react";
 import type { WSMessage } from "@/types";
 import type { BackendConnection } from "@/lib/config";
-import { loadConnections, saveConnections } from "@/lib/config";
+import { loadConnections, saveConnectionsAsync } from "@/lib/config";
 import { createApiClient, type ApiClient } from "@/lib/api";
 import {
   WebSocketManager,
@@ -116,7 +116,7 @@ export function BackendProvider({ children }: { children: ReactNode }) {
   }, [connections]);
 
   useEffect(() => {
-    saveConnections(connections);
+    saveConnectionsAsync(connections);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [persistableSnapshot]);
 

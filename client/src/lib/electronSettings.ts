@@ -59,44 +59,6 @@ class ElectronSettingsStore {
     } catch (err) {
       logger.warn("[ElectronSettings] ✗ Load failed:", err);
     }
-
-    // Migrate legacy localStorage data to persistent storage
-    await this.migrateLegacySettings();
-  }
-
-  /**
-   * One-time migration of localStorage settings to Documents/Game-Servum/data/
-   */
-  private async migrateLegacySettings(): Promise<void> {
-    const keysToMigrate = [
-      "onboarding-completed",
-      "system_monitoring_enabled",
-      "agent-sidebar-collapsed",
-      "launch_on_startup",
-      "minimize_to_tray",
-      "auto_update_enabled",
-    ];
-
-    let migrated = false;
-    const migratedKeys: string[] = [];
-
-    for (const key of keysToMigrate) {
-      const value = localStorage.getItem(key);
-      if (value !== null && this.cache[key] === undefined) {
-        this.cache[key] = value;
-        migratedKeys.push(key);
-        migrated = true;
-      }
-    }
-
-    if (migrated) {
-      logger.info(
-        `[ElectronSettings] Migrated from localStorage: ${migratedKeys.join(", ")}`,
-      );
-      await this.flush();
-    } else {
-      logger.debug("[ElectronSettings] No localStorage migration needed");
-    }
   }
 
   /**

@@ -138,34 +138,6 @@ function commander_setupIPC() {
     logger.debug("[Connections] No connections file found in Documents yet");
   }
 
-  // ── Migrate app-settings.json from legacy userData ──
-  if (!fs.existsSync(SETTINGS_FILE)) {
-    const legacySettings = [
-      path.join(app.getPath("userData"), "app-settings.json"),
-      path.join(
-        path.dirname(app.getPath("userData")),
-        "game-servum-commander",
-        "app-settings.json",
-      ),
-    ];
-
-    for (const legacyPath of legacySettings) {
-      if (fs.existsSync(legacyPath)) {
-        logger.info("[AppSettings] Found legacy file:", { path: legacyPath });
-        try {
-          fs.copyFileSync(legacyPath, SETTINGS_FILE);
-          logger.info("[AppSettings] ✓ Migrated to Documents");
-          fs.unlinkSync(legacyPath);
-          break;
-        } catch (err) {
-          logger.warn("[AppSettings] Migration failed:", {
-            error: err.message,
-          });
-        }
-      }
-    }
-  }
-
   logger.info("[Connections] Initialization complete");
 
   // ── Commander Connection Storage (Simple Plaintext JSON) ──
@@ -230,18 +202,6 @@ function commander_setupIPC() {
 
   // ── App Settings Storage (persists UI preferences across reinstalls) ──
   // (SETTINGS_FILE is declared at module level above)
-
-  // Migrate legacy localStorage settings on first launch after upgrade
-  const legacySettings = path.join(
-    app.getPath("userData"),
-    "legacy-migrated.flag",
-  );
-  if (!fs.existsSync(legacySettings)) {
-    logger.info(
-      "[AppSettings] First launch after upgrade - migration handled by renderer",
-    );
-    fs.writeFileSync(legacySettings, "1");
-  }
 
   ipcMain.handle("settings:load", async () => {
     try {

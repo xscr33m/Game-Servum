@@ -50,7 +50,8 @@ const migrations: Migration[] = [
           auto_restart INTEGER DEFAULT 0,
           status TEXT DEFAULT 'stopped',
           pid INTEGER,
-          created_at TEXT DEFAULT CURRENT_TIMESTAMP
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          started_at TEXT DEFAULT NULL
         );
 
         CREATE TABLE IF NOT EXISTS server_mods (
@@ -74,6 +75,7 @@ const migrations: Migration[] = [
           steam_id TEXT NOT NULL,
           player_name TEXT NOT NULL,
           character_id TEXT,
+          steam64_id TEXT,
           connected_at TEXT NOT NULL,
           disconnected_at TEXT,
           is_online INTEGER DEFAULT 1,
@@ -133,14 +135,7 @@ const migrations: Migration[] = [
           key TEXT PRIMARY KEY,
           value TEXT NOT NULL
         );
-      `);
-    },
-  },
-  {
-    version: 2,
-    name: "api_keys",
-    up: (db) => {
-      db.run(`
+
         CREATE TABLE IF NOT EXISTS api_keys (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           key_hash TEXT UNIQUE NOT NULL,
@@ -149,47 +144,15 @@ const migrations: Migration[] = [
           created_at TEXT DEFAULT CURRENT_TIMESTAMP,
           last_used_at TEXT,
           is_active INTEGER DEFAULT 1
-        )
-      `);
-    },
-  },
-  {
-    version: 3,
-    name: "game_servers_started_at",
-    up: (db) => {
-      const columns = db.exec(`PRAGMA table_info(game_servers)`);
-      if (columns.length > 0) {
-        const hasColumn = columns[0].values.some(
-          (row) => row[1] === "started_at",
         );
-        if (!hasColumn) {
-          db.run(
-            `ALTER TABLE game_servers ADD COLUMN started_at TEXT DEFAULT NULL`,
-          );
-        }
-      }
-    },
-  },
-  {
-    version: 4,
-    name: "ark_executable_path_fix",
-    up: (db) => {
-      db.run(
-        `UPDATE game_servers SET executable = 'ShooterGame/Binaries/Win64/ShooterGameServer.exe' WHERE game_id = 'ark' AND executable = 'ShooterGameServer.exe'`,
-      );
-    },
-  },
-  {
-    version: 5,
-    name: "backup_system",
-    up: (db) => {
-      db.run(`
+
         CREATE TABLE IF NOT EXISTS server_backups (
           id TEXT PRIMARY KEY,
           server_id INTEGER NOT NULL,
           game_id TEXT NOT NULL,
           server_name TEXT NOT NULL,
           timestamp TEXT NOT NULL,
+          name TEXT,
           tag TEXT,
           trigger_type TEXT NOT NULL,
           status TEXT NOT NULL DEFAULT 'running',
@@ -199,12 +162,13 @@ const migrations: Migration[] = [
           error_message TEXT,
           file_path TEXT,
           FOREIGN KEY (server_id) REFERENCES game_servers(id) ON DELETE CASCADE
-        )
-      `);
-      db.run(`
+        );
+
         CREATE TABLE IF NOT EXISTS backup_settings (
           server_id INTEGER PRIMARY KEY,
           enabled INTEGER DEFAULT 0,
+          full_backup INTEGER DEFAULT 0,
+          backup_before_start INTEGER DEFAULT 0,
           backup_before_restart INTEGER DEFAULT 0,
           backup_before_update INTEGER DEFAULT 0,
           retention_count INTEGER DEFAULT 5,
@@ -212,40 +176,8 @@ const migrations: Migration[] = [
           custom_include_paths TEXT DEFAULT '[]',
           custom_exclude_paths TEXT DEFAULT '[]',
           FOREIGN KEY (server_id) REFERENCES game_servers(id) ON DELETE CASCADE
-        )
+        );
       `);
-    },
-  },
-  {
-    version: 6,
-    name: "backup_full_backup_flag",
-    up: (db) => {
-      db.run(
-        `ALTER TABLE backup_settings ADD COLUMN full_backup INTEGER DEFAULT 0`,
-      );
-    },
-  },
-  {
-    version: 7,
-    name: "backup_before_start_flag",
-    up: (db) => {
-      db.run(
-        `ALTER TABLE backup_settings ADD COLUMN backup_before_start INTEGER DEFAULT 0`,
-      );
-    },
-  },
-  {
-    version: 8,
-    name: "backup_name_column",
-    up: (db) => {
-      db.run(`ALTER TABLE server_backups ADD COLUMN name TEXT`);
-    },
-  },
-  {
-    version: 9,
-    name: "player_sessions_steam64_id",
-    up: (db) => {
-      db.run(`ALTER TABLE player_sessions ADD COLUMN steam64_id TEXT`);
     },
   },
 ];
