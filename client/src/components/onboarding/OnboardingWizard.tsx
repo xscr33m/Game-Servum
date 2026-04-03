@@ -154,7 +154,7 @@ export function OnboardingWizard({
       {/* Welcome */}
       {step === "welcome" && <WelcomeStep onNext={handleWelcomeNext} />}
 
-      {/* Connect Agent (Dashboard only) */}
+      {/* Connect Agent (Commander only) */}
       {step === "connect" && <ConnectAgentStep onNext={handleAgentConnected} />}
 
       {/* SteamCMD Install */}

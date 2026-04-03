@@ -1,4 +1,4 @@
-// WebSocket message types — unified superset used by both Agent and Dashboard
+// WebSocket message types — unified superset used by both Agent and Commander
 export type WSMessageType =
   | "steamcmd:output"
   | "steamcmd:progress"

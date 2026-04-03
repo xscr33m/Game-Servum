@@ -365,7 +365,7 @@ export function Dashboard() {
         left={
           <>
             <img
-              src={publicAsset("dashboard-icon.png")}
+              src={publicAsset("commander-icon.png")}
               alt="Game-Servum"
               className="h-7 w-auto"
             />

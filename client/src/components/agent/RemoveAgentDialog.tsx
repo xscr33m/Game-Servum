@@ -59,12 +59,12 @@ export function RemoveAgentDialog({
           <DialogDescription>
             Are you sure you want to remove{" "}
             <span className="font-semibold text-foreground">{agent.name}</span>{" "}
-            from your dashboard?
+            from your Commander?
           </DialogDescription>
         </DialogHeader>
 
         <div className="rounded-lg border border-border/50 bg-muted/30 p-3 text-sm text-muted-foreground space-y-1.5">
-          <p>This will only disconnect the agent from this dashboard.</p>
+          <p>This will only disconnect the agent from this Commander.</p>
           <p>
             The agent will <strong className="text-foreground">not</strong> be
             uninstalled or stopped on the remote system. Game servers managed by

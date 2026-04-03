@@ -157,7 +157,7 @@ HOST=0.0.0.0
 # CORS_ORIGINS=https://your-dashboard.com,http://localhost:5173
 CORS_ORIGINS=*
 
-# Authentication (enabled by default for remote Dashboard access)
+# Authentication (enabled by default for remote Commander access)
 AUTH_ENABLED=true
 # JWT_SECRET=  (auto-generated if not set)
 `;

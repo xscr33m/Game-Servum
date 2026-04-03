@@ -94,7 +94,7 @@ export function BackendProvider({ children }: { children: ReactNode }) {
   const activeConnection = connections.find((c) => c.id === activeId) || null;
 
   // ── Persist connections (only when credentials/tokens change, not status) ──
-  // Exception: "updating" / "restarting" status IS persisted so the Dashboard
+  // Exception: "updating" / "restarting" status IS persisted so the Commander
   // continues unlimited reconnect polling after a page refresh.
   const persistableSnapshot = useMemo(() => {
     const persistable = connections.map((c) => ({

@@ -274,7 +274,7 @@ async function checkGameServerUpdate(serverId: number): Promise<{
       return {
         result: null,
         steamcmdOutput:
-          "Steam login required for game update check. Please log in via Dashboard.",
+          "Steam login required for game update check. Please log in via Commander.",
         loginRequired: true,
       };
     }

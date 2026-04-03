@@ -69,7 +69,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     error: (message, data) => ipcRenderer.invoke("logger:error", message, data),
   },
 
-  // ─── Local Logs (Dashboard Mode) ──────────────────────────
+  // ─── Local Logs (Commander Mode) ──────────────────────────
   logs: {
     /** List all log files in the local logs directory */
     listFiles: () => ipcRenderer.invoke("logs:listFiles"),

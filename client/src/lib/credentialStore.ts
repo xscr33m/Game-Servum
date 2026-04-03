@@ -30,7 +30,7 @@ function stripSensitiveSessionData(
     void sessionToken;
     void tokenExpiresAt;
 
-    // Persist "updating" / "restarting" status so the Dashboard knows
+    // Persist "updating" / "restarting" status so the Commander knows
     // to use unlimited retries after a refresh during an agent update.
     if (conn.status === "updating" || conn.status === "restarting") {
       return {
@@ -96,7 +96,7 @@ export class LocalCredentialStore implements CredentialStore {
 }
 
 // ── Electron Credential Store (persists in Documents/Game-Servum/data/) ──
-// Uses Electron IPC to store plaintext JSON file in Documents/Game-Servum/data/dashboard-connections.json.
+// Uses Electron IPC to store plaintext JSON file in Documents/Game-Servum/data/commander-connections.json.
 // Data survives reinstalls because Documents/ is preserved.
 
 interface ElectronCredentialsAPI {

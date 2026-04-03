@@ -18,7 +18,7 @@ interface ConnectAgentStepProps {
 }
 
 /**
- * Dashboard-mode step: connect to a remote Game-Servum Agent.
+ * Commander-mode step: connect to a remote Game-Servum Agent.
  * Reuses addConnection from BackendContext.
  */
 export function ConnectAgentStep({ onNext }: ConnectAgentStepProps) {

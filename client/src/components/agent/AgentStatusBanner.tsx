@@ -42,7 +42,7 @@ function useDelayedVisibility(shouldShow: boolean): boolean {
  * Non-blocking banner shown below the header on every page when the active
  * agent is in any non-connected state.  Replaces the old full-screen
  * AgentReconnectionScreen with an inline indicator that keeps the entire
- * Dashboard usable.
+ * Commander usable.
  *
  * A short delay prevents the banner from flashing briefly during fast
  * reconnect cycles (e.g. clicking "Reconnect" in the AgentControlPanel).

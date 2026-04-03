@@ -35,7 +35,7 @@ export function OnboardingLayout({
       {/* Branding */}
       <div className="flex items-center gap-3 mb-8">
         <img
-          src={publicAsset("dashboard-icon.png")}
+          src={publicAsset("commander-icon.png")}
           alt="Game-Servum"
           className="h-10 w-auto"
         />

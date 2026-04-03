@@ -1,17 +1,17 @@
 /**
- * Game-Servum Dashboard — Linux AppImage Builder
+ * Game-Servum Commander — Windows Build
  *
- * Builds a standalone Dashboard for Linux (no Agent - connects to remote Windows Agents).
+ * Builds standalone Commander for Windows (no Agent - connects to remote/local Agents).
  *
  * Steps:
  *  1. Build shared types
  *  2. Build client (Vite) with base='./' for file:// compatibility
- *  3. Stage Electron project (Dashboard only - no Agent/node.exe)
+ *  3. Stage Electron project (Commander only - no Agent/node.exe)
  *  4. Install Electron dependencies
- *  5. Run electron-builder → .AppImage
- *  6. Copy output to dist/
+ *  5. Run electron-builder → NSIS installer
+ *  6. Copy output + update metadata to dist/
  *
- * Output: dist/Game-Servum-Dashboard-{version}.AppImage
+ * Output: dist/Game-Servum-Commander-Setup-v{version}.exe (~90 MB) + commander.yml
  */
 import { execSync } from "child_process";
 import {
@@ -33,11 +33,35 @@ const ROOT = resolve(__dirname, "..");
 const pkg = JSON.parse(readFileSync(resolve(ROOT, "package.json"), "utf-8"));
 const APP_VERSION = pkg.version || "1.0.0";
 
-const STAGING = resolve(ROOT, "dist", "staging-linux-dashboard");
+const STAGING = resolve(ROOT, "dist", "staging-commander-windows");
 const DIST_DIR = resolve(ROOT, "dist", `v${APP_VERSION}`);
 
+/**
+ * Convert a PNG file to ICO format (no external dependencies).
+ * Uses the PNG-in-ICO approach supported since Windows Vista.
+ */
+function pngToIco(pngPath, icoPath) {
+  const png = readFileSync(pngPath);
+  // ICO header: reserved(2) + type(2, 1=ICO) + count(2)
+  const header = Buffer.alloc(6);
+  header.writeUInt16LE(0, 0);
+  header.writeUInt16LE(1, 2);
+  header.writeUInt16LE(1, 4);
+  // ICO directory entry: w(1) h(1) colors(1) reserved(1) planes(2) bpp(2) size(4) offset(4)
+  const entry = Buffer.alloc(16);
+  entry.writeUInt8(0, 0); // 0 = 256px
+  entry.writeUInt8(0, 1);
+  entry.writeUInt8(0, 2);
+  entry.writeUInt8(0, 3);
+  entry.writeUInt16LE(1, 4); // 1 color plane
+  entry.writeUInt16LE(32, 6); // 32 bpp
+  entry.writeUInt32LE(png.length, 8);
+  entry.writeUInt32LE(22, 12); // data starts at byte 22 (6+16)
+  writeFileSync(icoPath, Buffer.concat([header, entry, png]));
+}
+
 console.log("╔════════════════════════════════════════════");
-console.log(`║  Game-Servum Dashboard Builder (Linux)     `);
+console.log(`║  Game-Servum Commander Builder (Windows)   `);
 console.log(`║  Version: ${APP_VERSION.padEnd(32)}`);
 console.log("╚════════════════════════════════════════════");
 
@@ -64,11 +88,11 @@ if (existsSync(STAGING)) {
   rmSync(STAGING, { recursive: true });
 }
 
-// 3a. Electron project package.json (Dashboard only)
+// 3a. Electron project package.json (Commander only)
 const electronPkg = {
-  name: "game-servum-dashboard",
+  name: "game-servum-commander",
   version: APP_VERSION,
-  description: "Game-Servum Dashboard — Remote Agent Management",
+  description: "Game-Servum Commander — Remote Agent Management",
   author: "xscr33mLabs",
   license: "GPL-3.0-only",
   main: "main/main-unified.js",
@@ -84,27 +108,25 @@ const electronPkg = {
     "balanced-match": "^4.0.2",
   },
   build: {
-    appId: "com.gameservum.dashboard",
-    productName: "Game-Servum Dashboard",
+    appId: "com.gameservum.commander",
+    productName: "Game-Servum Commander",
     copyright: "Copyright © 2026 xscr33mLabs",
     directories: { output: "release", buildResources: "build" },
     files: ["main/**/*", "assets/**/*"],
     extraResources: [{ from: "runtime", to: "runtime", filter: ["**/*"] }],
-    linux: {
-      target: [{ target: "AppImage", arch: ["x64"] }],
-      category: "Utility",
+    win: {
+      target: [{ target: "nsis", arch: ["x64"] }],
       icon: "build/icon.png",
-      artifactName: "Game-Servum-Dashboard-${version}.${ext}",
     },
-    appImage: {
-      license: "LICENSE",
+    nsis: {
+      oneClick: true,
+      artifactName: `Game-Servum-Commander-Setup-v${APP_VERSION}.\${ext}`,
     },
     publish: {
       provider: "github",
       owner: "xscr33m",
       repo: "Game-Servum",
-      publisherName: ["xscr33mLabs"],
-      channel: "dashboard",
+      channel: "commander",
     },
   },
 };
@@ -115,23 +137,13 @@ writeFileSync(
   JSON.stringify(electronPkg, null, 2),
 );
 
-// 3b. Build resources (icon)
+// 3b. Build resources (icon only, no NSIS customization needed)
 mkdirSync(resolve(STAGING, "build"), { recursive: true });
+
 cpSync(
-  resolve(ROOT, "client", "public", "dashboard-icon.png"),
+  resolve(ROOT, "client", "public", "commander-icon.png"),
   resolve(STAGING, "build", "icon.png"),
 );
-
-// Optional: Copy LICENSE for AppImage
-if (existsSync(resolve(ROOT, "LICENSE"))) {
-  cpSync(resolve(ROOT, "LICENSE"), resolve(STAGING, "LICENSE"));
-} else {
-  // Create minimal LICENSE if missing
-  writeFileSync(
-    resolve(STAGING, "LICENSE"),
-    "Game-Servum — Copyright (C) 2025-2026 xscr33mLabs\n\nThis program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 3.\n\nSee https://www.gnu.org/licenses/ for details.",
-  );
-}
 
 // 3c. Electron main process files (packed into app.asar)
 mkdirSync(resolve(STAGING, "main"), { recursive: true });
@@ -151,11 +163,11 @@ cpSync(
 // 3d. Assets (packed into app.asar)
 mkdirSync(resolve(STAGING, "assets"), { recursive: true });
 cpSync(
-  resolve(ROOT, "client", "public", "dashboard-icon.png"),
-  resolve(STAGING, "assets", "dashboard-icon.png"),
+  resolve(ROOT, "client", "public", "commander-icon.png"),
+  resolve(STAGING, "assets", "commander-icon.png"),
 );
 
-// 3e. Runtime files (Client only - no Agent for Linux)
+// 3e. Runtime files (Client only - no Agent)
 const runtimeDir = resolve(STAGING, "runtime");
 mkdirSync(runtimeDir, { recursive: true });
 
@@ -163,7 +175,7 @@ const clientDir = resolve(runtimeDir, "client");
 mkdirSync(clientDir, { recursive: true });
 cpSync(resolve(ROOT, "client", "dist"), clientDir, { recursive: true });
 
-console.log("  ✓ Staged Electron project for Linux Dashboard-only");
+console.log("  ✓ Staged Commander runtime (React app)");
 
 // ─── 4. Install Electron dependencies ───────────────────────────
 
@@ -173,10 +185,10 @@ execSync("npm install --no-package-lock --loglevel=warn", {
   stdio: "inherit",
 });
 
-// ─── 5. Build AppImage ──────────────────────────────────────────
+// ───  5. Build installer ─────────────────────────────────────────
 
-console.log("\n[5/6] Building AppImage...");
-execSync("npx electron-builder --linux --publish never", {
+console.log("\n[5/6] Building NSIS installer...");
+execSync("npx electron-builder --win --publish never", {
   cwd: STAGING,
   stdio: "inherit",
   env: { ...process.env, NODE_NO_WARNINGS: "1" },
@@ -187,42 +199,38 @@ execSync("npx electron-builder --linux --publish never", {
 console.log("\n[6/6] Centralizing output...");
 mkdirSync(DIST_DIR, { recursive: true });
 
-// Copy all release assets flat to dist/v{version}/ (GitHub Releases = flat file uploads)
-
+// NSIS creates files directly under release/
 const releaseDir = resolve(STAGING, "release");
 let outputFile = "";
 
 if (existsSync(releaseDir)) {
-  const appImages = readdirSync(releaseDir).filter((f) =>
-    f.endsWith(".AppImage"),
+  const files = readdirSync(releaseDir);
+
+  // Copy installer executable
+  const setupFile = files.find(
+    (f) => f.endsWith(".exe") && f.includes("Setup"),
   );
-  for (const file of appImages) {
-    cpSync(resolve(releaseDir, file), resolve(DIST_DIR, file));
-    outputFile = file;
-    console.log(`  ✓ ${file}`);
+  if (setupFile) {
+    cpSync(resolve(releaseDir, setupFile), resolve(DIST_DIR, setupFile));
+    outputFile = setupFile;
+    console.log(`  ✓ ${setupFile}`);
+  } else {
+    console.warn("  ⚠ WARNING: No installer .exe found");
   }
 
-  // Copy dashboard-linux.yml (electron-updater metadata for GitHub provider + channel)
-  if (existsSync(resolve(releaseDir, "dashboard-linux.yml"))) {
-    cpSync(
-      resolve(releaseDir, "dashboard-linux.yml"),
-      resolve(DIST_DIR, "dashboard-linux.yml"),
+  // Copy commander.yml update metadata (required for electron-updater auto-updates)
+  const ymlFile = files.find((f) => f === "commander.yml");
+  if (ymlFile) {
+    cpSync(resolve(releaseDir, ymlFile), resolve(DIST_DIR, ymlFile));
+    console.log(`  ✓ ${ymlFile}`);
+  } else {
+    console.warn(
+      "  ⚠ WARNING: commander.yml not found (auto-update won't work)",
     );
-    console.log(`  ✓ dashboard-linux.yml`);
-  } else if (existsSync(resolve(releaseDir, "latest-linux.yml"))) {
-    // Fallback: electron-builder might create latest-linux.yml
-    cpSync(
-      resolve(releaseDir, "latest-linux.yml"),
-      resolve(DIST_DIR, "dashboard-linux.yml"),
-    );
-    console.log(`  ✓ dashboard-linux.yml (renamed from latest-linux.yml)`);
-  }
-
-  if (appImages.length === 0) {
-    console.warn("  ⚠ WARNING: No .AppImage found in staging release/");
   }
 } else {
-  console.warn("  ⚠ WARNING: staging release/ directory not found");
+  console.error("  ✗ ERROR: NSIS output directory not found!");
+  console.error(`    Expected: ${releaseDir}`);
 }
 
 // Clean up staging
@@ -241,11 +249,10 @@ if (outputFile) {
   );
 }
 console.log("║                                                              ");
-console.log("║  Mode: Dashboard only (connects to remote Windows Agents)    ");
-console.log("║  Data stored in: ~/.config/game-servum-dashboard/            ");
-console.log("║  No Agent runtime — Windows Agents required for servers      ");
+console.log("║  Mode: Commander only (connects to remote/local Agents)      ");
+console.log("║  Data stored in: Documents/Game-Servum/                      ");
 console.log("║                                                              ");
 console.log("║  GitHub Release Assets (flat):                               ");
-console.log("║    ├── Game-Servum-Dashboard-{version}.AppImage              ");
-console.log("║    └── dashboard-linux.yml                                   ");
+console.log("║    ├── Game-Servum-Commander-Setup-v{version}.exe            ");
+console.log("║    └── commander.yml                                         ");
 console.log("╚══════════════════════════════════════════════════════════════");

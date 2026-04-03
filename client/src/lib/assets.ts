@@ -1,8 +1,8 @@
 /**
  * Returns the correct path for a file in the `public/` directory.
  *
- * In dev mode `BASE_URL` is `/`, so this returns `/dashboard-icon.png`.
- * In Dashboard Electron builds `BASE_URL` is `./`, so this returns `./dashboard-icon.png`,
+ * In dev mode `BASE_URL` is `/`, so this returns `/commander-icon.png`.
+ * In Commander Electron builds `BASE_URL` is `./`, so this returns `./commander-icon.png`,
  * which resolves correctly from `file://` protocol.
  */
 export function publicAsset(path: string): string {
