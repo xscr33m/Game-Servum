@@ -31,3 +31,4 @@ data/
 
 # TypeScript
 *.tsbuildinfo
+.fallow/
