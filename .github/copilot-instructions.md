@@ -58,6 +58,8 @@ npm run build:linux          # Build Commander AppImage for Linux (Commander-onl
 npm run update:check         # Check all workspace packages for available updates (dry-run)
 npm run update:install       # Update workspace packages to latest versions
 npm run clean                # Clear build caches and dist folders
+npm run lint                 # ESLint across all workspaces (client, server, shared)
+npm run lint:fix             # ESLint with auto-fix
 ```
 
 **Platform-Specific Build Requirements:**
@@ -72,8 +74,12 @@ npm run clean                # Clear build caches and dist folders
 **Testing & Linting:**
 
 - ❌ No test framework configured
-- ❌ No linting on server side
-- ✅ ESLint configured for client (see `client/eslint.config.js`)
+- ✅ ESLint configured project-wide (see root `eslint.config.js`)
+  - Client: `js.configs.recommended` + `tseslint.configs.recommended` + React Hooks + React Refresh + browser globals
+  - Server: `js.configs.recommended` + `tseslint.configs.recommended` + Node.js globals
+  - Shared: `js.configs.recommended` + `tseslint.configs.recommended` + Node.js globals
+  - Ignored: `electron/`, `scripts/`, `service/`, `docs/`, `**/dist/`
+  - Convention: `_`-prefixed unused vars/args are allowed (`argsIgnorePattern: "^_"`)
 
 ## TypeScript & Module Conventions
 

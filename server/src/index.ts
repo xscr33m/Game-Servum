@@ -26,6 +26,7 @@ import {
 } from "./services/systemMonitor.js";
 import { setAppSetting } from "./db/index.js";
 import { logger } from "./core/logger.js";
+import { isRestartRequested } from "./core/shutdown.js";
 import {
   broadcast,
   addClient,
@@ -96,7 +97,7 @@ async function main() {
       }
 
       // Attach session to request for later use
-      (info.req as any).agentSession = payload;
+      info.req.agentSession = payload;
       callback(true);
     },
   });
@@ -155,7 +156,7 @@ async function main() {
   async function gracefulShutdown(signal: string) {
     logger.info(`[Shutdown] Received ${signal}, shutting down gracefully...`);
 
-    const isRestart = (process as any).__gameServumRestart === true;
+    const isRestart = isRestartRequested();
     if (isRestart) {
       logger.info(
         "[Shutdown] This is a restart — will trigger service restart",

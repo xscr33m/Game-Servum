@@ -16,6 +16,13 @@ export type {
   BackupTrigger,
 } from "@game-servum/shared";
 
+// Augment IncomingMessage so both Express (req) and WS (info.req) see agentSession
+declare module "http" {
+  interface IncomingMessage {
+    agentSession?: { keyId: number; name: string };
+  }
+}
+
 // Server-only types (not exposed to client)
 
 export interface PlayerSession {

@@ -15,6 +15,7 @@ import {
 } from "../services/agentUpdater.js";
 import { APP_VERSION } from "@game-servum/shared";
 import { logger } from "../core/logger.js";
+import { setRestartFlag } from "../core/shutdown.js";
 
 const router = Router();
 
@@ -137,10 +138,10 @@ router.post("/restart", async (_req, res) => {
   // and to self-spawn a replacement if not managed by Electron
   setTimeout(() => {
     logger.info("[System] Initiating agent restart via graceful shutdown...");
-    (process as any).__gameServumRestart = true;
+    setRestartFlag();
     // Use emit instead of kill — process.kill('SIGTERM') on Windows terminates
     // the process immediately without triggering the registered handler
-    process.emit("SIGTERM" as any);
+    process.emit("SIGTERM", "SIGTERM");
   }, 500);
 });
 
@@ -152,7 +153,7 @@ router.post("/shutdown", async (_req, res) => {
   // Delay to allow response to be sent, then trigger graceful shutdown
   setTimeout(() => {
     logger.info("[System] Initiating agent shutdown...");
-    process.emit("SIGTERM" as any);
+    process.emit("SIGTERM", "SIGTERM");
   }, 500);
 });
 

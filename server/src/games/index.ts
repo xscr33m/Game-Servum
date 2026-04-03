@@ -39,7 +39,7 @@ export function getGameAdapter(gameId: string): GameAdapter | undefined {
 /**
  * Get all registered game adapters.
  */
-function getAllGameAdapters(): GameAdapter[] {
+export function getAllGameAdapters(): GameAdapter[] {
   return Array.from(adapters.values());
 }
 
@@ -53,7 +53,9 @@ export function getGameDefinition(gameId: string): GameDefinition | undefined {
 /**
  * Get a game definition by Steam App ID.
  */
-function getGameDefinitionByAppId(appId: number): GameDefinition | undefined {
+export function getGameDefinitionByAppId(
+  appId: number,
+): GameDefinition | undefined {
   for (const adapter of adapters.values()) {
     if (adapter.definition.appId === appId) {
       return adapter.definition;
@@ -72,7 +74,7 @@ export function getAllGameDefinitions(): GameDefinition[] {
 /**
  * Get metadata for all registered games (for frontend display).
  */
-function getAllGameMetadata(): GameMetadata[] {
+export function getAllGameMetadata(): GameMetadata[] {
   return Array.from(adapters.values()).map((a) => a.getMetadata());
 }
 

@@ -1,5 +1,4 @@
 import express from "express";
-import path from "path";
 import os from "os";
 import cors from "cors";
 import {
@@ -59,7 +58,7 @@ app.get("/api/v1/info", (_req, res) => {
 });
 
 // Agent Status Page (localhost only, no auth required)
-app.get("/", (req, res, next) => {
+app.get("/", (req, res, _next) => {
   // Security: Only allow access from localhost
   const clientIp =
     req.ip || req.socket.remoteAddress || req.connection.remoteAddress || "";

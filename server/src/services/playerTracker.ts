@@ -72,7 +72,7 @@ const pendingReadyServers = new Set<number>();
 /**
  * Get cached count of online players for a server
  */
-function getOnlinePlayerCount(serverId: number): number {
+export function getOnlinePlayerCount(serverId: number): number {
   return getOnlinePlayers(serverId).length;
 }
 

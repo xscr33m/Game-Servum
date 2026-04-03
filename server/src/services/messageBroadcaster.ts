@@ -9,7 +9,6 @@
  * Timers are started when a server starts and cleared when it stops.
  */
 
-import { broadcast } from "../core/broadcast.js";
 import { logger } from "../core/logger.js";
 import {
   getEnabledMessagesByServerId,

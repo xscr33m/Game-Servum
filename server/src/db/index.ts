@@ -1179,7 +1179,7 @@ export function setModUpdateAvailable(modId: number): void {
   saveDatabase();
 }
 
-function clearModUpdateStatus(modId: number): void {
+export function clearModUpdateStatus(modId: number): void {
   getDb().run(
     "UPDATE server_mods SET status = 'installed' WHERE id = ? AND status = 'update_available'",
     [modId],
@@ -1301,7 +1301,7 @@ export function getBackupsByServerId(serverId: number): BackupMetadata[] {
   return result[0].values.map(mapBackupRow);
 }
 
-function deleteBackupsByServerId(serverId: number): void {
+export function deleteBackupsByServerId(serverId: number): void {
   getDb().run("DELETE FROM server_backups WHERE server_id = ?", [serverId]);
   saveDatabase();
 }

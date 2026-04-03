@@ -45,6 +45,6 @@ export function agentAuth(
   }
 
   // Session-Daten an Request anhängen
-  (req as any).agentSession = payload;
+  req.agentSession = payload;
   next();
 }

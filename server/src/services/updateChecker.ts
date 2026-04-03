@@ -849,7 +849,7 @@ export async function triggerUpdateCheck(
  * Initialize update checkers for a list of running server IDs.
  * Called from serverProcess.restoreServerStates() or app startup.
  */
-function initializeUpdateCheckers(runningServerIds: number[]): void {
+export function initializeUpdateCheckers(runningServerIds: number[]): void {
   let started = 0;
 
   for (const serverId of runningServerIds) {
@@ -870,6 +870,6 @@ function initializeUpdateCheckers(runningServerIds: number[]): void {
 /**
  * Check if a server has a pending update restart
  */
-function hasPendingUpdateRestart(serverId: number): boolean {
+export function hasPendingUpdateRestart(serverId: number): boolean {
   return pendingUpdateRestarts.has(serverId);
 }

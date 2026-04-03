@@ -505,7 +505,7 @@ export function generateModParams(serverId: number): {
 /**
  * Cancel an ongoing mod installation
  */
-function cancelModInstallation(modId: number): {
+export function cancelModInstallation(modId: number): {
   success: boolean;
   message: string;
 } {
@@ -522,7 +522,7 @@ function cancelModInstallation(modId: number): {
 /**
  * Check if a mod is currently being installed
  */
-function isModInstalling(modId: number): boolean {
+export function isModInstalling(modId: number): boolean {
   return activeInstallations.has(modId);
 }
 

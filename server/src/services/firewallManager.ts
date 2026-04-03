@@ -269,7 +269,7 @@ export async function addFirewallRules(
 export async function removeFirewallRules(
   serverName: string,
   gameId: string,
-  port: number,
+  _port: number,
 ): Promise<FirewallResult> {
   if (process.platform !== "win32") {
     logger.info(

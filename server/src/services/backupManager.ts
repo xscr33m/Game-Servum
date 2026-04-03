@@ -410,7 +410,7 @@ export function cancelActiveBackup(serverId: number): void {
 /**
  * Clean up all backup files for a server (used when deleting a server).
  */
-function cleanupServerBackups(serverId: number): void {
+export function cleanupServerBackups(serverId: number): void {
   const backupDir = getBackupStoragePath(serverId);
   if (fs.existsSync(backupDir)) {
     fs.rmSync(backupDir, { recursive: true, force: true });
@@ -428,7 +428,7 @@ function applyRetention(serverId: number): void {
   );
 
   // Already sorted DESC by timestamp from DB query
-  let toDelete: BackupMetadata[] = [];
+  const toDelete: BackupMetadata[] = [];
 
   // Count-based retention
   if (settings.retentionCount > 0 && backups.length > settings.retentionCount) {

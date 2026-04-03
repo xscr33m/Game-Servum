@@ -19,7 +19,7 @@ import {
   getSteamConfig,
   getServerById,
 } from "../db/index.js";
-import { getGameDefinition, runPostInstall } from "../games/index.js";
+import { runPostInstall } from "../games/index.js";
 
 // Track active installations with buffered output & progress
 interface ActiveInstallation {
@@ -557,7 +557,7 @@ export function isInstalling(serverId: number): boolean {
 /**
  * Get installation status for a server
  */
-function getInstallationStatus(serverId: number): {
+export function getInstallationStatus(serverId: number): {
   installing: boolean;
   gameId?: string;
 } {

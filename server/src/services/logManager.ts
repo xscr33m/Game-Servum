@@ -95,7 +95,7 @@ export function archiveLogsBeforeStart(logPaths: LogPaths): number {
     try {
       fs.renameSync(src, dest);
       archivedCount++;
-    } catch (error) {
+    } catch {
       // File might be locked — try copy + delete instead
       try {
         fs.copyFileSync(src, dest);

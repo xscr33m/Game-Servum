@@ -88,7 +88,7 @@ export function runMigrations(
 /**
  * Get current schema version (highest applied migration).
  */
-function getCurrentVersion(db: SqlJsDatabase): number {
+export function getCurrentVersion(db: SqlJsDatabase): number {
   ensureVersionTable(db);
   const result = db.exec("SELECT MAX(version) FROM schema_versions");
   if (result.length === 0 || result[0].values[0][0] === null) return 0;

@@ -1,4 +1,9 @@
-import { Router, type Request, type Response } from "express";
+import {
+  Router,
+  type Request,
+  type Response,
+  type NextFunction,
+} from "express";
 import path from "path";
 import os from "os";
 import fs from "fs";
@@ -18,12 +23,10 @@ import {
   updateServerPorts,
   updateServerName,
   updateServerAutoRestart,
-  deleteServer,
   getModsByServerId,
   createMod,
   updateModEnabled,
   updateModLoadOrder,
-  deleteMod,
   getOnlinePlayers,
   getPlayerSummaries,
   getLogSettings as getLogSettingsFromDb,
@@ -62,13 +65,10 @@ import {
 import { STEAM_RESERVED_PORT_RANGES } from "@game-servum/shared";
 import { readGameFile } from "../games/encoding.js";
 import {
-  cancelInstallation,
   cancelAndCleanupInstallation,
   isInstalling,
   getInstallationProgress,
   queueInstallation,
-  isQueued,
-  removeFromQueue,
 } from "../services/serverInstall.js";
 import {
   startServer,
@@ -267,7 +267,7 @@ router.post("/", async (req: Request, res: Response) => {
   // Check for port conflicts with existing servers (using firewallRules as source of truth)
   const requestedPort = body.port || gameDef.defaultPort;
   const createQpOffset = getQueryPortOffset(gameDef);
-  const requestedQueryPort =
+  const _requestedQueryPort =
     body.queryPort ||
     (createQpOffset != null ? requestedPort + createQpOffset : null);
 
@@ -3086,7 +3086,12 @@ router.post(
 
 // Handle multer file-size errors
 router.use(
-  (err: any, _req: Request, res: Response, next: (err?: any) => void) => {
+  (
+    err: Error & { code?: string },
+    _req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
     if (err && err.code === "LIMIT_FILE_SIZE") {
       return res.status(413).json({ error: "File too large (max 500 MB)" });
     }

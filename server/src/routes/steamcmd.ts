@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import fs from "fs";
-import { getConfig, getSteamCMDExecutable } from "../services/config.js";
+import { getSteamCMDExecutable } from "../services/config.js";
 import { getSteamConfig } from "../db/index.js";
 import {
   downloadSteamCMD,
@@ -16,7 +16,6 @@ const router = Router();
 
 // GET /api/steamcmd/status - Check SteamCMD installation status
 router.get("/status", (_req: Request, res: Response) => {
-  const config = getConfig();
   const steamcmdExe = getSteamCMDExecutable();
   const installed = fs.existsSync(steamcmdExe);
   const steamConfig = getSteamConfig();
