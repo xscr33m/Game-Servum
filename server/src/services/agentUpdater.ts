@@ -3,6 +3,7 @@ import path from "path";
 import { createWriteStream } from "fs";
 import { execFileSync } from "child_process";
 import { APP_VERSION, compareSemVer } from "@game-servum/shared";
+import type { UpdateState } from "@game-servum/shared";
 import { getConfig } from "./config.js";
 import { logger, broadcast } from "../index.js";
 import { getRunningServerIds } from "./serverProcess.js";
@@ -31,20 +32,6 @@ let updateState: UpdateState = {
 };
 
 let autoCheckTimer: ReturnType<typeof setInterval> | null = null;
-
-export interface UpdateState {
-  checking: boolean;
-  updateAvailable: boolean;
-  currentVersion: string;
-  latestVersion?: string;
-  releaseNotes?: string;
-  releaseDate?: string;
-  downloading: boolean;
-  downloadProgress?: number;
-  downloaded: boolean;
-  error?: string;
-  lastCheck?: number;
-}
 
 /**
  * Persist current update state to disk and broadcast to connected clients.
