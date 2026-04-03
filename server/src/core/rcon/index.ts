@@ -2,22 +2,13 @@
  * RCON module — factory + re-exports
  */
 
-import type {
-  RconClient,
-  RconConnectionOptions,
-  GenericRconPlayer,
-} from "./types.js";
+import type { RconClient, RconConnectionOptions } from "./types.js";
 import type { RconProtocol } from "@game-servum/shared";
 import { BattlEyeRcon } from "./battleye.js";
 import { TelnetRcon } from "./telnet.js";
 import { SourceRcon } from "./source.js";
 
-export type {
-  RconClient,
-  RconConnectionOptions,
-  GenericRconPlayer,
-} from "./types.js";
-export { type BattlEyePlayer } from "./battleye.js";
+export type { RconClient } from "./types.js";
 
 /**
  * Create an RCON client for the given protocol.

@@ -6,7 +6,7 @@ import type { BackendConnection } from "./config";
 
 // ── Storage Backend Interface ──
 
-export interface CredentialStore {
+interface CredentialStore {
   load(): Promise<BackendConnection[]>;
   save(connections: BackendConnection[]): Promise<void>;
   clear(): Promise<void>;

@@ -29,12 +29,9 @@ export interface BrowseTreeEntry {
   children?: BrowseTreeEntry[];
 }
 
-export type FetchApiFn = <T>(
-  endpoint: string,
-  options?: RequestInit,
-) => Promise<T>;
+type FetchApiFn = <T>(endpoint: string, options?: RequestInit) => Promise<T>;
 
-export interface SteamcmdApiClient {
+interface SteamcmdApiClient {
   getStatus: () => Promise<SteamCMDStatus>;
   install: () => Promise<{ success: boolean; message: string }>;
   login: (data: SteamLoginRequest) => Promise<{
@@ -49,7 +46,7 @@ export interface SteamcmdApiClient {
   logout: () => Promise<{ success: boolean; message: string }>;
 }
 
-export interface ServersApiClient {
+interface ServersApiClient {
   getAll: () => Promise<GameServer[]>;
   getById: (id: number) => Promise<GameServer>;
   getAvailableGames: () => Promise<GameDefinition[]>;
@@ -450,7 +447,7 @@ export interface ServersApiClient {
   }>;
 }
 
-export interface SystemApiClient {
+interface SystemApiClient {
   getMetrics: () => Promise<SystemMetrics>;
   getSettings: () => Promise<SystemSettings>;
   updateSettings: (
@@ -469,11 +466,11 @@ export interface SystemApiClient {
   shutdown: () => Promise<{ success: boolean; message: string }>;
 }
 
-export interface HealthApiClient {
+interface HealthApiClient {
   check: () => Promise<{ status: string; timestamp: string }>;
 }
 
-export interface AuthApiClient {
+interface AuthApiClient {
   connect: (
     apiKey: string,
     password: string,
@@ -481,7 +478,7 @@ export interface AuthApiClient {
   refresh: () => Promise<{ token: string; expiresIn: number }>;
 }
 
-export interface LogsApiClient {
+interface LogsApiClient {
   getSettings: () => Promise<{
     success: boolean;
     settings: import("@game-servum/shared").LoggerSettings;

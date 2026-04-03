@@ -80,25 +80,25 @@ function readRconConfig(
   return adapter.readRconConfig(server);
 }
 
-export interface StartResult {
+interface StartResult {
   success: boolean;
   message: string;
   pid?: number;
 }
 
-export interface StopResult {
+interface StopResult {
   success: boolean;
   message: string;
 }
 
-export interface RequirementCheck {
+interface RequirementCheck {
   name: string;
   status: "ok" | "warning" | "error";
   message: string;
   link?: string;
 }
 
-export interface RequirementsResult {
+interface RequirementsResult {
   ready: boolean;
   checks: RequirementCheck[];
 }

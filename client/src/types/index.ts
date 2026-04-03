@@ -1,9 +1,6 @@
 // Re-export all shared types
 export type {
-  ServerStatus,
   GameServer,
-  SteamConfig,
-  ModStatus,
   ServerMod,
   PlayerSummary,
   LogSettings,
@@ -14,26 +11,18 @@ export type {
   CreateServerRequest,
   SteamLoginRequest,
   SteamGuardRequest,
-  LoginState,
   SteamCMDStatus,
-  WSMessageType,
   WSMessage,
   SystemMetrics,
   SystemSettings,
   AgentSettings,
   UpdateState,
-  ApiResponse,
-  FirewallRuleDefinition,
-  FirewallRuleStatus,
   FirewallStatus,
   FirewallResult,
   GameCapabilities,
-  RconProtocol,
   BackupMetadata,
   BackupSettings,
   BackupProgress,
-  BackupStatus,
-  BackupTrigger,
 } from "@game-servum/shared";
 
 // Client-only types

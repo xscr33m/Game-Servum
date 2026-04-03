@@ -3,8 +3,6 @@ import { exec } from "child_process";
 import { statfs } from "fs/promises";
 import type { SystemMetrics } from "@game-servum/shared";
 
-export type { SystemMetrics };
-
 // ─── CPU Usage via os.cpus() delta ──────────────────────────────────────
 
 let previousCpuTimes: { idle: number; total: number } | null = null;

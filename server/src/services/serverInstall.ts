@@ -41,7 +41,7 @@ const cancelledServerIds: Set<number> = new Set();
 const installQueue: InstallOptions[] = [];
 let isProcessingQueue = false;
 
-export interface InstallOptions {
+interface InstallOptions {
   serverId: number;
   gameId: string;
   appId: number;
@@ -53,7 +53,7 @@ export interface InstallOptions {
   password?: string | null;
 }
 
-export interface InstallResult {
+interface InstallResult {
   success: boolean;
   message: string;
 }

@@ -1,9 +1,7 @@
 // Re-export all shared types
 export type {
-  ServerStatus,
   GameServer,
   SteamConfig,
-  ModStatus,
   ServerMod,
   PlayerSummary,
   LogSettings,
@@ -12,19 +10,9 @@ export type {
   ServerVariable,
   UpdateRestartSettings,
   CreateServerRequest,
-  SteamLoginRequest,
-  SteamGuardRequest,
-  LoginState,
   SteamCMDStatus,
-  WSMessageType,
-  WSMessage,
-  SystemMetrics,
-  SystemSettings,
-  ApiResponse,
   BackupMetadata,
   BackupSettings,
-  BackupProgress,
-  BackupStatus,
   BackupTrigger,
 } from "@game-servum/shared";
 

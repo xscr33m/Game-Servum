@@ -60,5 +60,3 @@ export function getWorkshopUrl(
   const id = workshopAppId || appId;
   return `https://steamcommunity.com/app/${id}/workshop/`;
 }
-
-export type { GameUIPlugin, ConfigEditorProps } from "./types";

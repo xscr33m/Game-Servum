@@ -79,7 +79,7 @@ export function getDb(): SqlJsDatabase {
 
 // ── API Keys queries ──
 
-export interface ApiKeyRecord {
+interface ApiKeyRecord {
   id: number;
   keyHash: string;
   passwordHash: string;

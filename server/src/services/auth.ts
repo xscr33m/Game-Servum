@@ -41,7 +41,7 @@ export function verifyPassword(password: string, storedHash: string): boolean {
 
 // ── JWT ──
 
-export interface SessionPayload {
+interface SessionPayload {
   keyId: number;
   name: string;
 }
@@ -63,7 +63,7 @@ export function verifySessionToken(token: string): SessionPayload | null {
 
 // ── Key Generation ──
 
-export interface GeneratedCredentials {
+interface GeneratedCredentials {
   apiKey: string;
   password: string;
 }

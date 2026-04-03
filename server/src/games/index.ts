@@ -128,16 +128,5 @@ export function getAllPortsFromRules(
 
 // ── Re-exports ─────────────────────────────────────────────────────
 
-export type {
-  GameAdapter,
-  GameDefinition,
-  GameMetadata,
-  StartupDetector,
-  RconConfig,
-  PlayerFileConfig,
-  PlayerListResult,
-  EditableFileConfig,
-  ModCopyResult,
-  LogPaths,
-} from "./types.js";
+export type { GameDefinition, LogPaths } from "./types.js";
 export { getQueryPortOffset, getConsecutivePortCount } from "./base.js";

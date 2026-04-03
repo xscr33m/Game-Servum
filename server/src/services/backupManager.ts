@@ -37,7 +37,7 @@ export function isBackupRunning(serverId: number): boolean {
 
 // ── Public API ─────────────────────────────────────────────────────
 
-export interface CreateBackupOptions {
+interface CreateBackupOptions {
   name?: string;
   tag?: string;
   trigger?: BackupTrigger;
@@ -45,13 +45,13 @@ export interface CreateBackupOptions {
   skipServerLifecycle?: boolean;
 }
 
-export interface BackupResult {
+interface BackupResult {
   success: boolean;
   message: string;
   backupId?: string;
 }
 
-export interface RestoreResult {
+interface RestoreResult {
   success: boolean;
   message: string;
 }
