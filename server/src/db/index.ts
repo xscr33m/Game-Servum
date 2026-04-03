@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs";
 import { getConfig } from "../services/config.js";
 import { logger } from "../index.js";
-import { runMigrations } from "./migrations.js";
+import { runMigrations } from "./migrations/index.js";
 import type {
   GameServer,
   SteamConfig,
