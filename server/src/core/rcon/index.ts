@@ -22,8 +22,8 @@ export {
   type BattlEyePlayer,
   parseBattlEyePlayersResponse,
 } from "./battleye.js";
-export { TelnetRcon, parseTelnetPlayersResponse } from "./telnet.js";
-export { SourceRcon, parseSourcePlayersResponse } from "./source.js";
+export { TelnetRcon } from "./telnet.js";
+export { SourceRcon } from "./source.js";
 
 /**
  * Create an RCON client for the given protocol.

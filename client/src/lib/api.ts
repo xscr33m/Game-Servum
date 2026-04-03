@@ -573,7 +573,7 @@ function createFetchApi(
   };
 }
 
-export class ApiAuthError extends Error {
+class ApiAuthError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ApiAuthError";

@@ -121,14 +121,6 @@ export function loadConnections(): BackendConnection[] {
 }
 
 /**
- * Async load — uses the credential store.
- */
-export async function loadConnectionsAsync(): Promise<BackendConnection[]> {
-  const store = getCredentialStore();
-  return store.load();
-}
-
-/**
  * Save connections via the credential store.
  */
 export async function saveConnectionsAsync(

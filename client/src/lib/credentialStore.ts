@@ -74,7 +74,7 @@ export function cleanStaleStatuses(
 
 // ── LocalStorage (Plaintext) ──
 
-export class LocalCredentialStore implements CredentialStore {
+class LocalCredentialStore implements CredentialStore {
   async load(): Promise<BackendConnection[]> {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
@@ -228,54 +228,3 @@ export function getCredentialStore(): CredentialStore {
   return storeInstance;
 }
 
-/**
- * Override the credential store (e.g. with Electron safeStorage implementation).
- * Call this before any React rendering.
- */
-export function setCredentialStore(store: CredentialStore): void {
-  storeInstance = store;
-}
-
-/**
- * Initialize the Electron credential store if running in Electron.
- * Must be awaited before React renders so connections are available synchronously.
- */
-export async function initElectronCredentialStore(): Promise<void> {
-  const w = window as unknown as { electronAPI?: unknown };
-
-  console.log("[CredentialStore] Init environment check:");
-  console.log("  - window.electronAPI present:", !!w.electronAPI);
-  console.log("  - User agent:", navigator.userAgent);
-
-  if (!w.electronAPI) {
-    console.log(
-      "[CredentialStore] Not in Electron, using LocalCredentialStore",
-    );
-    console.log(
-      "[CredentialStore] Connections will be stored in browser localStorage",
-    );
-    return; // Not in Electron — keep localStorage store
-  }
-
-  console.log("[CredentialStore] Initializing ElectronCredentialStore...");
-  const store = new ElectronCredentialStore();
-  await store.init();
-  setCredentialStore(store);
-  console.log("[CredentialStore] ✓ ElectronCredentialStore active");
-
-  // Verify the store has the right type
-  const verifyStore = getCredentialStore();
-  console.log(
-    "[CredentialStore] Active store type:",
-    verifyStore.constructor.name,
-  );
-
-  // If in Electron and store is ElectronCredentialStore, verify cache
-  if (verifyStore instanceof ElectronCredentialStore) {
-    const cachedConnections = verifyStore.loadSync();
-    console.log(
-      "[CredentialStore] Cached connections ready:",
-      cachedConnections.length,
-    );
-  }
-}

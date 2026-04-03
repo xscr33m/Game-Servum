@@ -251,7 +251,7 @@ export class TelnetRcon implements RconClient {
  *   0. id=171, PlayerName, pos=(1234.5, 67.8, 910.1), ..., steamid=76561198012345678, ip=192.168.1.10, ping=32
  *   Total of 1 in the game
  */
-export function parseTelnetPlayersResponse(
+function parseTelnetPlayersResponse(
   response: string,
 ): GenericRconPlayer[] {
   const players: GenericRconPlayer[] = [];

@@ -62,7 +62,7 @@ export async function initDatabase(): Promise<SqlJsDatabase> {
   return db;
 }
 
-export function saveDatabase(): void {
+function saveDatabase(): void {
   if (db && dbPath) {
     const data = db.export();
     const buffer = Buffer.from(data);
@@ -1179,7 +1179,7 @@ export function setModUpdateAvailable(modId: number): void {
   saveDatabase();
 }
 
-export function clearModUpdateStatus(modId: number): void {
+function clearModUpdateStatus(modId: number): void {
   getDb().run(
     "UPDATE server_mods SET status = 'installed' WHERE id = ? AND status = 'update_available'",
     [modId],
@@ -1301,7 +1301,7 @@ export function getBackupsByServerId(serverId: number): BackupMetadata[] {
   return result[0].values.map(mapBackupRow);
 }
 
-export function deleteBackupsByServerId(serverId: number): void {
+function deleteBackupsByServerId(serverId: number): void {
   getDb().run("DELETE FROM server_backups WHERE server_id = ?", [serverId]);
   saveDatabase();
 }

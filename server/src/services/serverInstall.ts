@@ -20,7 +20,6 @@ import {
 } from "../db/index.js";
 import {
   getGameDefinition,
-  getGameDefinitionByAppId,
   runPostInstall,
 } from "../games/index.js";
 import { performBackgroundDeletion } from "./serverDelete.js";
@@ -65,7 +64,7 @@ export interface InstallResult {
 /**
  * Install a game server via SteamCMD
  */
-export async function installServer(
+async function installServer(
   options: InstallOptions,
 ): Promise<InstallResult> {
   const { serverId, gameId, appId, installPath, serverName, useAnonymous } =
@@ -556,7 +555,7 @@ export function isInstalling(serverId: number): boolean {
 /**
  * Get installation status for a server
  */
-export function getInstallationStatus(serverId: number): {
+function getInstallationStatus(serverId: number): {
   installing: boolean;
   gameId?: string;
 } {

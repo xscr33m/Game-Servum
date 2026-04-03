@@ -409,7 +409,7 @@ export function cancelActiveBackup(serverId: number): void {
 /**
  * Clean up all backup files for a server (used when deleting a server).
  */
-export function cleanupServerBackups(serverId: number): void {
+function cleanupServerBackups(serverId: number): void {
   const backupDir = getBackupStoragePath(serverId);
   if (fs.existsSync(backupDir)) {
     fs.rmSync(backupDir, { recursive: true, force: true });
@@ -418,7 +418,7 @@ export function cleanupServerBackups(serverId: number): void {
 
 // ── Retention Policy ───────────────────────────────────────────────
 
-export function applyRetention(serverId: number): void {
+function applyRetention(serverId: number): void {
   const settings = getBackupSettings(serverId);
   if (!settings) return;
 
@@ -459,7 +459,7 @@ export function applyRetention(serverId: number): void {
 
 // ── Helpers ────────────────────────────────────────────────────────
 
-export function getBackupStoragePath(serverId: number): string {
+function getBackupStoragePath(serverId: number): string {
   return path.join(getConfig().dataPath, "backups", String(serverId));
 }
 

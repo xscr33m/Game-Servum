@@ -61,7 +61,6 @@ import {
 import { STEAM_RESERVED_PORT_RANGES } from "@game-servum/shared";
 import { readGameFile } from "../games/encoding.js";
 import {
-  installServer,
   cancelInstallation,
   cancelAndCleanupInstallation,
   isInstalling,
@@ -91,7 +90,6 @@ import {
   restoreBackup,
   deleteBackup,
   isBackupRunning,
-  getBackupStoragePath,
   backupFileExists,
   getBackupFilePath,
 } from "../services/backupManager.js";

@@ -291,7 +291,7 @@ export class SourceRcon implements RconClient {
  * Or no players:
  *   No Players Connected
  */
-export function parseSourcePlayersResponse(
+function parseSourcePlayersResponse(
   response: string,
 ): GenericRconPlayer[] {
   const players: GenericRconPlayer[] = [];

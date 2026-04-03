@@ -188,7 +188,7 @@ export async function downloadSteamCMD(): Promise<void> {
 /**
  * Run SteamCMD with given commands (generic helper)
  */
-export function runSteamCMD(args: string[]): ChildProcess {
+function runSteamCMD(args: string[]): ChildProcess {
   const executable = getSteamCMDExecutable();
 
   const proc = spawn(executable, args, {
