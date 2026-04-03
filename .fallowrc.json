@@ -1,0 +1,31 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "entry": [
+    "server/src/index.ts",
+    "client/src/main.tsx",
+    "electron/main/main-unified.js",
+    "electron/main/preload.js",
+    "scripts/*.mjs"
+  ],
+  "ignorePatterns": [
+    "**/*.d.ts"
+  ],
+  "ignoreExports": [
+    { "file": "client/src/components/ui/**", "exports": ["*"] },
+    { "file": "packages/shared/src/**", "exports": ["*"] }
+  ],
+  "ignoreDependencies": [
+    "electron",
+    "electron-updater"
+  ],
+  "rules": {
+    "unused-files": "error",
+    "unused-exports": "error",
+    "unused-types": "warn",
+    "circular-deps": "warn"
+  },
+  "health": {
+    "maxCyclomatic": 20,
+    "maxCognitive": 15
+  }
+}
