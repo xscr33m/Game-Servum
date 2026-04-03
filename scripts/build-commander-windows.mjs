@@ -36,30 +36,6 @@ const APP_VERSION = pkg.version || "1.0.0";
 const STAGING = resolve(ROOT, "dist", "staging-commander-windows");
 const DIST_DIR = resolve(ROOT, "dist", `v${APP_VERSION}`);
 
-/**
- * Convert a PNG file to ICO format (no external dependencies).
- * Uses the PNG-in-ICO approach supported since Windows Vista.
- */
-function pngToIco(pngPath, icoPath) {
-  const png = readFileSync(pngPath);
-  // ICO header: reserved(2) + type(2, 1=ICO) + count(2)
-  const header = Buffer.alloc(6);
-  header.writeUInt16LE(0, 0);
-  header.writeUInt16LE(1, 2);
-  header.writeUInt16LE(1, 4);
-  // ICO directory entry: w(1) h(1) colors(1) reserved(1) planes(2) bpp(2) size(4) offset(4)
-  const entry = Buffer.alloc(16);
-  entry.writeUInt8(0, 0); // 0 = 256px
-  entry.writeUInt8(0, 1);
-  entry.writeUInt8(0, 2);
-  entry.writeUInt8(0, 3);
-  entry.writeUInt16LE(1, 4); // 1 color plane
-  entry.writeUInt16LE(32, 6); // 32 bpp
-  entry.writeUInt32LE(png.length, 8);
-  entry.writeUInt32LE(22, 12); // data starts at byte 22 (6+16)
-  writeFileSync(icoPath, Buffer.concat([header, entry, png]));
-}
-
 console.log("╔════════════════════════════════════════════");
 console.log(`║  Game-Servum Commander Builder (Windows)   `);
 console.log(`║  Version: ${APP_VERSION.padEnd(32)}`);
