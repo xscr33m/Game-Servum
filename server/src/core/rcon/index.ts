@@ -17,9 +17,7 @@ export type {
   RconConnectionOptions,
   GenericRconPlayer,
 } from "./types.js";
-export {
-  type BattlEyePlayer,
-} from "./battleye.js";
+export { type BattlEyePlayer } from "./battleye.js";
 
 /**
  * Create an RCON client for the given protocol.

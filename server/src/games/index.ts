@@ -53,9 +53,7 @@ export function getGameDefinition(gameId: string): GameDefinition | undefined {
 /**
  * Get a game definition by Steam App ID.
  */
-function getGameDefinitionByAppId(
-  appId: number,
-): GameDefinition | undefined {
+function getGameDefinitionByAppId(appId: number): GameDefinition | undefined {
   for (const adapter of adapters.values()) {
     if (adapter.definition.appId === appId) {
       return adapter.definition;
@@ -142,7 +140,4 @@ export type {
   ModCopyResult,
   LogPaths,
 } from "./types.js";
-export {
-  getQueryPortOffset,
-  getConsecutivePortCount,
-} from "./base.js";
+export { getQueryPortOffset, getConsecutivePortCount } from "./base.js";
