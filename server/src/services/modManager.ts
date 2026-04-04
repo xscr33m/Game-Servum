@@ -520,13 +520,6 @@ export function cancelModInstallation(modId: number): {
 }
 
 /**
- * Check if a mod is currently being installed
- */
-export function isModInstalling(modId: number): boolean {
-  return activeInstallations.has(modId);
-}
-
-/**
  * Check multiple mods for updates via Steam Workshop API (batch request)
  * Returns list of mods that have updates available
  */
