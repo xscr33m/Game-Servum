@@ -291,6 +291,17 @@ export function OverviewTab({ server, onRefresh }: OverviewTabProps) {
 
   return (
     <div className="space-y-0">
+      {/* Pending update restart banner */}
+      {server.hasPendingUpdateRestart && (
+        <Alert className="mb-6 border-amber-500/30 bg-amber-500/10">
+          <FaClock className="h-4 w-4 text-amber-400" />
+          <AlertDescription className="text-amber-200">
+            An update has been detected. The server will restart automatically
+            to apply updates.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Messages */}
       {(paramsError || portsError) && (
         <Alert variant="destructive" className="mb-6">

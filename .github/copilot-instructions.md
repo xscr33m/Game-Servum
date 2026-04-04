@@ -47,6 +47,18 @@ Monorepo for a web-based game server management tool using SteamCMD.
 
 ## Development Commands
 
+**Secure dependency installation** (recommended for all contributors):
+
+```bash
+npm config set min-release-age 3   # Block packages published < 3 days ago (supply chain protection)
+npm install --package-lock-only    # Resolve dependency tree without installing
+npm audit                          # Check for vulnerabilities
+npm audit fix                      # Fix vulnerabilities (only if audit found issues)
+npm ci                             # Install from verified lock file
+```
+
+**Development & build commands:**
+
 ```bash
 npm run dev                  # Starts shared (watch) + client (:5173) + server (:3001) via concurrently
 npm run dev:client           # Vite dev server with HMR + proxy to backend
@@ -58,6 +70,8 @@ npm run build:linux          # Build Commander AppImage for Linux (Commander-onl
 npm run update:check         # Check all workspace packages for available updates (dry-run)
 npm run update:install       # Update workspace packages to latest versions
 npm run clean                # Clear build caches and dist folders
+npm run lint                 # ESLint across all workspaces (client, server, shared)
+npm run lint:fix             # ESLint with auto-fix
 ```
 
 **Platform-Specific Build Requirements:**
@@ -72,8 +86,12 @@ npm run clean                # Clear build caches and dist folders
 **Testing & Linting:**
 
 - ❌ No test framework configured
-- ❌ No linting on server side
-- ✅ ESLint configured for client (see `client/eslint.config.js`)
+- ✅ ESLint configured project-wide (see root `eslint.config.js`)
+  - Client: `js.configs.recommended` + `tseslint.configs.recommended` + React Hooks + React Refresh + browser globals
+  - Server: `js.configs.recommended` + `tseslint.configs.recommended` + Node.js globals
+  - Shared: `js.configs.recommended` + `tseslint.configs.recommended` + Node.js globals
+  - Ignored: `electron/`, `scripts/`, `service/`, `docs/`, `**/dist/`
+  - Convention: `_`-prefixed unused vars/args are allowed (`argsIgnorePattern: "^_"`)
 
 ## TypeScript & Module Conventions
 
@@ -82,6 +100,7 @@ npm run clean                # Clear build caches and dist folders
 - **Shared types**: `@game-servum/shared` package in `packages/shared/` — shared types are re-exported from both `client/src/types/index.ts` and `server/src/types/index.ts`
 - **Local-only types**: Server keeps `PlayerSession`, `AppConfig` locally; Client keeps `GameDefinition`, `LogFile`, `ArchiveSession` locally
 - **npm workspaces**: Root `package.json` manages `packages/shared`, `client`, `server`
+- **Electron config**: `electron/package.json` holds Electron dependencies and shared build config (not a workspace — read directly by build scripts to avoid installing ~180MB of Electron packages during development)
 
 ## Backend Patterns
 
@@ -280,15 +299,15 @@ Commander-only Electron app (no agent code):
 
 1. Build shared types
 2. Build client via Vite (`--base=./`)
-3. Stage Electron project (no agent code)
-4. Package with `electron-builder` (Squirrel target)
-5. Output: `Game-Servum-Commander-Setup-v{version}.exe` (~90 MB) + `.nupkg` files for auto-update
+3. Stage Electron project — reads `electron/package.json`, merges Windows-specific build config (`build.win`, `build.nsis`)
+4. Package with `electron-builder` (NSIS target)
+5. Output: `Game-Servum-Commander-Setup-v{version}.exe` (~90 MB) + `commander.yml` for auto-update
 
 **Commander-only Linux (`scripts/build-commander-linux.mjs`):**
 
 1. Build shared types
 2. Build client via Vite
-3. Stage Electron project (Commander components only)
+3. Stage Electron project — reads `electron/package.json`, merges Linux-specific build config (`build.linux`, `build.appImage`)
 4. Package with `electron-builder` (AppImage target)
 5. Output: `Game-Servum-Commander_v{version}.AppImage` (~80 MB)
 

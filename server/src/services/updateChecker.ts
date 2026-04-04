@@ -14,11 +14,13 @@
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
-import { broadcast, logger } from "../index.js";
+import { broadcast } from "../core/broadcast.js";
+import { logger } from "../core/logger.js";
 import {
   getUpdateRestartSettings,
   getServerById,
   setModUpdateAvailable,
+  clearModUpdateStatus,
   getSteamConfig,
   getBackupSettings,
 } from "../db/index.js";
@@ -711,6 +713,9 @@ async function performUpdateRestart(
           `[UpdateChecker] Reinstalling mod ${mod.workshopId} (${mod.name})`,
         );
         await installMod(mod.modId);
+        // Clear the update_available flag (installMod sets "installed" but also
+        // resets installed_at; this is a clean semantic transition)
+        clearModUpdateStatus(mod.modId);
       } catch (error) {
         logger.error(
           `[UpdateChecker] Failed to reinstall mod ${mod.workshopId}:`,

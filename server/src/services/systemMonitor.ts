@@ -1,37 +1,7 @@
 import os from "os";
 import { exec } from "child_process";
 import { statfs } from "fs/promises";
-
-export interface SystemMetrics {
-  cpu: {
-    usagePercent: number;
-    cores: number;
-    model: string;
-  };
-  memory: {
-    totalBytes: number;
-    usedBytes: number;
-    freeBytes: number;
-    usagePercent: number;
-  };
-  disk: {
-    totalBytes: number;
-    usedBytes: number;
-    freeBytes: number;
-    usagePercent: number;
-    drive: string;
-  };
-  network: {
-    bytesSent: number;
-    bytesReceived: number;
-    /** Bytes/s sent (delta since last sample) */
-    sendRate: number;
-    /** Bytes/s received (delta since last sample) */
-    receiveRate: number;
-  };
-  uptime: number;
-  timestamp: string;
-}
+import type { SystemMetrics } from "@game-servum/shared";
 
 // ─── CPU Usage via os.cpus() delta ──────────────────────────────────────
 

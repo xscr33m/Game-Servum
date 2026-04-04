@@ -13,7 +13,8 @@
 import { spawn, exec, type ChildProcess } from "child_process";
 import path from "path";
 import fs from "fs";
-import { broadcast, logger } from "../index.js";
+import { broadcast } from "../core/broadcast.js";
+import { logger } from "../core/logger.js";
 import {
   getServerById,
   updateServerStatus,
@@ -41,7 +42,6 @@ import {
   stopMessageBroadcaster,
 } from "./messageBroadcaster.js";
 import { startUpdateChecker, stopUpdateChecker } from "./updateChecker.js";
-import { performBackgroundDeletion } from "./serverDelete.js";
 import type { GameServer } from "../types/index.js";
 
 // Track running server processes
@@ -80,25 +80,25 @@ function readRconConfig(
   return adapter.readRconConfig(server);
 }
 
-export interface StartResult {
+interface StartResult {
   success: boolean;
   message: string;
   pid?: number;
 }
 
-export interface StopResult {
+interface StopResult {
   success: boolean;
   message: string;
 }
 
-export interface RequirementCheck {
+interface RequirementCheck {
   name: string;
   status: "ok" | "warning" | "error";
   message: string;
   link?: string;
 }
 
-export interface RequirementsResult {
+interface RequirementsResult {
   ready: boolean;
   checks: RequirementCheck[];
 }
@@ -1166,12 +1166,14 @@ export function restoreServerStates(): void {
       logger.info(
         `[ServerProcess] Server ${server.id} (${server.name}) was in "deleting" state — resuming deletion`,
       );
-      performBackgroundDeletion(
-        server.id,
-        server.name,
-        server.gameId,
-        server.port,
-        server.installPath,
+      import("./serverDelete.js").then(({ performBackgroundDeletion }) =>
+        performBackgroundDeletion(
+          server.id,
+          server.name,
+          server.gameId,
+          server.port,
+          server.installPath,
+        ),
       );
       continue;
     }

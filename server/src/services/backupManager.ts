@@ -11,7 +11,8 @@ import fs from "fs";
 import crypto from "crypto";
 import archiver from "archiver";
 import AdmZip from "adm-zip";
-import { broadcast, logger } from "../index.js";
+import { broadcast } from "../core/broadcast.js";
+import { logger } from "../core/logger.js";
 import { getConfig } from "./config.js";
 import {
   getServerById,
@@ -37,7 +38,7 @@ export function isBackupRunning(serverId: number): boolean {
 
 // ── Public API ─────────────────────────────────────────────────────
 
-export interface CreateBackupOptions {
+interface CreateBackupOptions {
   name?: string;
   tag?: string;
   trigger?: BackupTrigger;
@@ -45,13 +46,13 @@ export interface CreateBackupOptions {
   skipServerLifecycle?: boolean;
 }
 
-export interface BackupResult {
+interface BackupResult {
   success: boolean;
   message: string;
   backupId?: string;
 }
 
-export interface RestoreResult {
+interface RestoreResult {
   success: boolean;
   message: string;
 }
@@ -418,7 +419,7 @@ export function cleanupServerBackups(serverId: number): void {
 
 // ── Retention Policy ───────────────────────────────────────────────
 
-export function applyRetention(serverId: number): void {
+function applyRetention(serverId: number): void {
   const settings = getBackupSettings(serverId);
   if (!settings) return;
 
@@ -427,7 +428,7 @@ export function applyRetention(serverId: number): void {
   );
 
   // Already sorted DESC by timestamp from DB query
-  let toDelete: BackupMetadata[] = [];
+  const toDelete: BackupMetadata[] = [];
 
   // Count-based retention
   if (settings.retentionCount > 0 && backups.length > settings.retentionCount) {
@@ -459,7 +460,7 @@ export function applyRetention(serverId: number): void {
 
 // ── Helpers ────────────────────────────────────────────────────────
 
-export function getBackupStoragePath(serverId: number): string {
+function getBackupStoragePath(serverId: number): string {
   return path.join(getConfig().dataPath, "backups", String(serverId));
 }
 

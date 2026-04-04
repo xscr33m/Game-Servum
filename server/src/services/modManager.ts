@@ -3,7 +3,8 @@ import fs from "fs";
 import { spawn, type ChildProcess } from "child_process";
 import { getConfig, getSteamCMDExecutable } from "./config.js";
 import { getGameAdapter, getGameDefinition } from "../games/index.js";
-import { broadcast, logger } from "../index.js";
+import { broadcast } from "../core/broadcast.js";
+import { logger } from "../core/logger.js";
 import {
   getModById,
   getModsByServerId,
@@ -516,13 +517,6 @@ export function cancelModInstallation(modId: number): {
     return { success: true, message: "Installation cancelled" };
   }
   return { success: false, message: "No active installation found" };
-}
-
-/**
- * Check if a mod is currently being installed
- */
-export function isModInstalling(modId: number): boolean {
-  return activeInstallations.has(modId);
 }
 
 /**

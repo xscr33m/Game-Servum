@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useBackend } from "@/hooks/useBackend";
 import { RemoveAgentDialog } from "@/components/agent/RemoveAgentDialog";
-import type { BackendConnection } from "@/lib/config";
+import type { BackendConnection } from "@/types";
 
 const SHOW_DELAY_MS = 2000;
 

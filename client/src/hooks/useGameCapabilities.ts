@@ -48,10 +48,3 @@ export function useGameCapabilities(gameId: string): {
     loading,
   };
 }
-
-/**
- * Invalidate the cached game definitions (e.g., after reconnecting to a different agent)
- */
-export function invalidateGameCapabilitiesCache(): void {
-  cachedGames = null;
-}

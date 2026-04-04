@@ -20,35 +20,25 @@ import {
   startAutoUpdateCheck,
   stopAutoUpdateCheck,
 } from "./services/agentUpdater.js";
+import { initializeUpdateCheckers } from "./services/updateChecker.js";
 import {
   startMetricsCollection,
   stopMetricsCollection,
 } from "./services/systemMonitor.js";
-import { SimpleLogger } from "./services/logger.js";
-import { DEFAULT_LOG_SETTINGS } from "@game-servum/shared";
 import { setAppSetting } from "./db/index.js";
+import { logger } from "./core/logger.js";
+import { isRestartRequested } from "./core/shutdown.js";
+import {
+  broadcast,
+  addClient,
+  removeClient,
+  getAllClients,
+  getClientCount,
+} from "./core/broadcast.js";
+
+export { logger, broadcast };
 
 const config = getConfig();
-
-// Initialize logger
-export const logger = new SimpleLogger("agent", config.logsPath, {
-  ...DEFAULT_LOG_SETTINGS,
-  writeToConsole: process.env.NODE_ENV === "development",
-});
-
-// Store connected clients
-const clients = new Set<WebSocket>();
-
-// Broadcast to all connected clients
-export function broadcast(type: string, payload: unknown) {
-  const message = JSON.stringify({ type, payload });
-  clients.forEach((client) => {
-    if (client.readyState === 1) {
-      // WebSocket.OPEN = 1
-      client.send(message);
-    }
-  });
-}
 
 async function main() {
   logger.info("[Server] Starting server...", {
@@ -72,6 +62,10 @@ async function main() {
 
   // Initialize scheduled RCON message broadcasters
   initializeMessageBroadcasters();
+
+  // Initialize update checkers for servers that were already running
+  const runningServerIds = getRunningServerIds();
+  initializeUpdateCheckers(runningServerIds);
 
   // Start periodic agent update checks (every 4 hours)
   startAutoUpdateCheck(4);
@@ -108,36 +102,36 @@ async function main() {
       }
 
       // Attach session to request for later use
-      (info.req as any).agentSession = payload;
+      info.req.agentSession = payload;
       callback(true);
     },
   });
 
   wss.on("connection", (ws: WebSocket) => {
     logger.debug("[WebSocket] Client connected");
-    clients.add(ws);
+    addClient(ws);
 
     // Start metrics collection when first client connects
-    if (clients.size === 1) {
+    if (getClientCount() === 1) {
       startMetricsCollection();
     }
 
     ws.on("close", () => {
       logger.debug("[WebSocket] Client disconnected");
-      clients.delete(ws);
+      removeClient(ws);
 
       // Stop metrics collection when last client disconnects
-      if (clients.size === 0) {
+      if (getClientCount() === 0) {
         stopMetricsCollection();
       }
     });
 
     ws.on("error", (error: Error) => {
       logger.error("[WebSocket] Client error", error);
-      clients.delete(ws);
+      removeClient(ws);
 
       // Stop metrics collection when last client disconnects
-      if (clients.size === 0) {
+      if (getClientCount() === 0) {
         stopMetricsCollection();
       }
     });
@@ -167,7 +161,7 @@ async function main() {
   async function gracefulShutdown(signal: string) {
     logger.info(`[Shutdown] Received ${signal}, shutting down gracefully...`);
 
-    const isRestart = (process as any).__gameServumRestart === true;
+    const isRestart = isRestartRequested();
     if (isRestart) {
       logger.info(
         "[Shutdown] This is a restart — will trigger service restart",
@@ -193,10 +187,9 @@ async function main() {
     await shutdownAllServers();
 
     // Close WebSocket connections
-    clients.forEach((client) => {
+    for (const client of getAllClients()) {
       client.close();
-    });
-    clients.clear();
+    }
 
     // Close WebSocket server first — it shares the HTTP server and
     // prevents server.close() from completing while it's still attached
@@ -253,5 +246,3 @@ async function main() {
 }
 
 main().catch((err) => logger.error("[Server] Fatal error:", err));
-
-export { clients };

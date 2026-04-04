@@ -8,7 +8,7 @@
  * - getAllGameDefinitions() — all game definitions
  */
 
-import type { GameAdapter, GameDefinition, GameMetadata } from "./types.js";
+import type { GameAdapter, GameDefinition } from "./types.js";
 import { getQueryPortOffset, getConsecutivePortCount } from "./base.js";
 import { DayZAdapter } from "./dayz/index.js";
 import { ArkAdapter } from "./ark/index.js";
@@ -37,13 +37,6 @@ export function getGameAdapter(gameId: string): GameAdapter | undefined {
 }
 
 /**
- * Get all registered game adapters.
- */
-export function getAllGameAdapters(): GameAdapter[] {
-  return Array.from(adapters.values());
-}
-
-/**
  * Get a game definition by ID.
  */
 export function getGameDefinition(gameId: string): GameDefinition | undefined {
@@ -51,31 +44,10 @@ export function getGameDefinition(gameId: string): GameDefinition | undefined {
 }
 
 /**
- * Get a game definition by Steam App ID.
- */
-export function getGameDefinitionByAppId(
-  appId: number,
-): GameDefinition | undefined {
-  for (const adapter of adapters.values()) {
-    if (adapter.definition.appId === appId) {
-      return adapter.definition;
-    }
-  }
-  return undefined;
-}
-
-/**
  * Get all available game definitions (backward-compatible).
  */
 export function getAllGameDefinitions(): GameDefinition[] {
   return Array.from(adapters.values()).map((a) => a.definition);
-}
-
-/**
- * Get metadata for all registered games (for frontend display).
- */
-export function getAllGameMetadata(): GameMetadata[] {
-  return Array.from(adapters.values()).map((a) => a.getMetadata());
 }
 
 /**
@@ -130,24 +102,5 @@ export function getAllPortsFromRules(
 
 // ── Re-exports ─────────────────────────────────────────────────────
 
-export type {
-  GameAdapter,
-  GameDefinition,
-  GameMetadata,
-  StartupDetector,
-  RconConfig,
-  PlayerFileConfig,
-  PlayerListResult,
-  EditableFileConfig,
-  ModCopyResult,
-  LogPaths,
-} from "./types.js";
-export {
-  BaseGameAdapter,
-  getQueryPortOffset,
-  getRconPortOffset,
-  getConsecutivePortCount,
-} from "./base.js";
-export { DayZAdapter } from "./dayz/index.js";
-export { ArkAdapter } from "./ark/index.js";
-export { SevenDaysAdapter } from "./7dtd/index.js";
+export type { GameDefinition, LogPaths } from "./types.js";
+export { getQueryPortOffset, getConsecutivePortCount } from "./base.js";

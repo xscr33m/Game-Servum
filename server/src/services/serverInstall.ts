@@ -12,18 +12,14 @@ import { spawn, exec, type ChildProcess } from "child_process";
 import path from "path";
 import fs from "fs";
 import { getConfig, getSteamCMDExecutable } from "./config.js";
-import { broadcast, logger } from "../index.js";
+import { broadcast } from "../core/broadcast.js";
+import { logger } from "../core/logger.js";
 import {
   updateServerStatus,
   getSteamConfig,
   getServerById,
 } from "../db/index.js";
-import {
-  getGameDefinition,
-  getGameDefinitionByAppId,
-  runPostInstall,
-} from "../games/index.js";
-import { performBackgroundDeletion } from "./serverDelete.js";
+import { runPostInstall } from "../games/index.js";
 
 // Track active installations with buffered output & progress
 interface ActiveInstallation {
@@ -45,7 +41,7 @@ const cancelledServerIds: Set<number> = new Set();
 const installQueue: InstallOptions[] = [];
 let isProcessingQueue = false;
 
-export interface InstallOptions {
+interface InstallOptions {
   serverId: number;
   gameId: string;
   appId: number;
@@ -57,7 +53,7 @@ export interface InstallOptions {
   password?: string | null;
 }
 
-export interface InstallResult {
+interface InstallResult {
   success: boolean;
   message: string;
 }
@@ -65,9 +61,7 @@ export interface InstallResult {
 /**
  * Install a game server via SteamCMD
  */
-export async function installServer(
-  options: InstallOptions,
-): Promise<InstallResult> {
+async function installServer(options: InstallOptions): Promise<InstallResult> {
   const { serverId, gameId, appId, installPath, serverName, useAnonymous } =
     options;
 
@@ -504,12 +498,15 @@ export function cancelAndCleanupInstallation(serverId: number): boolean {
           serverName: server.name,
         });
 
-        return performBackgroundDeletion(
-          serverId,
-          server.name,
-          server.gameId,
-          server.port,
-          server.installPath,
+        return import("./serverDelete.js").then(
+          ({ performBackgroundDeletion }) =>
+            performBackgroundDeletion(
+              serverId,
+              server.name,
+              server.gameId,
+              server.port,
+              server.installPath,
+            ),
         );
       })
       .catch((err) => {
@@ -526,17 +523,21 @@ export function cancelAndCleanupInstallation(serverId: number): boolean {
       serverName: server.name,
     });
 
-    performBackgroundDeletion(
-      serverId,
-      server.name,
-      server.gameId,
-      server.port,
-      server.installPath,
-    ).catch((err) => {
-      logger.error(
-        `[Install] Cleanup failed for dequeued server ${serverId}: ${err}`,
-      );
-    });
+    import("./serverDelete.js")
+      .then(({ performBackgroundDeletion }) =>
+        performBackgroundDeletion(
+          serverId,
+          server.name,
+          server.gameId,
+          server.port,
+          server.installPath,
+        ),
+      )
+      .catch((err) => {
+        logger.error(
+          `[Install] Cleanup failed for dequeued server ${serverId}: ${err}`,
+        );
+      });
   }
 
   logger.info(
@@ -551,20 +552,6 @@ export function cancelAndCleanupInstallation(serverId: number): boolean {
  */
 export function isInstalling(serverId: number): boolean {
   return activeInstallations.has(serverId);
-}
-
-/**
- * Get installation status for a server
- */
-export function getInstallationStatus(serverId: number): {
-  installing: boolean;
-  gameId?: string;
-} {
-  const installation = activeInstallations.get(serverId);
-  if (installation) {
-    return { installing: true, gameId: installation.gameId };
-  }
-  return { installing: false };
 }
 
 /**

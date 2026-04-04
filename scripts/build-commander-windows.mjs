@@ -36,30 +36,6 @@ const APP_VERSION = pkg.version || "1.0.0";
 const STAGING = resolve(ROOT, "dist", "staging-commander-windows");
 const DIST_DIR = resolve(ROOT, "dist", `v${APP_VERSION}`);
 
-/**
- * Convert a PNG file to ICO format (no external dependencies).
- * Uses the PNG-in-ICO approach supported since Windows Vista.
- */
-function pngToIco(pngPath, icoPath) {
-  const png = readFileSync(pngPath);
-  // ICO header: reserved(2) + type(2, 1=ICO) + count(2)
-  const header = Buffer.alloc(6);
-  header.writeUInt16LE(0, 0);
-  header.writeUInt16LE(1, 2);
-  header.writeUInt16LE(1, 4);
-  // ICO directory entry: w(1) h(1) colors(1) reserved(1) planes(2) bpp(2) size(4) offset(4)
-  const entry = Buffer.alloc(16);
-  entry.writeUInt8(0, 0); // 0 = 256px
-  entry.writeUInt8(0, 1);
-  entry.writeUInt8(0, 2);
-  entry.writeUInt8(0, 3);
-  entry.writeUInt16LE(1, 4); // 1 color plane
-  entry.writeUInt16LE(32, 6); // 32 bpp
-  entry.writeUInt32LE(png.length, 8);
-  entry.writeUInt32LE(22, 12); // data starts at byte 22 (6+16)
-  writeFileSync(icoPath, Buffer.concat([header, entry, png]));
-}
-
 console.log("╔════════════════════════════════════════════");
 console.log(`║  Game-Servum Commander Builder (Windows)   `);
 console.log(`║  Version: ${APP_VERSION.padEnd(32)}`);
@@ -88,32 +64,15 @@ if (existsSync(STAGING)) {
   rmSync(STAGING, { recursive: true });
 }
 
-// 3a. Electron project package.json (Commander only)
+// 3a. Read base Electron config and merge platform-specific build settings
+const electronBasePkg = JSON.parse(
+  readFileSync(resolve(ROOT, "electron", "package.json"), "utf-8"),
+);
 const electronPkg = {
-  name: "game-servum-commander",
+  ...electronBasePkg,
   version: APP_VERSION,
-  description: "Game-Servum Commander — Remote Agent Management",
-  author: "xscr33mLabs",
-  license: "GPL-3.0-only",
-  main: "main/main-unified.js",
-  dependencies: {
-    "electron-updater": "^6.8.3",
-  },
-  devDependencies: {
-    electron: "^40.4.1",
-    "electron-builder": "^26.8.0",
-  },
-  overrides: {
-    "global-agent": "^4.0.0",
-    "balanced-match": "^4.0.2",
-  },
   build: {
-    appId: "com.gameservum.commander",
-    productName: "Game-Servum Commander",
-    copyright: "Copyright © 2026 xscr33mLabs",
-    directories: { output: "release", buildResources: "build" },
-    files: ["main/**/*", "assets/**/*"],
-    extraResources: [{ from: "runtime", to: "runtime", filter: ["**/*"] }],
+    ...electronBasePkg.build,
     win: {
       target: [{ target: "nsis", arch: ["x64"] }],
       icon: "build/icon.png",
@@ -121,12 +80,6 @@ const electronPkg = {
     nsis: {
       oneClick: true,
       artifactName: `Game-Servum-Commander-Setup-v${APP_VERSION}.\${ext}`,
-    },
-    publish: {
-      provider: "github",
-      owner: "xscr33m",
-      repo: "Game-Servum",
-      channel: "commander",
     },
   },
 };
@@ -180,10 +133,51 @@ console.log("  ✓ Staged Commander runtime (React app)");
 // ─── 4. Install Electron dependencies ───────────────────────────
 
 console.log("\n[4/6] Installing Electron dependencies...");
-execSync("npm install --no-package-lock --loglevel=warn", {
+
+// 4a. Generate lock file without installing packages
+console.log("  Resolving dependency tree...");
+execSync("npm install --package-lock-only --loglevel=warn", {
   cwd: STAGING,
   stdio: "inherit",
 });
+
+// 4b. Audit dependencies before installing
+try {
+  execSync("npm audit", { cwd: STAGING, stdio: "pipe" });
+  console.log("  ✓ No vulnerabilities found");
+} catch {
+  // Vulnerabilities found — attempt to fix in lock file only
+  console.warn("  ⚠ Vulnerabilities detected, attempting auto-fix...");
+  try {
+    execSync("npm audit fix --package-lock-only", {
+      cwd: STAGING,
+      stdio: "inherit",
+    });
+  } catch {
+    // audit fix can exit non-zero even when it partially fixes
+  }
+
+  // Re-audit — abort if vulnerabilities remain
+  try {
+    execSync("npm audit", { cwd: STAGING, stdio: "pipe" });
+    console.log("  ✓ All vulnerabilities fixed");
+  } catch (auditErr) {
+    console.error("\n  ✗ Unfixable vulnerabilities remain:\n");
+    // Show the audit report
+    if (auditErr.stdout) process.stderr.write(auditErr.stdout);
+    if (auditErr.stderr) process.stderr.write(auditErr.stderr);
+    console.error("\n  Build aborted — resolve vulnerabilities manually.");
+    process.exit(1);
+  }
+}
+
+// 4c. Install packages (now verified clean)
+console.log("  Installing packages...");
+execSync("npm install --loglevel=warn", {
+  cwd: STAGING,
+  stdio: "inherit",
+});
+console.log("  ✓ Dependencies installed (audit clean)");
 
 // ───  5. Build installer ─────────────────────────────────────────
 

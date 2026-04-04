@@ -8,7 +8,8 @@
 
 import fs from "fs";
 import fsPromises from "fs/promises";
-import { broadcast, logger } from "../index.js";
+import { broadcast } from "../core/broadcast.js";
+import { logger } from "../core/logger.js";
 import { deleteServer, updateServerStatus } from "../db/index.js";
 import {
   isInstalling,
@@ -21,7 +22,7 @@ import { clearSchedule } from "./scheduler.js";
 import { stopMessageBroadcaster } from "./messageBroadcaster.js";
 import { stopUpdateChecker } from "./updateChecker.js";
 import { removeFirewallRules } from "./firewallManager.js";
-import { cancelActiveBackup } from "./backupManager.js";
+import { cancelActiveBackup, cleanupServerBackups } from "./backupManager.js";
 
 /**
  * Performs the actual server deletion in the background without blocking the event loop.
@@ -34,6 +35,7 @@ export async function performBackgroundDeletion(
   gameId: string,
   port: number,
   installPath: string,
+  deleteBackups = false,
 ): Promise<void> {
   try {
     // Cancel active installations / dequeue
@@ -66,8 +68,11 @@ export async function performBackgroundDeletion(
     }
 
     // Note: Backup files in data/backups/{serverId}/ are intentionally
-    // preserved so the user can still access them externally after deletion.
-    // They can be removed manually via the file system if no longer needed.
+    // preserved unless the user explicitly chose to delete them.
+    if (deleteBackups) {
+      cleanupServerBackups(id);
+      logger.info(`[Delete] Removed backup files for server: ${serverName}`);
+    }
 
     // Delete database entry
     deleteServer(id);

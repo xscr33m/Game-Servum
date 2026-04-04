@@ -4,7 +4,8 @@ import path from "path";
 import { spawn, type ChildProcess } from "child_process";
 import AdmZip from "adm-zip";
 import { getConfig, getSteamCMDExecutable } from "./config.js";
-import { broadcast, logger } from "../index.js";
+import { broadcast } from "../core/broadcast.js";
+import { logger } from "../core/logger.js";
 import { updateSteamConfig, getSteamConfig } from "../db/index.js";
 
 const STEAMCMD_URL =
@@ -183,35 +184,6 @@ export async function downloadSteamCMD(): Promise<void> {
     });
     return;
   }
-}
-
-/**
- * Run SteamCMD with given commands (generic helper)
- */
-export function runSteamCMD(args: string[]): ChildProcess {
-  const executable = getSteamCMDExecutable();
-
-  const proc = spawn(executable, args, {
-    cwd: path.dirname(executable),
-    stdio: ["pipe", "pipe", "pipe"],
-  });
-
-  proc.stdout?.on("data", (data: Buffer) => {
-    const lines = cleanSteamOutput(data.toString());
-    for (const line of lines) {
-      broadcast("steamcmd:output", { message: line });
-    }
-  });
-
-  // stderr — only forward if it contains real content
-  proc.stderr?.on("data", (data: Buffer) => {
-    const lines = cleanSteamOutput(data.toString());
-    for (const line of lines) {
-      broadcast("steamcmd:output", { message: `[ERROR] ${line}` });
-    }
-  });
-
-  return proc;
 }
 
 /**

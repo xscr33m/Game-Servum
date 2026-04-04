@@ -1,5 +1,5 @@
 import { execFileSync } from "child_process";
-import { logger } from "../index.js";
+import { logger } from "../core/logger.js";
 
 const SERVICE_NAME = "GameServumAgent";
 

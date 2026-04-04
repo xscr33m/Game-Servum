@@ -1,4 +1,9 @@
-import { Router, type Request, type Response } from "express";
+import {
+  Router,
+  type Request,
+  type Response,
+  type NextFunction,
+} from "express";
 import path from "path";
 import os from "os";
 import fs from "fs";
@@ -6,7 +11,8 @@ import fsPromises from "fs/promises";
 import { exec } from "child_process";
 import multer from "multer";
 import AdmZip from "adm-zip";
-import { logger, broadcast } from "../index.js";
+import { logger } from "../core/logger.js";
+import { broadcast } from "../core/broadcast.js";
 import {
   getAllServers,
   getServerById,
@@ -17,12 +23,10 @@ import {
   updateServerPorts,
   updateServerName,
   updateServerAutoRestart,
-  deleteServer,
   getModsByServerId,
   createMod,
   updateModEnabled,
   updateModLoadOrder,
-  deleteMod,
   getOnlinePlayers,
   getPlayerSummaries,
   getLogSettings as getLogSettingsFromDb,
@@ -61,14 +65,10 @@ import {
 import { STEAM_RESERVED_PORT_RANGES } from "@game-servum/shared";
 import { readGameFile } from "../games/encoding.js";
 import {
-  installServer,
-  cancelInstallation,
   cancelAndCleanupInstallation,
   isInstalling,
   getInstallationProgress,
   queueInstallation,
-  isQueued,
-  removeFromQueue,
 } from "../services/serverInstall.js";
 import {
   startServer,
@@ -84,6 +84,7 @@ import { BUILTIN_VARIABLES } from "../services/variableResolver.js";
 import {
   triggerUpdateCheck,
   startUpdateChecker,
+  hasPendingUpdateRestart,
 } from "../services/updateChecker.js";
 import { performBackgroundDeletion } from "../services/serverDelete.js";
 import {
@@ -91,7 +92,6 @@ import {
   restoreBackup,
   deleteBackup,
   isBackupRunning,
-  getBackupStoragePath,
   backupFileExists,
   getBackupFilePath,
 } from "../services/backupManager.js";
@@ -101,6 +101,7 @@ import {
   installMod,
   uninstallMod,
   generateModParams,
+  cancelModInstallation,
 } from "../services/modManager.js";
 import {
   getCurrentLogs,
@@ -268,7 +269,7 @@ router.post("/", async (req: Request, res: Response) => {
   // Check for port conflicts with existing servers (using firewallRules as source of truth)
   const requestedPort = body.port || gameDef.defaultPort;
   const createQpOffset = getQueryPortOffset(gameDef);
-  const requestedQueryPort =
+  const _requestedQueryPort =
     body.queryPort ||
     (createQpOffset != null ? requestedPort + createQpOffset : null);
 
@@ -378,7 +379,11 @@ router.get("/:id", (req: Request, res: Response) => {
   // Add installation status
   const installing = isInstalling(id);
 
-  res.json({ ...server, installing });
+  res.json({
+    ...server,
+    installing,
+    hasPendingUpdateRestart: hasPendingUpdateRestart(id),
+  });
 });
 
 // GET /api/servers/:id/check - Check server requirements before starting
@@ -1780,7 +1785,10 @@ router.put("/:id/logs/settings", (req: Request, res: Response) => {
 // DELETE /api/servers/:id - Delete server and all files
 router.delete("/:id", async (req: Request, res: Response) => {
   const id = parseInt(req.params.id, 10);
-  const { confirmName } = req.body as { confirmName?: string };
+  const { confirmName, deleteBackups } = req.body as {
+    confirmName?: string;
+    deleteBackups?: boolean;
+  };
   const server = getServerById(id);
 
   if (!server) {
@@ -1816,6 +1824,7 @@ router.delete("/:id", async (req: Request, res: Response) => {
     server.gameId,
     server.port,
     server.installPath,
+    deleteBackups === true,
   );
 
   res.status(202).json({
@@ -1973,6 +1982,35 @@ router.post(
     res.json({ success: true, message: "Mod reinstallation started" });
   },
 );
+
+// POST /api/servers/:id/mods/:modId/cancel - Cancel an active mod download
+router.post("/:id/mods/:modId/cancel", (req: Request, res: Response) => {
+  const serverId = parseInt(req.params.id, 10);
+  const modId = parseInt(req.params.modId, 10);
+
+  const server = getServerById(serverId);
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  const mods = getModsByServerId(serverId);
+  const mod = mods.find((m) => m.id === modId);
+  if (!mod) {
+    return res.status(404).json({ error: "Mod not found" });
+  }
+
+  const result = cancelModInstallation(modId);
+  if (result.success) {
+    broadcast("mod:error", {
+      modId,
+      serverId,
+      error: "Installation cancelled by user",
+    });
+    res.json(result);
+  } else {
+    res.status(404).json({ error: result.message });
+  }
+});
 
 // DELETE /api/servers/:id/mods/:modId - Remove a mod
 router.delete("/:id/mods/:modId", async (req: Request, res: Response) => {
@@ -3087,7 +3125,12 @@ router.post(
 
 // Handle multer file-size errors
 router.use(
-  (err: any, _req: Request, res: Response, next: (err?: any) => void) => {
+  (
+    err: Error & { code?: string },
+    _req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
     if (err && err.code === "LIMIT_FILE_SIZE") {
       return res.status(413).json({ error: "File too large (max 500 MB)" });
     }

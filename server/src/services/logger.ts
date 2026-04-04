@@ -355,4 +355,4 @@ class SimpleLogger {
   }
 }
 
-export { SimpleLogger, LogContext };
+export { SimpleLogger };

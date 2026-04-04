@@ -15,7 +15,7 @@ import type {
   UpdateState,
   AgentSystemInfo,
 } from "@/types";
-import type { BackendConnection } from "./config";
+import type { BackendConnection } from "@/types";
 import { getApiBase } from "./config";
 
 // ── Types for the API client ──
@@ -29,12 +29,9 @@ export interface BrowseTreeEntry {
   children?: BrowseTreeEntry[];
 }
 
-export type FetchApiFn = <T>(
-  endpoint: string,
-  options?: RequestInit,
-) => Promise<T>;
+type FetchApiFn = <T>(endpoint: string, options?: RequestInit) => Promise<T>;
 
-export interface SteamcmdApiClient {
+interface SteamcmdApiClient {
   getStatus: () => Promise<SteamCMDStatus>;
   install: () => Promise<{ success: boolean; message: string }>;
   login: (data: SteamLoginRequest) => Promise<{
@@ -49,7 +46,7 @@ export interface SteamcmdApiClient {
   logout: () => Promise<{ success: boolean; message: string }>;
 }
 
-export interface ServersApiClient {
+interface ServersApiClient {
   getAll: () => Promise<GameServer[]>;
   getById: (id: number) => Promise<GameServer>;
   getAvailableGames: () => Promise<GameDefinition[]>;
@@ -209,6 +206,7 @@ export interface ServersApiClient {
   delete: (
     id: number,
     confirmName: string,
+    deleteBackups?: boolean,
   ) => Promise<{ success: boolean; message: string }>;
   getConfig: (
     id: number,
@@ -296,6 +294,10 @@ export interface ServersApiClient {
     data: { enabled?: boolean; loadOrder?: number },
   ) => Promise<{ success: boolean; message: string }>;
   reinstallMod: (
+    serverId: number,
+    modId: number,
+  ) => Promise<{ success: boolean; message: string }>;
+  cancelModInstall: (
     serverId: number,
     modId: number,
   ) => Promise<{ success: boolean; message: string }>;
@@ -450,7 +452,7 @@ export interface ServersApiClient {
   }>;
 }
 
-export interface SystemApiClient {
+interface SystemApiClient {
   getMetrics: () => Promise<SystemMetrics>;
   getSettings: () => Promise<SystemSettings>;
   updateSettings: (
@@ -469,11 +471,11 @@ export interface SystemApiClient {
   shutdown: () => Promise<{ success: boolean; message: string }>;
 }
 
-export interface HealthApiClient {
+interface HealthApiClient {
   check: () => Promise<{ status: string; timestamp: string }>;
 }
 
-export interface AuthApiClient {
+interface AuthApiClient {
   connect: (
     apiKey: string,
     password: string,
@@ -481,7 +483,7 @@ export interface AuthApiClient {
   refresh: () => Promise<{ token: string; expiresIn: number }>;
 }
 
-export interface LogsApiClient {
+interface LogsApiClient {
   getSettings: () => Promise<{
     success: boolean;
     settings: import("@game-servum/shared").LoggerSettings;
@@ -573,7 +575,7 @@ function createFetchApi(
   };
 }
 
-export class ApiAuthError extends Error {
+class ApiAuthError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ApiAuthError";
@@ -843,10 +845,10 @@ function createServersApi(
       fetchApi<import("@/types").FirewallResult>(`/servers/${id}/firewall`, {
         method: "DELETE",
       }),
-    delete: (id: number, confirmName: string) =>
+    delete: (id: number, confirmName: string, deleteBackups?: boolean) =>
       fetchApi<{ success: boolean; message: string }>(`/servers/${id}`, {
         method: "DELETE",
-        body: JSON.stringify({ confirmName }),
+        body: JSON.stringify({ confirmName, deleteBackups }),
       }),
     getConfig: (id: number, file?: string) =>
       fetchApi<{
@@ -967,6 +969,13 @@ function createServersApi(
     reinstallMod: (serverId: number, modId: number) =>
       fetchApi<{ success: boolean; message: string }>(
         `/servers/${serverId}/mods/${modId}/reinstall`,
+        {
+          method: "POST",
+        },
+      ),
+    cancelModInstall: (serverId: number, modId: number) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${serverId}/mods/${modId}/cancel`,
         {
           method: "POST",
         },

@@ -70,14 +70,26 @@
 git clone https://github.com/xscr33m/Game-Servum.git
 cd Game-Servum
 
-# Install dependencies
-npm install
+# Supply chain protection: only allow packages published 3+ days ago
+npm config set min-release-age 3
 
-# Start dev servers on windows (shared watch + client :5173 + agent :3001)
+# Resolve dependency tree (lock file only, no install)
+npm install --package-lock-only
+
+# Check for vulnerabilities and fix if possible
+npm audit
+npm audit fix              # only if vulnerabilities were found
+
+# Install from verified lock file
+npm ci
+
+# Start dev servers (shared watch + client :5173 + agent :3001)
 npm run dev
 ```
 
 Open [http://localhost:5173](http://localhost:5173) in your browser.
+
+> **Why this workflow?** Using `--package-lock-only` + `npm audit` before installing ensures no vulnerable packages reach `node_modules/`. The `min-release-age` setting blocks packages published less than 3 days ago, mitigating supply chain attacks targeting freshly published malicious versions. `npm ci` installs exactly what the lock file specifies — deterministic and fast.
 
 ## Distribution
 

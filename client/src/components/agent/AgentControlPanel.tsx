@@ -28,7 +28,7 @@ import { EditAgentDialog } from "@/components/agent/EditAgentDialog";
 import { AgentUpdateNotification } from "@/components/agent/AgentUpdateNotification";
 import { useBackend } from "@/hooks/useBackend";
 import { toastSuccess, toastError, toastInfo } from "@/lib/toast";
-import type { BackendConnection } from "@/lib/config";
+import type { BackendConnection } from "@/types";
 import type { UpdateState } from "@/types";
 import { Tip } from "@/components/ui/tooltip";
 

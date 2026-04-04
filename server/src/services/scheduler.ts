@@ -11,7 +11,8 @@
  * After the final warning, the server is stopped and restarted.
  */
 
-import { broadcast, logger } from "../index.js";
+import { broadcast } from "../core/broadcast.js";
+import { logger } from "../core/logger.js";
 import {
   getScheduleByServerId,
   updateScheduleNextRestart,

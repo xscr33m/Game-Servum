@@ -2,7 +2,7 @@ import initSqlJs, { Database as SqlJsDatabase } from "sql.js";
 import path from "path";
 import fs from "fs";
 import { getConfig } from "../services/config.js";
-import { logger } from "../index.js";
+import { logger } from "../core/logger.js";
 import { runMigrations } from "./migrations/index.js";
 import type {
   GameServer,
@@ -62,7 +62,7 @@ export async function initDatabase(): Promise<SqlJsDatabase> {
   return db;
 }
 
-export function saveDatabase(): void {
+function saveDatabase(): void {
   if (db && dbPath) {
     const data = db.export();
     const buffer = Buffer.from(data);
@@ -79,7 +79,7 @@ export function getDb(): SqlJsDatabase {
 
 // ── API Keys queries ──
 
-export interface ApiKeyRecord {
+interface ApiKeyRecord {
   id: number;
   keyHash: string;
   passwordHash: string;
@@ -1299,11 +1299,6 @@ export function getBackupsByServerId(serverId: number): BackupMetadata[] {
   );
   if (result.length === 0) return [];
   return result[0].values.map(mapBackupRow);
-}
-
-export function deleteBackupsByServerId(serverId: number): void {
-  getDb().run("DELETE FROM server_backups WHERE server_id = ?", [serverId]);
-  saveDatabase();
 }
 
 function mapBackupRow(row: unknown[]): BackupMetadata {

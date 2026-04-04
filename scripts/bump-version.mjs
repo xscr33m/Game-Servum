@@ -130,12 +130,23 @@ try {
   process.exit(1);
 }
 
+// Manually bump electron/package.json (not a workspace, but uses shared version)
+const electronPkgPath = resolve(ROOT, "electron/package.json");
+const electronPkg = JSON.parse(readFileSync(electronPkgPath, "utf-8"));
+electronPkg.version = targetVersion;
+writeFileSync(
+  electronPkgPath,
+  JSON.stringify(electronPkg, null, 2) + "\n",
+  "utf-8",
+);
+
 // Verify all package.json files
 const pkgPaths = [
   "package.json",
   "packages/shared/package.json",
   "client/package.json",
   "server/package.json",
+  "electron/package.json",
 ];
 for (const rel of pkgPaths) {
   const pkg = JSON.parse(readFileSync(resolve(ROOT, rel), "utf-8"));

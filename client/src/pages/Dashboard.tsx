@@ -296,9 +296,12 @@ export function Dashboard() {
     }
   }
 
-  async function confirmDeleteServer(server: GameServer) {
+  async function confirmDeleteServer(
+    server: GameServer,
+    deleteBackups: boolean,
+  ) {
     try {
-      await api.servers.delete(server.id, server.name);
+      await api.servers.delete(server.id, server.name, deleteBackups);
       toastSuccess(`${server.name} is being deleted...`);
       // The server:status WS event will update the card to "Deleting"
       // and server:deleted will remove it once complete

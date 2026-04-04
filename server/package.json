@@ -11,7 +11,8 @@
     "build:bundle": "node build.mjs",
     "build:prod": "tsc && node build.mjs",
     "start": "node dist/index.js",
-    "start:prod": "node dist/agent.mjs"
+    "start:prod": "node dist/agent.mjs",
+    "lint": "eslint src/"
   },
   "dependencies": {
     "@game-servum/shared": "*",
