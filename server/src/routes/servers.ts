@@ -2290,6 +2290,96 @@ router.get("/:id/players/ban-content", (req: Request, res: Response) => {
   res.json({ content });
 });
 
+// POST /api/servers/:id/players/priority - Add a player to the priority queue
+router.post("/:id/players/priority", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const { steamId, playerName } = req.body as {
+    steamId: string;
+    playerName?: string;
+  };
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  if (!steamId || steamId.length < 10) {
+    return res.status(400).json({ error: "Valid Steam ID is required" });
+  }
+
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter) {
+    return res.status(400).json({ error: "Unknown game type" });
+  }
+
+  try {
+    const result = adapter.addToPlayerList(
+      server,
+      "priority",
+      steamId,
+      playerName,
+    );
+    if (!result.success) {
+      return res.status(400).json({ error: result.message });
+    }
+    res.json({ success: true, message: result.message });
+  } catch (err) {
+    res.status(500).json({
+      error: `Failed to update priority queue: ${(err as Error).message}`,
+    });
+  }
+});
+
+// DELETE /api/servers/:id/players/priority - Remove a player from the priority queue
+router.delete("/:id/players/priority", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const { steamId } = req.body as { steamId: string };
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  if (!steamId) {
+    return res.status(400).json({ error: "Steam ID is required" });
+  }
+
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter) {
+    return res.status(400).json({ error: "Unknown game type" });
+  }
+
+  try {
+    const result = adapter.removeFromPlayerList(server, "priority", steamId);
+    if (!result.success) {
+      return res.status(404).json({ error: result.message });
+    }
+    res.json({ success: true, message: result.message });
+  } catch (err) {
+    res.status(500).json({
+      error: `Failed to update priority queue: ${(err as Error).message}`,
+    });
+  }
+});
+
+// GET /api/servers/:id/players/priority-content - Get priority queue content as text
+router.get("/:id/players/priority-content", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter) {
+    return res.status(400).json({ error: "Unknown game type" });
+  }
+
+  const content = adapter.getPlayerListContent(server, "priority");
+  res.json({ content });
+});
+
 // POST /api/servers/:id/players/:playerId/message - Send a direct message to a player
 router.post(
   "/:id/players/:playerId/message",

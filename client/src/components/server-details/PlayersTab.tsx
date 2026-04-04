@@ -15,6 +15,7 @@ import {
   FaUserPlus,
   FaUserMinus,
   FaMessage,
+  FaStar,
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -96,11 +97,13 @@ export function PlayersTab({ server }: PlayersTabProps) {
   const [playersLoading, setPlayersLoading] = useState(true);
   const [playersError, setPlayersError] = useState<string | null>(null);
 
-  // Whitelist/ban state
+  // Whitelist/ban/priority state
   const [whitelistContent, setWhitelistContent] = useState("");
   const [banContent, setBanContent] = useState("");
+  const [priorityContent, setPriorityContent] = useState("");
   const [originalWhitelist, setOriginalWhitelist] = useState("");
   const [originalBan, setOriginalBan] = useState("");
+  const [originalPriority, setOriginalPriority] = useState("");
   const [filesLoading, setFilesLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -121,6 +124,7 @@ export function PlayersTab({ server }: PlayersTabProps) {
 
   const hasWhitelist = capabilities?.whitelist !== false;
   const hasBanList = capabilities?.banList !== false;
+  const hasPriority = capabilities?.priorityQueue !== false;
   const isPlayerListEditable = capabilities?.playerListEditable !== false;
   const hasDirectMessage = capabilities?.directMessage === true;
 
@@ -150,6 +154,14 @@ export function PlayersTab({ server }: PlayersTabProps) {
     return banContent.includes(characterId);
   }
 
+  /**
+   * Check if a Steam ID is present in the priority queue content
+   */
+  function isPrioritized(steamId: string | null): boolean {
+    if (!steamId) return false;
+    return priorityContent.includes(steamId);
+  }
+
   // Load player data
   const loadPlayers = useCallback(async () => {
     try {
@@ -164,9 +176,9 @@ export function PlayersTab({ server }: PlayersTabProps) {
     }
   }, [server.id, api.servers]);
 
-  // Load whitelist/ban content (only for games that support them)
+  // Load whitelist/ban/priority content (only for games that support them)
   const loadFiles = useCallback(async () => {
-    if (!hasWhitelist && !hasBanList) {
+    if (!hasWhitelist && !hasBanList && !hasPriority) {
       setFilesLoading(false);
       return;
     }
@@ -184,18 +196,25 @@ export function PlayersTab({ server }: PlayersTabProps) {
       } else {
         promises.push(Promise.resolve({ content: "" }));
       }
-      const [whitelist, ban] = await Promise.all(promises);
+      if (hasPriority) {
+        promises.push(api.servers.getPriorityContent(server.id));
+      } else {
+        promises.push(Promise.resolve({ content: "" }));
+      }
+      const [whitelist, ban, priority] = await Promise.all(promises);
 
       setWhitelistContent(whitelist.content);
       setBanContent(ban.content);
+      setPriorityContent(priority.content);
       setOriginalWhitelist(whitelist.content);
       setOriginalBan(ban.content);
+      setOriginalPriority(priority.content);
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setFilesLoading(false);
     }
-  }, [server.id, api.servers, hasWhitelist, hasBanList]);
+  }, [server.id, api.servers, hasWhitelist, hasBanList, hasPriority]);
 
   useEffect(() => {
     if (!isConnected) return;
@@ -248,6 +267,26 @@ export function PlayersTab({ server }: PlayersTabProps) {
       await api.servers.saveFile(server.id, "ban.txt", banContent);
       setOriginalBan(banContent);
       toastSuccess("Ban list saved successfully");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSavePriority() {
+    setSaving(true);
+    setError(null);
+    try {
+      // Convert one-per-line display format back to semicolon-separated file format
+      const semicolonContent = priorityContent
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .join(";");
+      await api.servers.saveFile(server.id, "priority.txt", semicolonContent);
+      setOriginalPriority(priorityContent);
+      toastSuccess("Priority queue saved successfully");
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -331,6 +370,40 @@ export function PlayersTab({ server }: PlayersTabProps) {
   }
 
   /**
+   * Add a player to the priority queue via API
+   */
+  async function handleAddToPriority(steamId: string, playerName: string) {
+    setActionLoading(`priority-${steamId}`);
+    setError(null);
+    try {
+      await api.servers.addToPriority(server.id, steamId, playerName);
+      toastSuccess(`${playerName} added to priority queue`);
+      loadFiles();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  /**
+   * Remove a player from the priority queue via API
+   */
+  async function handleRemoveFromPriority(steamId: string, playerName: string) {
+    setActionLoading(`unpriority-${steamId}`);
+    setError(null);
+    try {
+      await api.servers.removeFromPriority(server.id, steamId);
+      toastSuccess(`${playerName} removed from priority queue`);
+      loadFiles();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  /**
    * Copy character ID to clipboard
    */
   async function handleCopyId(id: string) {
@@ -371,11 +444,12 @@ export function PlayersTab({ server }: PlayersTabProps) {
 
   const whitelistChanged = whitelistContent !== originalWhitelist;
   const banChanged = banContent !== originalBan;
+  const priorityChanged = priorityContent !== originalPriority;
 
   // ─── Unsaved changes guard ───
   useUnsavedChanges(
     `players-tab-${server.id}`,
-    whitelistChanged || banChanged,
+    whitelistChanged || banChanged || priorityChanged,
     {
       onSave: async () => {
         if (whitelistChanged) {
@@ -390,10 +464,20 @@ export function PlayersTab({ server }: PlayersTabProps) {
           await api.servers.saveFile(server.id, "ban.txt", banContent);
           setOriginalBan(banContent);
         }
+        if (priorityChanged) {
+          const semicolonContent = priorityContent
+            .split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .join(";");
+          await api.servers.saveFile(server.id, "priority.txt", semicolonContent);
+          setOriginalPriority(priorityContent);
+        }
       },
       onDiscard: () => {
         setWhitelistContent(originalWhitelist);
         setBanContent(originalBan);
+        setPriorityContent(originalPriority);
       },
     },
   );
@@ -458,6 +542,17 @@ export function PlayersTab({ server }: PlayersTabProps) {
                   )}
                 </TabsTrigger>
               )}
+              {hasPriority && (
+                <TabsTrigger value="priority" className="gap-2">
+                  <FaStar className="h-4 w-4 text-ring/70" />
+                  Priority
+                  {priorityChanged && (
+                    <Badge variant="warning" className="ml-1">
+                      Modified
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              )}
             </TabsList>
             {activeTab === "whitelist" && isPlayerListEditable && (
               <div className="flex items-center gap-2">
@@ -499,6 +594,30 @@ export function PlayersTab({ server }: PlayersTabProps) {
                   size="sm"
                   onClick={handleSaveBan}
                   disabled={!banChanged || saving}
+                >
+                  <FaFloppyDisk className="h-4 w-4 mr-2" />
+                  {saving ? "Saving..." : "Save"}
+                </Button>
+              </div>
+            )}
+            {activeTab === "priority" && (
+              <div className="flex items-center gap-2">
+                {priorityChanged && (
+                  <Badge variant="warning">Unsaved Changes</Badge>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPriorityContent(originalPriority)}
+                  disabled={!priorityChanged || saving}
+                >
+                  <FaRotateLeft className="h-4 w-4 mr-2" />
+                  Reset
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSavePriority}
+                  disabled={!priorityChanged || saving}
                 >
                   <FaFloppyDisk className="h-4 w-4 mr-2" />
                   {saving ? "Saving..." : "Save"}
@@ -588,6 +707,17 @@ export function PlayersTab({ server }: PlayersTabProps) {
                               >
                                 <FaBan className="h-2.5 w-2.5 mr-0.5" />
                                 Banned
+                              </Badge>
+                            )}
+                          {hasPriority &&
+                            player.steam64Id &&
+                            isPrioritized(player.steam64Id) && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] px-1.5 py-0 border-yellow-500 text-yellow-500 shrink-0"
+                              >
+                                <FaStar className="h-2.5 w-2.5 mr-0.5" />
+                                Prio
                               </Badge>
                             )}
                         </div>
@@ -684,6 +814,43 @@ export function PlayersTab({ server }: PlayersTabProps) {
                                     <FaUserPlus className="h-4 w-4" />
                                   </Button>
                                 </Tip>
+                              )}
+                              {hasPriority && player.steam64Id && (
+                                isPrioritized(player.steam64Id) ? (
+                                  <Tip content="Remove from priority queue">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 w-7 p-0 text-yellow-500 hover:text-yellow-600"
+                                      onClick={() =>
+                                        handleRemoveFromPriority(
+                                          player.steam64Id!,
+                                          player.playerName,
+                                        )
+                                      }
+                                      disabled={actionLoading !== null}
+                                    >
+                                      <FaStar className="h-4 w-4" />
+                                    </Button>
+                                  </Tip>
+                                ) : (
+                                  <Tip content="Add to priority queue">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 w-7 p-0 text-muted-foreground hover:text-yellow-500"
+                                      onClick={() =>
+                                        handleAddToPriority(
+                                          player.steam64Id!,
+                                          player.playerName,
+                                        )
+                                      }
+                                      disabled={actionLoading !== null}
+                                    >
+                                      <FaStar className="h-4 w-4" />
+                                    </Button>
+                                  </Tip>
+                                )
                               )}
                             </div>
                           )}
@@ -820,6 +987,16 @@ export function PlayersTab({ server }: PlayersTabProps) {
                                 Ban
                               </Badge>
                             )}
+                          {hasPriority &&
+                            player.steam64Id &&
+                            isPrioritized(player.steam64Id) && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] px-1 py-0 border-yellow-500 text-yellow-500 shrink-0"
+                              >
+                                Prio
+                              </Badge>
+                            )}
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
                           <div className="hidden sm:flex items-center gap-3 text-xs">
@@ -850,7 +1027,7 @@ export function PlayersTab({ server }: PlayersTabProps) {
                               </span>
                             </span>
                           </div>
-                          {(hasWhitelist || hasBanList) &&
+                          {(hasWhitelist || hasBanList || hasPriority) &&
                             getPlayerId(player) && (
                               <div className="flex items-center gap-0.5">
                                 {isWhitelisted(getPlayerId(player)) ? (
@@ -922,6 +1099,43 @@ export function PlayersTab({ server }: PlayersTabProps) {
                                       <FaUserPlus className="h-3.5 w-3.5" />
                                     </Button>
                                   </Tip>
+                                )}
+                                {hasPriority && player.steam64Id && (
+                                  isPrioritized(player.steam64Id) ? (
+                                    <Tip content="Remove from priority queue">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 w-7 p-0 text-yellow-500 hover:text-yellow-600"
+                                        onClick={() =>
+                                          handleRemoveFromPriority(
+                                            player.steam64Id!,
+                                            player.playerName,
+                                          )
+                                        }
+                                        disabled={actionLoading !== null}
+                                      >
+                                        <FaStar className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </Tip>
+                                  ) : (
+                                    <Tip content="Add to priority queue">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 w-7 p-0 text-muted-foreground hover:text-yellow-500"
+                                        onClick={() =>
+                                          handleAddToPriority(
+                                            player.steam64Id!,
+                                            player.playerName,
+                                          )
+                                        }
+                                        disabled={actionLoading !== null}
+                                      >
+                                        <FaStar className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </Tip>
+                                  )
                                 )}
                               </div>
                             )}
@@ -1057,6 +1271,32 @@ export function PlayersTab({ server }: PlayersTabProps) {
                     placeholder={`// Add player IDs of banned players here (one per line)`}
                     spellCheck={false}
                     readOnly={!isPlayerListEditable}
+                  />
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        )}
+
+        {/* ── Priority Queue Tab ── */}
+        {hasPriority && (
+          <TabsContent
+            value="priority"
+            className="flex-1 min-h-0 mt-0 px-4 py-4"
+          >
+            <div className={cn("h-full", contentClass)}>
+              {filesLoading ? (
+                <div className="text-center py-8 text-muted-foreground text-sm">
+                  Loading...
+                </div>
+              ) : (
+                <div className="rounded-md border overflow-hidden h-full min-h-[300px] flex flex-col">
+                  <Textarea
+                    className="font-mono text-sm flex-1 resize-none rounded-none border-0 focus-visible:ring-0"
+                    value={priorityContent}
+                    onChange={(e) => setPriorityContent(e.target.value)}
+                    placeholder={`// Add Steam IDs here (one per line)\n// Prioritized players get first position in the login queue`}
+                    spellCheck={false}
                   />
                 </div>
               )}

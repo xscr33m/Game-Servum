@@ -39,6 +39,8 @@ export interface GameCapabilities {
   profilesPath: boolean;
   /** Whether direct messages to individual players are supported via RCON */
   directMessage: boolean;
+  /** How priority queue management works: 'file' = text file, false = not supported */
+  priorityQueue: "file" | false;
 }
 
 // Database models

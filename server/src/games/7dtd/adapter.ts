@@ -88,6 +88,7 @@ export class SevenDaysAdapter extends BaseGameAdapter {
       playerListEditable: false,
       profilesPath: false,
       directMessage: true,
+      priorityQueue: false,
     },
     broadcastCommand: 'say "{MESSAGE}"',
     playerListCommand: "listplayers",
@@ -224,7 +225,7 @@ export class SevenDaysAdapter extends BaseGameAdapter {
   }
 
   formatPlayerEntry(
-    _type: "whitelist" | "ban",
+    _type: "whitelist" | "ban" | "priority",
     playerId: string,
     _playerName?: string,
   ): string {
@@ -241,10 +242,13 @@ export class SevenDaysAdapter extends BaseGameAdapter {
 
   addToPlayerList(
     server: GameServer,
-    type: "whitelist" | "ban",
+    type: "whitelist" | "ban" | "priority",
     playerId: string,
     _playerName?: string,
   ): PlayerListResult {
+    if (type === "priority") {
+      return super.addToPlayerList(server, type, playerId, _playerName);
+    }
     const adminPath = this.getServerAdminPath(server);
     const listLabel = type === "ban" ? "ban list" : "whitelist";
 
@@ -283,9 +287,12 @@ export class SevenDaysAdapter extends BaseGameAdapter {
 
   removeFromPlayerList(
     server: GameServer,
-    type: "whitelist" | "ban",
+    type: "whitelist" | "ban" | "priority",
     playerId: string,
   ): PlayerListResult {
+    if (type === "priority") {
+      return super.removeFromPlayerList(server, type, playerId);
+    }
     const adminPath = this.getServerAdminPath(server);
     const listLabel = type === "ban" ? "ban list" : "whitelist";
 
@@ -327,7 +334,13 @@ export class SevenDaysAdapter extends BaseGameAdapter {
     }
   }
 
-  getPlayerListContent(server: GameServer, type: "whitelist" | "ban"): string {
+  getPlayerListContent(
+    server: GameServer,
+    type: "whitelist" | "ban" | "priority",
+  ): string {
+    if (type === "priority") {
+      return super.getPlayerListContent(server, type);
+    }
     const adminPath = this.getServerAdminPath(server);
     if (!fs.existsSync(adminPath)) return "";
 

@@ -348,6 +348,16 @@ interface ServersApiClient {
   ) => Promise<{ success: boolean; message: string }>;
   getWhitelistContent: (serverId: number) => Promise<{ content: string }>;
   getBanContent: (serverId: number) => Promise<{ content: string }>;
+  addToPriority: (
+    serverId: number,
+    steamId: string,
+    playerName?: string,
+  ) => Promise<{ success: boolean; message: string }>;
+  removeFromPriority: (
+    serverId: number,
+    steamId: string,
+  ) => Promise<{ success: boolean; message: string }>;
+  getPriorityContent: (serverId: number) => Promise<{ content: string }>;
   sendDirectMessage: (
     serverId: number,
     playerId: string,
@@ -1069,6 +1079,26 @@ function createServersApi(
       ),
     getBanContent: (serverId: number) =>
       fetchApi<{ content: string }>(`/servers/${serverId}/players/ban-content`),
+    addToPriority: (serverId: number, steamId: string, playerName?: string) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${serverId}/players/priority`,
+        {
+          method: "POST",
+          body: JSON.stringify({ steamId, playerName }),
+        },
+      ),
+    removeFromPriority: (serverId: number, steamId: string) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${serverId}/players/priority`,
+        {
+          method: "DELETE",
+          body: JSON.stringify({ steamId }),
+        },
+      ),
+    getPriorityContent: (serverId: number) =>
+      fetchApi<{ content: string }>(
+        `/servers/${serverId}/players/priority-content`,
+      ),
     sendDirectMessage: (
       serverId: number,
       playerId: string,

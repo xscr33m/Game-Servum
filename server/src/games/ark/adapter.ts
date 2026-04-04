@@ -186,6 +186,7 @@ export class ArkAdapter extends BaseGameAdapter {
       playerListEditable: true,
       profilesPath: false,
       directMessage: false,
+      priorityQueue: false,
     },
     broadcastCommand: "ServerChat {MESSAGE}",
     playerListCommand: "ListPlayers",
@@ -933,7 +934,7 @@ export class ArkAdapter extends BaseGameAdapter {
   }
 
   formatPlayerEntry(
-    _type: "whitelist" | "ban",
+    _type: "whitelist" | "ban" | "priority",
     playerId: string,
     _playerName?: string,
   ): string {

@@ -21,6 +21,7 @@ import type {
   GameDefinition,
   RconConfig,
   PlayerFileConfig,
+  PlayerListResult,
   EditableFileConfig,
   BrowsableRoot,
   ModCopyResult,
@@ -129,6 +130,7 @@ export class DayZAdapter extends BaseGameAdapter {
       playerListEditable: true,
       profilesPath: true,
       directMessage: true,
+      priorityQueue: "file",
     },
     broadcastCommand: "say -1 {MESSAGE}",
     playerListCommand: "players",
@@ -401,12 +403,21 @@ export class DayZAdapter extends BaseGameAdapter {
     };
   }
 
+  getPriorityConfig(server: GameServer): PlayerFileConfig | null {
+    return {
+      filePath: path.join(server.installPath, "priority.txt"),
+      idType: "steam-id",
+    };
+  }
+
   formatPlayerEntry(
-    type: "whitelist" | "ban",
+    type: "whitelist" | "ban" | "priority",
     playerId: string,
     playerName?: string,
   ): string {
     if (!playerName) return playerId;
+    // Priority queue stores only Steam IDs (no comments)
+    if (type === "priority") return playerId;
     // DayZ whitelist uses tab separator, ban uses space
     return type === "whitelist"
       ? `${playerId}\t//${playerName}`
@@ -419,6 +430,125 @@ export class DayZAdapter extends BaseGameAdapter {
     // Extract the ID (everything before tab or space+//)
     const id = trimmed.split(/\t|(\s+\/\/)/)[0].trim();
     return id || null;
+  }
+
+  /**
+   * Priority queue uses semicolon-separated Steam IDs on a single line.
+   * Override to add a Steam ID to the semicolon list.
+   */
+  addToPlayerList(
+    server: GameServer,
+    type: "whitelist" | "ban" | "priority",
+    playerId: string,
+    playerName?: string,
+  ): PlayerListResult {
+    if (type !== "priority") {
+      return super.addToPlayerList(server, type, playerId, playerName);
+    }
+
+    const config = this.getPriorityConfig(server);
+    if (!config) {
+      return {
+        success: false,
+        message: "This game does not support priority queue",
+      };
+    }
+
+    let content = "";
+    if (fs.existsSync(config.filePath)) {
+      content = fs.readFileSync(config.filePath, "utf-8").trim();
+    }
+
+    const ids = content
+      ? content
+          .split(";")
+          .map((id) => id.trim())
+          .filter(Boolean)
+      : [];
+
+    if (ids.includes(playerId)) {
+      return {
+        success: false,
+        message: "Player is already on the priority queue",
+      };
+    }
+
+    ids.push(playerId);
+    fs.writeFileSync(config.filePath, ids.join(";"), "utf-8");
+    return {
+      success: true,
+      message: `${playerName || "Player"} added to priority queue`,
+    };
+  }
+
+  /**
+   * Remove a Steam ID from the semicolon-separated priority queue.
+   */
+  removeFromPlayerList(
+    server: GameServer,
+    type: "whitelist" | "ban" | "priority",
+    playerId: string,
+  ): PlayerListResult {
+    if (type !== "priority") {
+      return super.removeFromPlayerList(server, type, playerId);
+    }
+
+    const config = this.getPriorityConfig(server);
+    if (!config) {
+      return {
+        success: false,
+        message: "This game does not support priority queue",
+      };
+    }
+
+    if (!fs.existsSync(config.filePath)) {
+      return { success: false, message: "Priority file not found" };
+    }
+
+    const content = fs.readFileSync(config.filePath, "utf-8").trim();
+    const ids = content
+      ? content
+          .split(";")
+          .map((id) => id.trim())
+          .filter(Boolean)
+      : [];
+    const filtered = ids.filter((id) => id !== playerId);
+
+    if (ids.length === filtered.length) {
+      return {
+        success: false,
+        message: "Player not found on the priority queue",
+      };
+    }
+
+    fs.writeFileSync(config.filePath, filtered.join(";"), "utf-8");
+    return { success: true, message: "Player removed from priority queue" };
+  }
+
+  /**
+   * Return priority queue content as one Steam ID per line (for frontend display).
+   * The file stores IDs as semicolon-separated on one line.
+   */
+  getPlayerListContent(
+    server: GameServer,
+    type: "whitelist" | "ban" | "priority",
+  ): string {
+    if (type !== "priority") {
+      return super.getPlayerListContent(server, type);
+    }
+
+    const config = this.getPriorityConfig(server);
+    if (!config || !fs.existsSync(config.filePath)) return "";
+
+    const content = fs.readFileSync(config.filePath, "utf-8").trim();
+    if (!content) return "";
+
+    // Convert semicolons to newlines for the frontend
+    return content
+      .split(";")
+      .map((id) => id.trim())
+      .filter(Boolean)
+      .join("\n");
   }
 
   // ── Logs ─────────────────────────────────────────────────────────
@@ -463,6 +593,10 @@ export class DayZAdapter extends BaseGameAdapter {
       {
         name: "whitelist.txt",
         path: path.join(server.installPath, "whitelist.txt"),
+      },
+      {
+        name: "priority.txt",
+        path: path.join(server.installPath, "priority.txt"),
       },
       {
         name: "BEServer_x64.cfg",
