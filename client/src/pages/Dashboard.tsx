@@ -9,6 +9,8 @@ import {
   FaPlugCircleXmark,
   FaFileLines,
   FaCircleQuestion,
+  FaDownload,
+  FaTriangleExclamation,
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +21,7 @@ import { AddServerDialog } from "@/components/server-details/dialogs/AddServerDi
 import { DeleteServerDialog } from "@/components/server-details/dialogs/DeleteServerDialog";
 import { CancelInstallDialog } from "@/components/server-details/dialogs/CancelInstallDialog";
 import { SteamAccountDialog } from "@/components/agent/SteamAccountDialog";
+import { SteamCmdInstallDialog } from "@/components/agent/SteamCmdInstallDialog";
 import { SystemMonitor } from "@/components/agent/SystemMonitor";
 import { AgentStatusBanner } from "@/components/agent/AgentStatusBanner";
 import { useBackend } from "@/hooks/useBackend";
@@ -52,6 +55,7 @@ export function Dashboard() {
   const [showWizard, setShowWizard] = useState(false);
   const [showAddServer, setShowAddServer] = useState(false);
   const [showSteamAccount, setShowSteamAccount] = useState(false);
+  const [showSteamInstall, setShowSteamInstall] = useState(false);
   const [serverToDelete, setServerToDelete] = useState<GameServer | null>(null);
   const [serverToCancel, setServerToCancel] = useState<GameServer | null>(null);
   const [installProgress, setInstallProgress] = useState<
@@ -392,6 +396,18 @@ export function Dashboard() {
         right={
           <>
             {/* SteamCMD status indicator */}
+            {steamcmd !== null && !steamcmd.installed && (
+              <Tip content="SteamCMD is required to manage game servers">
+                <Badge
+                  variant="warning"
+                  className={`gap-1.5 ${isConnected ? "cursor-pointer" : "opacity-50 cursor-not-allowed"}`}
+                  onClick={() => isConnected && setShowSteamInstall(true)}
+                >
+                  <FaDownload className="h-3 w-3" />
+                  Install SteamCMD
+                </Badge>
+              </Tip>
+            )}
             {steamcmd?.installed && (
               <Tip content="Steam Account">
                 <Badge
@@ -460,7 +476,23 @@ export function Dashboard() {
 
             <div className="border-t" />
 
-            {/* Steam account */}
+            {/* Steam account / SteamCMD install */}
+            {steamcmd !== null && !steamcmd.installed && (
+              <button
+                data-mobile-nav
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                onClick={() => isConnected && setShowSteamInstall(true)}
+                disabled={!isConnected}
+              >
+                <FaDownload className="h-4 w-4 text-warning" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium">Install SteamCMD</div>
+                  <div className="text-[11px] text-muted-foreground">
+                    Required to manage game servers
+                  </div>
+                </div>
+              </button>
+            )}
             {steamcmd?.installed && (
               <button
                 data-mobile-nav
@@ -594,6 +626,32 @@ export function Dashboard() {
                   </Button>
                 </div>
 
+                {/* SteamCMD not installed alert */}
+                {steamcmd !== null && !steamcmd.installed && isConnected && (
+                  <div className="flex items-start gap-4 rounded-lg border border-warning/40 bg-warning/5 p-4 mb-6">
+                    <div className="rounded-full bg-warning/15 p-2.5 shrink-0">
+                      <FaTriangleExclamation className="h-5 w-5 text-warning" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-semibold mb-1">
+                        SteamCMD Required
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        SteamCMD must be installed on the connected agent before
+                        you can download and manage game servers.
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => setShowSteamInstall(true)}
+                      className="shrink-0"
+                    >
+                      <FaDownload className="h-3.5 w-3.5 mr-1.5" />
+                      Install
+                    </Button>
+                  </div>
+                )}
+
                 {servers.length === 0 ? (
                   !isConnected && connections.length > 0 ? (
                     <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -675,6 +733,13 @@ export function Dashboard() {
         onOpenChange={setShowSteamAccount}
         steamcmd={steamcmd}
         onStatusChange={loadSteamCMD}
+      />
+
+      {/* SteamCMD Install Dialog */}
+      <SteamCmdInstallDialog
+        open={showSteamInstall}
+        onOpenChange={setShowSteamInstall}
+        onInstalled={loadSteamCMD}
       />
     </div>
   );
