@@ -88,6 +88,7 @@ npm run lint:fix             # ESLint with auto-fix
 - **Shared types**: `@game-servum/shared` package in `packages/shared/` — shared types are re-exported from both `client/src/types/index.ts` and `server/src/types/index.ts`
 - **Local-only types**: Server keeps `PlayerSession`, `AppConfig` locally; Client keeps `GameDefinition`, `LogFile`, `ArchiveSession` locally
 - **npm workspaces**: Root `package.json` manages `packages/shared`, `client`, `server`
+- **Electron config**: `electron/package.json` holds Electron dependencies and shared build config (not a workspace — read directly by build scripts to avoid installing ~180MB of Electron packages during development)
 
 ## Backend Patterns
 
@@ -286,15 +287,15 @@ Commander-only Electron app (no agent code):
 
 1. Build shared types
 2. Build client via Vite (`--base=./`)
-3. Stage Electron project (no agent code)
-4. Package with `electron-builder` (Squirrel target)
-5. Output: `Game-Servum-Commander-Setup-v{version}.exe` (~90 MB) + `.nupkg` files for auto-update
+3. Stage Electron project — reads `electron/package.json`, merges Windows-specific build config (`build.win`, `build.nsis`)
+4. Package with `electron-builder` (NSIS target)
+5. Output: `Game-Servum-Commander-Setup-v{version}.exe` (~90 MB) + `commander.yml` for auto-update
 
 **Commander-only Linux (`scripts/build-commander-linux.mjs`):**
 
 1. Build shared types
 2. Build client via Vite
-3. Stage Electron project (Commander components only)
+3. Stage Electron project — reads `electron/package.json`, merges Linux-specific build config (`build.linux`, `build.appImage`)
 4. Package with `electron-builder` (AppImage target)
 5. Output: `Game-Servum-Commander_v{version}.AppImage` (~80 MB)
 
