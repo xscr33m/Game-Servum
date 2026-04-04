@@ -2616,6 +2616,102 @@ router.get("/:id/browse/tree", (req: Request, res: Response) => {
   res.json({ root: rootKey, tree });
 });
 
+// GET /api/servers/:id/browse/list - List a single directory level (lazy-loading)
+router.get(
+  "/:id/browse/list",
+  async (req: Request, res: Response): Promise<void> => {
+    const id = parseInt(req.params.id, 10);
+    const rootKey = req.query.root as string;
+    const dirPath = (req.query.path as string) || ".";
+    const server = getServerById(id);
+
+    if (!server) {
+      res.status(404).json({ error: "Server not found" });
+      return;
+    }
+
+    if (!rootKey) {
+      res.status(400).json({ error: "Query parameter 'root' is required" });
+      return;
+    }
+
+    const resolved = resolveAndValidateBrowsePath(server, rootKey, dirPath);
+    if ("error" in resolved) {
+      res.status(400).json({ error: resolved.error });
+      return;
+    }
+
+    try {
+      const stat = await fsPromises.stat(resolved.absolutePath);
+      if (!stat.isDirectory()) {
+        res.status(400).json({ error: "Path is not a directory" });
+        return;
+      }
+
+      const entries = await fsPromises.readdir(resolved.absolutePath, {
+        withFileTypes: true,
+      });
+
+      // Sort: directories first, then files, alphabetically
+      const sorted = entries.sort((a, b) => {
+        if (a.isDirectory() && !b.isDirectory()) return -1;
+        if (!a.isDirectory() && b.isDirectory()) return 1;
+        return a.name.localeCompare(b.name);
+      });
+
+      const result: {
+        name: string;
+        type: "file" | "directory";
+        size?: number;
+        extension?: string;
+        editable?: boolean;
+        hasChildren?: boolean;
+      }[] = [];
+
+      for (const entry of sorted) {
+        const fullPath = path.join(resolved.absolutePath, entry.name);
+        if (entry.isDirectory()) {
+          // Check if directory has any children (non-recursive, lightweight)
+          let hasChildren = false;
+          try {
+            const children = await fsPromises.readdir(fullPath, {
+              recursive: false,
+            });
+            hasChildren = children.length > 0;
+          } catch {
+            // Can't read → treat as empty
+          }
+          result.push({
+            name: entry.name,
+            type: "directory",
+            hasChildren,
+          });
+        } else if (entry.isFile()) {
+          try {
+            const stats = await fsPromises.stat(fullPath);
+            const ext = path.extname(entry.name).toLowerCase();
+            result.push({
+              name: entry.name,
+              type: "file",
+              size: stats.size,
+              extension: ext || undefined,
+              editable: isTextFile(entry.name),
+            });
+          } catch {
+            // Skip files we can't stat
+          }
+        }
+      }
+
+      res.json({ path: dirPath, entries: result });
+    } catch (err) {
+      res.status(500).json({
+        error: `Failed to list directory: ${(err as Error).message}`,
+      });
+    }
+  },
+);
+
 // GET /api/servers/:id/browse/file - Read a file
 router.get("/:id/browse/file", (req: Request, res: Response) => {
   const id = parseInt(req.params.id, 10);

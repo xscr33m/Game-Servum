@@ -10,7 +10,7 @@ import {
 import { useBackend } from "@/hooks/useBackend";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { toastSuccess, toastError } from "@/lib/toast";
-import type { BrowseTreeEntry } from "@/lib/api";
+import type { BrowseListEntry } from "@/lib/api";
 import { FileTree } from "./FileTree";
 import { FileEditor } from "./FileEditor";
 import { FileExplorerToolbar } from "./FileExplorerToolbar";
@@ -37,8 +37,14 @@ interface OpenFile {
 
 export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
   const { api } = useBackend();
-  const [tree, setTree] = useState<BrowseTreeEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Map of dirPath → entries for that directory (lazy-loaded cache)
+  const [dirCache, setDirCache] = useState<Map<string, BrowseListEntry[]>>(
+    () => new Map(),
+  );
+  const [loadingDirs, setLoadingDirs] = useState<Set<string>>(
+    () => new Set(["."]),
+  );
+  const [initialLoading, setInitialLoading] = useState(true);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [selectedIsDirectory, setSelectedIsDirectory] = useState(false);
   const [openFile, setOpenFile] = useState<OpenFile | null>(null);
@@ -110,23 +116,39 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
     document.body.style.userSelect = "none";
   }
 
-  const loadTree = useCallback(async () => {
-    try {
-      setLoading(true);
-      const result = await api.servers.browseTree(serverId, rootKey);
-      setTree(result.tree);
-    } catch (err) {
-      toastError(
-        err instanceof Error ? err.message : "Failed to load file tree",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [api.servers, serverId, rootKey]);
+  const loadDirectory = useCallback(
+    async (dirPath: string) => {
+      setLoadingDirs((prev) => {
+        const next = new Set(prev);
+        next.add(dirPath);
+        return next;
+      });
+      try {
+        const result = await api.servers.browseList(serverId, rootKey, dirPath);
+        setDirCache((prev) => {
+          const next = new Map(prev);
+          next.set(dirPath, result.entries);
+          return next;
+        });
+      } catch (err) {
+        toastError(
+          err instanceof Error ? err.message : "Failed to load directory",
+        );
+      } finally {
+        setLoadingDirs((prev) => {
+          const next = new Set(prev);
+          next.delete(dirPath);
+          return next;
+        });
+        setInitialLoading(false);
+      }
+    },
+    [api.servers, serverId, rootKey],
+  );
 
   useEffect(() => {
-    loadTree();
-  }, [loadTree]);
+    loadDirectory(".");
+  }, [loadDirectory]);
 
   async function doFileSelect(relativePath: string) {
     setSelectedPath(relativePath);
@@ -158,6 +180,33 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
   function handleDirectorySelect(relativePath: string) {
     setSelectedPath(relativePath);
     setSelectedIsDirectory(true);
+  }
+
+  /** Reload the parent directory of a given path (or root if at top level) */
+  function reloadParentDir(filePath: string) {
+    const lastSlash = filePath.lastIndexOf("/");
+    const parentDir = lastSlash > 0 ? filePath.substring(0, lastSlash) : ".";
+    loadDirectory(parentDir);
+  }
+
+  /** Expand a directory: load its contents if not already cached */
+  function handleExpandDir(dirPath: string) {
+    if (!dirCache.has(dirPath)) {
+      loadDirectory(dirPath);
+    }
+  }
+
+  /** Refresh: reload only the currently selected directory (or root) */
+  function handleRefresh() {
+    if (selectedPath && selectedIsDirectory) {
+      // Reload the selected directory + its parent
+      loadDirectory(selectedPath);
+      reloadParentDir(selectedPath);
+    } else if (selectedPath) {
+      reloadParentDir(selectedPath);
+    } else {
+      loadDirectory(".");
+    }
   }
 
   async function handleSave(content: string) {
@@ -196,7 +245,7 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
     try {
       await api.servers.browseCreateFile(serverId, rootKey, relativePath);
       toastSuccess("File created");
-      await loadTree();
+      reloadParentDir(relativePath);
       // Auto-open the new file
       await handleFileSelect(relativePath);
     } catch (err) {
@@ -208,7 +257,7 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
     try {
       await api.servers.browseCreateDirectory(serverId, rootKey, relativePath);
       toastSuccess("Folder created");
-      await loadTree();
+      reloadParentDir(relativePath);
     } catch (err) {
       toastError(
         err instanceof Error ? err.message : "Failed to create folder",
@@ -225,26 +274,32 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
         setOpenFile((prev) => (prev ? { ...prev, path: to } : null));
       }
       setSelectedPath(to);
-      await loadTree();
+      reloadParentDir(from);
     } catch (err) {
       toastError(err instanceof Error ? err.message : "Failed to rename");
     }
   }
 
-  async function handleDelete(path: string) {
+  async function handleDelete(deletePath: string) {
     try {
       if (selectedIsDirectory) {
-        await api.servers.browseDeleteDirectory(serverId, rootKey, path);
+        await api.servers.browseDeleteDirectory(serverId, rootKey, deletePath);
+        // Remove from cache
+        setDirCache((prev) => {
+          const next = new Map(prev);
+          next.delete(deletePath);
+          return next;
+        });
       } else {
-        await api.servers.browseDeleteFile(serverId, rootKey, path);
+        await api.servers.browseDeleteFile(serverId, rootKey, deletePath);
       }
       toastSuccess("Deleted successfully");
       // If we deleted the open file, close it
-      if (openFile && openFile.path === path) {
+      if (openFile && openFile.path === deletePath) {
         setOpenFile(null);
       }
       setSelectedPath(null);
-      await loadTree();
+      reloadParentDir(deletePath);
     } catch (err) {
       toastError(err instanceof Error ? err.message : "Failed to delete");
     }
@@ -262,34 +317,19 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
     }
   }
 
-  // Find files in the tree that exist at the given directory path
-  function getExistingFileNames(
-    entries: BrowseTreeEntry[],
-    dirPath: string,
-  ): Set<string> {
-    if (!dirPath) {
-      // Root level — return file names at top level
-      return new Set(
-        entries.filter((e) => e.type === "file").map((e) => e.name),
-      );
-    }
-    const parts = dirPath.split("/");
-    let current = entries;
-    for (const part of parts) {
-      const dir = current.find(
-        (e) => e.type === "directory" && e.name === part,
-      );
-      if (!dir?.children) return new Set();
-      current = dir.children;
-    }
-    return new Set(current.filter((e) => e.type === "file").map((e) => e.name));
+  // Find files in the cache that exist at the given directory path
+  function getExistingFileNames(dirPath: string): Set<string> {
+    const cacheKey = dirPath || ".";
+    const entries = dirCache.get(cacheKey);
+    if (!entries) return new Set();
+    return new Set(entries.filter((e) => e.type === "file").map((e) => e.name));
   }
 
   async function handleUpload(files: FileList, targetDir: string) {
     const fileArray = Array.from(files);
 
-    // Check for conflicts using the already-loaded tree data
-    const existing = getExistingFileNames(tree, targetDir);
+    // Check for conflicts using the cached directory data
+    const existing = getExistingFileNames(targetDir);
     const conflicts = fileArray
       .map((f) => f.name)
       .filter((name) => existing.has(name));
@@ -313,7 +353,8 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
         files,
       );
       toastSuccess(result.message);
-      await loadTree();
+      // Reload the target directory
+      loadDirectory(targetDir || ".");
     } catch (err) {
       toastError(err instanceof Error ? err.message : "Failed to upload");
     } finally {
@@ -336,7 +377,7 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
       <FileExplorerToolbar
         selectedPath={selectedPath}
         selectedIsDirectory={selectedIsDirectory}
-        onRefresh={loadTree}
+        onRefresh={handleRefresh}
         onNewFile={handleNewFile}
         onNewFolder={handleNewFolder}
         onRename={handleRename}
@@ -376,16 +417,18 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
           }`}
           style={{ "--sidebar-w": `${sidebarWidth}px` } as React.CSSProperties}
         >
-          {loading ? (
+          {initialLoading ? (
             <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
               Loading...
             </div>
           ) : (
             <FileTree
-              tree={tree}
+              dirCache={dirCache}
+              loadingDirs={loadingDirs}
               selectedPath={selectedPath}
               onFileSelect={handleFileSelect}
               onDirectorySelect={handleDirectorySelect}
+              onExpandDir={handleExpandDir}
               onUpload={handleUpload}
             />
           )}

@@ -6,17 +6,20 @@ import {
   FaChevronRight,
   FaChevronDown,
   FaMagnifyingGlass,
+  FaSpinner,
 } from "react-icons/fa6";
 import { Input } from "@/components/ui/input";
-import type { BrowseTreeEntry } from "@/lib/api";
+import type { BrowseListEntry } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Tip } from "@/components/ui/tooltip";
 
 interface FileTreeProps {
-  tree: BrowseTreeEntry[];
+  dirCache: Map<string, BrowseListEntry[]>;
+  loadingDirs: Set<string>;
   selectedPath: string | null;
   onFileSelect: (relativePath: string) => void;
   onDirectorySelect?: (relativePath: string) => void;
+  onExpandDir: (dirPath: string) => void;
   onUpload?: (files: FileList, targetDir: string) => void;
 }
 
@@ -26,36 +29,27 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function matchesFilter(entry: BrowseTreeEntry, filter: string): boolean {
-  const lower = filter.toLowerCase();
-  if (entry.name.toLowerCase().includes(lower)) return true;
-  if (entry.type === "directory" && entry.children) {
-    return entry.children.some((child) => matchesFilter(child, filter));
-  }
-  return false;
+function matchesFilter(entry: BrowseListEntry, filter: string): boolean {
+  return entry.name.toLowerCase().includes(filter.toLowerCase());
 }
 
-function filterTree(
-  tree: BrowseTreeEntry[],
+function filterEntries(
+  entries: BrowseListEntry[],
   filter: string,
-): BrowseTreeEntry[] {
-  if (!filter) return tree;
-  return tree
-    .filter((entry) => matchesFilter(entry, filter))
-    .map((entry) => {
-      if (entry.type === "directory" && entry.children) {
-        return { ...entry, children: filterTree(entry.children, filter) };
-      }
-      return entry;
-    });
+): BrowseListEntry[] {
+  if (!filter) return entries;
+  return entries.filter((entry) => matchesFilter(entry, filter));
 }
 
 interface TreeNodeProps {
-  entry: BrowseTreeEntry;
+  entry: BrowseListEntry;
   depth: number;
   parentPath: string;
   selectedPath: string | null;
   expandedDirs: Set<string>;
+  dirCache: Map<string, BrowseListEntry[]>;
+  loadingDirs: Set<string>;
+  filter: string;
   dragOverDir: string | null;
   onToggleDir: (path: string) => void;
   onFileSelect: (relativePath: string) => void;
@@ -70,6 +64,9 @@ function TreeNode({
   parentPath,
   selectedPath,
   expandedDirs,
+  dirCache,
+  loadingDirs,
+  filter,
   dragOverDir,
   onToggleDir,
   onFileSelect,
@@ -83,6 +80,9 @@ function TreeNode({
   const isDirectory = entry.type === "directory";
   const isEditable = entry.editable !== false;
   const isDragTarget = isDirectory && dragOverDir === currentPath;
+  const isLoading = isDirectory && loadingDirs.has(currentPath);
+  const hasExpandArrow =
+    isDirectory && (entry.hasChildren !== false || dirCache.has(currentPath));
 
   function handleClick() {
     if (isDirectory) {
@@ -110,6 +110,13 @@ function TreeNode({
     }
   }
 
+  // Get children from the cache for this directory
+  const children =
+    isDirectory && isExpanded ? dirCache.get(currentPath) : undefined;
+  const filteredChildren = children
+    ? filterEntries(children, filter)
+    : undefined;
+
   return (
     <>
       <Tip
@@ -136,10 +143,16 @@ function TreeNode({
         >
           {isDirectory ? (
             <>
-              {isExpanded ? (
-                <FaChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+              {isLoading ? (
+                <FaSpinner className="h-3 w-3 shrink-0 text-muted-foreground animate-spin" />
+              ) : hasExpandArrow ? (
+                isExpanded ? (
+                  <FaChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+                ) : (
+                  <FaChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+                )
               ) : (
-                <FaChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+                <span className="w-3 shrink-0" />
               )}
               {isExpanded ? (
                 <FaFolderOpen className="h-4 w-4 shrink-0 text-ring/70" />
@@ -161,9 +174,9 @@ function TreeNode({
           )}
         </button>
       </Tip>
-      {isDirectory && isExpanded && entry.children && (
+      {isDirectory && isExpanded && filteredChildren && (
         <div>
-          {entry.children.map((child) => (
+          {filteredChildren.map((child) => (
             <TreeNode
               key={child.name}
               entry={child}
@@ -171,6 +184,9 @@ function TreeNode({
               parentPath={currentPath}
               selectedPath={selectedPath}
               expandedDirs={expandedDirs}
+              dirCache={dirCache}
+              loadingDirs={loadingDirs}
+              filter={filter}
               dragOverDir={dragOverDir}
               onToggleDir={onToggleDir}
               onFileSelect={onFileSelect}
@@ -186,10 +202,12 @@ function TreeNode({
 }
 
 export function FileTree({
-  tree,
+  dirCache,
+  loadingDirs,
   selectedPath,
   onFileSelect,
   onDirectorySelect,
+  onExpandDir,
   onUpload,
 }: FileTreeProps) {
   const [filter, setFilter] = useState("");
@@ -197,7 +215,10 @@ export function FileTree({
   const [dragOverDir, setDragOverDir] = useState<string | null>(null);
   const [isDragOverRoot, setIsDragOverRoot] = useState(false);
 
-  const filteredTree = useMemo(() => filterTree(tree, filter), [tree, filter]);
+  const filteredRootEntries = useMemo(
+    () => filterEntries(dirCache.get(".") ?? [], filter),
+    [dirCache, filter],
+  );
 
   function handleToggleDir(dirPath: string) {
     setExpandedDirs((prev) => {
@@ -206,6 +227,8 @@ export function FileTree({
         next.delete(dirPath);
       } else {
         next.add(dirPath);
+        // Trigger lazy-load when expanding
+        onExpandDir(dirPath);
       }
       return next;
     });
@@ -274,7 +297,7 @@ export function FileTree({
           <Input
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filter files..."
+            placeholder="Filter open folders..."
             className="h-8 pl-7 text-sm"
           />
         </div>
@@ -294,12 +317,12 @@ export function FileTree({
               Drop files here to upload to root
             </p>
           </div>
-        ) : filteredTree.length === 0 ? (
+        ) : filteredRootEntries.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-4">
             {filter ? "No matching files" : "Empty directory"}
           </p>
         ) : (
-          filteredTree.map((entry) => (
+          filteredRootEntries.map((entry) => (
             <TreeNode
               key={entry.name}
               entry={entry}
@@ -307,6 +330,9 @@ export function FileTree({
               parentPath=""
               selectedPath={selectedPath}
               expandedDirs={expandedDirs}
+              dirCache={dirCache}
+              loadingDirs={loadingDirs}
+              filter={filter}
               dragOverDir={dragOverDir}
               onToggleDir={handleToggleDir}
               onFileSelect={onFileSelect}

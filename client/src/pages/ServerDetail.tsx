@@ -87,6 +87,8 @@ export function ServerDetail() {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const { capabilities } = useGameCapabilities(server?.gameId ?? "");
   const hasPlayers = capabilities?.playerTracking !== false;
+  // Track whether files tab has ever been visited to keep it mounted
+  const filesTabVisited = useRef(false);
 
   // Sidebar navigation
   const activeSection: ServerSection = validSections.includes(
@@ -98,6 +100,12 @@ export function ServerDetail() {
     () => (hasPlayers ? undefined : new Set(["players"])),
     [hasPlayers],
   );
+
+  // Keep FilesTab mounted once it has been visited to preserve its state
+  if (activeSection === "files") {
+    filesTabVisited.current = true;
+  }
+  const showFilesTab = filesTabVisited.current;
 
   const terminalRef = useRef<HTMLDivElement>(null);
   const hasFetchedInstallOutput = useRef(false);
@@ -680,7 +688,17 @@ export function ServerDetail() {
               {activeSection === "config" && (
                 <ConfigTab server={server} onRefresh={loadServer} />
               )}
-              {activeSection === "files" && <FilesTab server={server} />}
+              {showFilesTab && (
+                <div
+                  className={
+                    activeSection === "files"
+                      ? "flex flex-col flex-1 min-h-0"
+                      : "hidden"
+                  }
+                >
+                  <FilesTab server={server} />
+                </div>
+              )}
               {activeSection === "players" && hasPlayers && (
                 <PlayersTab server={server} />
               )}

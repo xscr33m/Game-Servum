@@ -29,6 +29,15 @@ export interface BrowseTreeEntry {
   children?: BrowseTreeEntry[];
 }
 
+export interface BrowseListEntry {
+  name: string;
+  type: "file" | "directory";
+  size?: number;
+  extension?: string;
+  editable?: boolean;
+  hasChildren?: boolean;
+}
+
 type FetchApiFn = <T>(endpoint: string, options?: RequestInit) => Promise<T>;
 
 interface SteamcmdApiClient {
@@ -355,6 +364,14 @@ interface ServersApiClient {
   ) => Promise<{
     root: string;
     tree: BrowseTreeEntry[];
+  }>;
+  browseList: (
+    id: number,
+    rootKey: string,
+    dirPath?: string,
+  ) => Promise<{
+    path: string;
+    entries: BrowseListEntry[];
   }>;
   browseReadFile: (
     id: number,
@@ -1073,6 +1090,10 @@ function createServersApi(
     browseTree: (id: number, rootKey: string) =>
       fetchApi<{ root: string; tree: BrowseTreeEntry[] }>(
         `/servers/${id}/browse/tree?root=${encodeURIComponent(rootKey)}`,
+      ),
+    browseList: (id: number, rootKey: string, dirPath: string = ".") =>
+      fetchApi<{ path: string; entries: BrowseListEntry[] }>(
+        `/servers/${id}/browse/list?root=${encodeURIComponent(rootKey)}&path=${encodeURIComponent(dirPath)}`,
       ),
     browseReadFile: (id: number, rootKey: string, filePath: string) =>
       fetchApi<{ content: string; size: number; path: string }>(
