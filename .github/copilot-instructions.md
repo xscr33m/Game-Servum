@@ -47,6 +47,18 @@ Monorepo for a web-based game server management tool using SteamCMD.
 
 ## Development Commands
 
+**Secure dependency installation** (recommended for all contributors):
+
+```bash
+npm config set min-release-age 3   # Block packages published < 3 days ago (supply chain protection)
+npm install --package-lock-only    # Resolve dependency tree without installing
+npm audit                          # Check for vulnerabilities
+npm audit fix                      # Fix vulnerabilities (only if audit found issues)
+npm ci                             # Install from verified lock file
+```
+
+**Development & build commands:**
+
 ```bash
 npm run dev                  # Starts shared (watch) + client (:5173) + server (:3001) via concurrently
 npm run dev:client           # Vite dev server with HMR + proxy to backend
