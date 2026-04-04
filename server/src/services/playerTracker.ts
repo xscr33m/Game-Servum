@@ -20,7 +20,6 @@ import {
   recordPlayerConnect,
   recordPlayerDisconnect,
   disconnectAllPlayers,
-  getOnlinePlayers,
   lookupCharacterId,
   lookupSteam64Id,
 } from "../db/index.js";
@@ -68,13 +67,6 @@ const CHARACTER_ID_SYNC_INTERVAL = 5; // Sync character IDs every N polls
 
 // Servers waiting for a startup-complete signal before connecting RCON
 const pendingReadyServers = new Set<number>();
-
-/**
- * Get cached count of online players for a server
- */
-export function getOnlinePlayerCount(serverId: number): number {
-  return getOnlinePlayers(serverId).length;
-}
 
 /**
  * Notify that a server has finished starting (detected via stdout log pattern).

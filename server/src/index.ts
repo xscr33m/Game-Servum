@@ -20,6 +20,7 @@ import {
   startAutoUpdateCheck,
   stopAutoUpdateCheck,
 } from "./services/agentUpdater.js";
+import { initializeUpdateCheckers } from "./services/updateChecker.js";
 import {
   startMetricsCollection,
   stopMetricsCollection,
@@ -61,6 +62,10 @@ async function main() {
 
   // Initialize scheduled RCON message broadcasters
   initializeMessageBroadcasters();
+
+  // Initialize update checkers for servers that were already running
+  const runningServerIds = getRunningServerIds();
+  initializeUpdateCheckers(runningServerIds);
 
   // Start periodic agent update checks (every 4 hours)
   startAutoUpdateCheck(4);

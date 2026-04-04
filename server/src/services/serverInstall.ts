@@ -555,20 +555,6 @@ export function isInstalling(serverId: number): boolean {
 }
 
 /**
- * Get installation status for a server
- */
-export function getInstallationStatus(serverId: number): {
-  installing: boolean;
-  gameId?: string;
-} {
-  const installation = activeInstallations.get(serverId);
-  if (installation) {
-    return { installing: true, gameId: installation.gameId };
-  }
-  return { installing: false };
-}
-
-/**
  * Get detailed installation progress for a server (for REST endpoint).
  * Returns buffered output lines + current progress percentage/status.
  */

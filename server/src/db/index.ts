@@ -1301,11 +1301,6 @@ export function getBackupsByServerId(serverId: number): BackupMetadata[] {
   return result[0].values.map(mapBackupRow);
 }
 
-export function deleteBackupsByServerId(serverId: number): void {
-  getDb().run("DELETE FROM server_backups WHERE server_id = ?", [serverId]);
-  saveDatabase();
-}
-
 function mapBackupRow(row: unknown[]): BackupMetadata {
   return {
     id: row[0] as string,

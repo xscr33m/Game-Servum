@@ -206,6 +206,7 @@ interface ServersApiClient {
   delete: (
     id: number,
     confirmName: string,
+    deleteBackups?: boolean,
   ) => Promise<{ success: boolean; message: string }>;
   getConfig: (
     id: number,
@@ -293,6 +294,10 @@ interface ServersApiClient {
     data: { enabled?: boolean; loadOrder?: number },
   ) => Promise<{ success: boolean; message: string }>;
   reinstallMod: (
+    serverId: number,
+    modId: number,
+  ) => Promise<{ success: boolean; message: string }>;
+  cancelModInstall: (
     serverId: number,
     modId: number,
   ) => Promise<{ success: boolean; message: string }>;
@@ -840,10 +845,10 @@ function createServersApi(
       fetchApi<import("@/types").FirewallResult>(`/servers/${id}/firewall`, {
         method: "DELETE",
       }),
-    delete: (id: number, confirmName: string) =>
+    delete: (id: number, confirmName: string, deleteBackups?: boolean) =>
       fetchApi<{ success: boolean; message: string }>(`/servers/${id}`, {
         method: "DELETE",
-        body: JSON.stringify({ confirmName }),
+        body: JSON.stringify({ confirmName, deleteBackups }),
       }),
     getConfig: (id: number, file?: string) =>
       fetchApi<{
@@ -964,6 +969,13 @@ function createServersApi(
     reinstallMod: (serverId: number, modId: number) =>
       fetchApi<{ success: boolean; message: string }>(
         `/servers/${serverId}/mods/${modId}/reinstall`,
+        {
+          method: "POST",
+        },
+      ),
+    cancelModInstall: (serverId: number, modId: number) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${serverId}/mods/${modId}/cancel`,
         {
           method: "POST",
         },

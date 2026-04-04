@@ -66,4 +66,5 @@ export interface GameServer {
   createdAt: string;
   startedAt: string | null;
   installing?: boolean; // Set by API when install is in progress
+  hasPendingUpdateRestart?: boolean; // Set by API when auto-update restart is pending
 }

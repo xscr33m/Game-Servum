@@ -16,6 +16,7 @@ import {
   FaUsers,
   FaDownload,
   FaTerminal,
+  FaXmark,
 } from "react-icons/fa6";
 import {
   Dialog,
@@ -169,6 +170,14 @@ export function ModsTab({ server }: ModsTabProps) {
       setError((err as Error).message);
     } finally {
       setActionInProgress(null);
+    }
+  }
+
+  async function handleCancelModInstall(mod: ServerMod) {
+    try {
+      await api.servers.cancelModInstall(server.id, mod.id);
+    } catch (err) {
+      setError((err as Error).message);
     }
   }
 
@@ -500,6 +509,19 @@ export function ModsTab({ server }: ModsTabProps) {
                           {mod.enabled ? "Disable" : "Enable"}
                         </Button>
                       </Tip>
+
+                      {mod.status === "downloading" && (
+                        <Tip content="Cancel download">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleCancelModInstall(mod)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <FaXmark className="h-4 w-4" />
+                          </Button>
+                        </Tip>
+                      )}
 
                       {mod.status === "error" && (
                         <Tip content="Retry installation">

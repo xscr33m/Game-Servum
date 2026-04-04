@@ -28,7 +28,7 @@ interface DeleteServerDialogProps {
   server: GameServer | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: (server: GameServer) => Promise<void>;
+  onConfirm: (server: GameServer, deleteBackups: boolean) => Promise<void>;
 }
 
 export function DeleteServerDialog({
@@ -39,6 +39,7 @@ export function DeleteServerDialog({
 }: DeleteServerDialogProps) {
   const [confirmName, setConfirmName] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
+  const [deleteBackups, setDeleteBackups] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -54,7 +55,7 @@ export function DeleteServerDialog({
 
     setIsDeleting(true);
     try {
-      await onConfirm(server);
+      await onConfirm(server, deleteBackups);
       resetState();
       onOpenChange(false);
     } finally {
@@ -65,6 +66,7 @@ export function DeleteServerDialog({
   function resetState() {
     setConfirmName("");
     setAcknowledged(false);
+    setDeleteBackups(false);
     setCopied(false);
   }
 
@@ -167,6 +169,25 @@ export function DeleteServerDialog({
                 className="text-sm leading-snug cursor-pointer select-none"
               >
                 I understand that this action is permanent and cannot be undone
+              </Label>
+            </div>
+
+            {/* Delete backups option */}
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="delete-backups"
+                checked={deleteBackups}
+                onCheckedChange={(checked) =>
+                  setDeleteBackups(checked === true)
+                }
+                disabled={isRunning || isDeleting}
+                className="mt-0.5"
+              />
+              <Label
+                htmlFor="delete-backups"
+                className="text-sm leading-snug cursor-pointer select-none"
+              >
+                Also delete all backups for this server
               </Label>
             </div>
 

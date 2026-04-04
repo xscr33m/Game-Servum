@@ -330,9 +330,16 @@ export function ServerDetail() {
     }
   }
 
-  async function confirmDeleteServer(serverToDelete: GameServer) {
+  async function confirmDeleteServer(
+    serverToDelete: GameServer,
+    deleteBackups: boolean,
+  ) {
     try {
-      await api.servers.delete(serverToDelete.id, serverToDelete.name);
+      await api.servers.delete(
+        serverToDelete.id,
+        serverToDelete.name,
+        deleteBackups,
+      );
       toastSuccess(`${serverToDelete.name} is being deleted...`);
       await loadServer();
     } catch (err) {

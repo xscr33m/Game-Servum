@@ -187,35 +187,6 @@ export async function downloadSteamCMD(): Promise<void> {
 }
 
 /**
- * Run SteamCMD with given commands (generic helper)
- */
-export function runSteamCMD(args: string[]): ChildProcess {
-  const executable = getSteamCMDExecutable();
-
-  const proc = spawn(executable, args, {
-    cwd: path.dirname(executable),
-    stdio: ["pipe", "pipe", "pipe"],
-  });
-
-  proc.stdout?.on("data", (data: Buffer) => {
-    const lines = cleanSteamOutput(data.toString());
-    for (const line of lines) {
-      broadcast("steamcmd:output", { message: line });
-    }
-  });
-
-  // stderr — only forward if it contains real content
-  proc.stderr?.on("data", (data: Buffer) => {
-    const lines = cleanSteamOutput(data.toString());
-    for (const line of lines) {
-      broadcast("steamcmd:output", { message: `[ERROR] ${line}` });
-    }
-  });
-
-  return proc;
-}
-
-/**
  * Start Steam login process — COMMAND LINE mode.
  *
  * Approach: `steamcmd +login <user> <pass> [guard] +quit`

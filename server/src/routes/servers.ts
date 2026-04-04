@@ -84,6 +84,7 @@ import { BUILTIN_VARIABLES } from "../services/variableResolver.js";
 import {
   triggerUpdateCheck,
   startUpdateChecker,
+  hasPendingUpdateRestart,
 } from "../services/updateChecker.js";
 import { performBackgroundDeletion } from "../services/serverDelete.js";
 import {
@@ -100,6 +101,7 @@ import {
   installMod,
   uninstallMod,
   generateModParams,
+  cancelModInstallation,
 } from "../services/modManager.js";
 import {
   getCurrentLogs,
@@ -377,7 +379,11 @@ router.get("/:id", (req: Request, res: Response) => {
   // Add installation status
   const installing = isInstalling(id);
 
-  res.json({ ...server, installing });
+  res.json({
+    ...server,
+    installing,
+    hasPendingUpdateRestart: hasPendingUpdateRestart(id),
+  });
 });
 
 // GET /api/servers/:id/check - Check server requirements before starting
@@ -1779,7 +1785,10 @@ router.put("/:id/logs/settings", (req: Request, res: Response) => {
 // DELETE /api/servers/:id - Delete server and all files
 router.delete("/:id", async (req: Request, res: Response) => {
   const id = parseInt(req.params.id, 10);
-  const { confirmName } = req.body as { confirmName?: string };
+  const { confirmName, deleteBackups } = req.body as {
+    confirmName?: string;
+    deleteBackups?: boolean;
+  };
   const server = getServerById(id);
 
   if (!server) {
@@ -1815,6 +1824,7 @@ router.delete("/:id", async (req: Request, res: Response) => {
     server.gameId,
     server.port,
     server.installPath,
+    deleteBackups === true,
   );
 
   res.status(202).json({
@@ -1972,6 +1982,35 @@ router.post(
     res.json({ success: true, message: "Mod reinstallation started" });
   },
 );
+
+// POST /api/servers/:id/mods/:modId/cancel - Cancel an active mod download
+router.post("/:id/mods/:modId/cancel", (req: Request, res: Response) => {
+  const serverId = parseInt(req.params.id, 10);
+  const modId = parseInt(req.params.modId, 10);
+
+  const server = getServerById(serverId);
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  const mods = getModsByServerId(serverId);
+  const mod = mods.find((m) => m.id === modId);
+  if (!mod) {
+    return res.status(404).json({ error: "Mod not found" });
+  }
+
+  const result = cancelModInstallation(modId);
+  if (result.success) {
+    broadcast("mod:error", {
+      modId,
+      serverId,
+      error: "Installation cancelled by user",
+    });
+    res.json(result);
+  } else {
+    res.status(404).json({ error: result.message });
+  }
+});
 
 // DELETE /api/servers/:id/mods/:modId - Remove a mod
 router.delete("/:id/mods/:modId", async (req: Request, res: Response) => {
