@@ -46,9 +46,9 @@ RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 # Create data volume mount point (owned by nodejs user)
 RUN mkdir -p /app/data && chown -R nodejs:nodejs /app/data
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:8080/health', (r) => { if (r.statusCode !== 200) throw new Error() }).on('error', () => { process.exit(1) })"
+# Health check (using wget — much faster than spawning node)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+  CMD wget -qO /dev/null http://localhost:8080/health || exit 1
 
 USER nodejs
 
