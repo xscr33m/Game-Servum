@@ -33,7 +33,7 @@ export function ConnectAgentStep({ onNext }: ConnectAgentStepProps) {
   const [apiKey, setApiKey] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<React.ReactNode | null>(null);
 
   // Warn only when user explicitly typed http:// to a non-localhost address.
   // No protocol = defaults to https:// on submit, so no warning needed.
@@ -91,24 +91,35 @@ export function ConnectAgentStep({ onNext }: ConnectAgentStepProps) {
       );
       await onNext(conn.url, conn.sessionToken!);
     } catch (err) {
-      let msg = err instanceof Error ? err.message : "Connection failed";
+      const msg = err instanceof Error ? err.message : "Connection failed";
 
       // Detect self-signed certificate rejection in browser
       if (
-        msg.includes("Failed to fetch") ||
-        msg.includes("NetworkError") ||
-        msg.includes("CERT")
+        (msg.includes("Failed to fetch") ||
+          msg.includes("NetworkError") ||
+          msg.includes("CERT")) &&
+        normalizedUrl.startsWith("https://")
       ) {
-        const agentUrl = normalizedUrl;
-        if (agentUrl.startsWith("https://")) {
-          msg =
-            `Cannot connect — your browser does not trust the agent's certificate. ` +
-            `Open ${agentUrl}/api/v1/health in a new tab, accept the certificate warning, ` +
-            `then try connecting again.`;
-        }
+        const healthUrl = `${normalizedUrl}/api/v1/health`;
+        setError(
+          <>
+            Cannot connect — your browser does not trust the agent's
+            certificate. Open{" "}
+            <a
+              href={healthUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline font-medium hover:opacity-80"
+            >
+              {healthUrl}
+            </a>{" "}
+            in a new tab, accept the certificate warning, then try connecting
+            again.
+          </>,
+        );
+      } else {
+        setError(msg);
       }
-
-      setError(msg);
     } finally {
       setLoading(false);
     }
