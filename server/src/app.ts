@@ -31,6 +31,17 @@ const corsOptions: cors.CorsOptions = {
 };
 
 app.use(cors(corsOptions));
+
+// Private Network Access (PNA) — allows Commanders hosted on public domains
+// (e.g. Docker/Coolify) to reach this Agent on a private/local network.
+// The browser sends Access-Control-Request-Private-Network: true on preflight;
+// we must respond with Access-Control-Allow-Private-Network: true.
+app.use((req, res, next) => {
+  if (req.headers["access-control-request-private-network"]) {
+    res.setHeader("Access-Control-Allow-Private-Network", "true");
+  }
+  next();
+});
 app.use(express.json({ limit: "10mb" }));
 
 // Public endpoints (no auth required)

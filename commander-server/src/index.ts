@@ -25,6 +25,22 @@ if (TRUST_PROXY) {
   app.set("trust proxy", 1);
 }
 
+// ── Security Headers ──
+app.use((_req, res, next) => {
+  // Prevent MIME-type sniffing
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  // Prevent clickjacking
+  res.setHeader("X-Frame-Options", "DENY");
+  // Control referrer information
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  // Permissions policy (restrict sensitive APIs)
+  res.setHeader(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=()",
+  );
+  next();
+});
+
 // ── Middleware ──
 app.use(express.json({ limit: "1mb" }));
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
