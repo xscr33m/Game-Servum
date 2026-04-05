@@ -39,7 +39,7 @@ const HOP_BY_HOP = new Set([
   "cookie",
 ]);
 
-agentProxyRouter.all("/:connectionId/*", (req, res) => {
+agentProxyRouter.all("/:connectionId/{*rest}", (req, res) => {
   const { connectionId } = req.params;
   const connection = getConnectionById(connectionId);
 
@@ -49,11 +49,9 @@ agentProxyRouter.all("/:connectionId/*", (req, res) => {
   }
 
   // Build target URL:  connection.url + /<rest-of-path>?<query>
-  // Express 5 stores the wildcard capture in req.params[0] as string[]
-  const wildcard = (req.params as Record<string, unknown>)[0];
-  const restPath = Array.isArray(wildcard)
-    ? wildcard.join("/")
-    : String(wildcard || "");
+  // Express 5 {*rest} captures path segments as string[]
+  const restSegments = (req.params as unknown as Record<string, string[]>).rest;
+  const restPath = Array.isArray(restSegments) ? restSegments.join("/") : "";
   const targetUrl = new URL(restPath, connection.url.replace(/\/$/, "") + "/");
 
   // Forward original query string
