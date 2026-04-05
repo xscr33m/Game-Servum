@@ -27,6 +27,20 @@ import {
   MIN_COMPATIBLE_AGENT_VERSION,
 } from "@game-servum/shared";
 
+const WEB_MODE = import.meta.env.VITE_WEB_MODE === "true";
+
+/**
+ * Returns the base URL for direct Agent requests.
+ * In web mode, routes through the Commander Server proxy to avoid
+ * cross-origin / Private Network Access / self-signed cert issues.
+ */
+function agentBaseUrl(conn: BackendConnection): string {
+  if (WEB_MODE) {
+    return `/commander/agent-proxy/${conn.id}${new URL(conn.url).pathname.replace(/\/$/, "")}`;
+  }
+  return conn.url;
+}
+
 /**
  * Build an agentInfo object from the /api/v1/info response,
  * including a compatibility warning if the agent version is too old.
@@ -177,7 +191,7 @@ export function BackendProvider({ children }: { children: ReactNode }) {
         try {
           const controller = new AbortController();
           const timeout = setTimeout(() => controller.abort(), 3000);
-          const healthRes = await fetch(`${conn.url}/api/v1/health`, {
+          const healthRes = await fetch(`${agentBaseUrl(conn)}/api/v1/health`, {
             signal: controller.signal,
           });
           clearTimeout(timeout);
@@ -190,14 +204,17 @@ export function BackendProvider({ children }: { children: ReactNode }) {
             return;
           }
 
-          const authRes = await fetch(`${conn.url}/api/v1/auth/connect`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              apiKey: conn.apiKey,
-              password: conn.password,
-            }),
-          });
+          const authRes = await fetch(
+            `${agentBaseUrl(conn)}/api/v1/auth/connect`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                apiKey: conn.apiKey,
+                password: conn.password,
+              }),
+            },
+          );
           if (!authRes.ok) {
             setConnections((prev) =>
               prev.map((c) =>
@@ -211,7 +228,7 @@ export function BackendProvider({ children }: { children: ReactNode }) {
 
           let agentInfo = conn.agentInfo;
           try {
-            const infoRes = await fetch(`${conn.url}/api/v1/info`);
+            const infoRes = await fetch(`${agentBaseUrl(conn)}/api/v1/info`);
             if (infoRes.ok) {
               const info = await infoRes.json();
               agentInfo = buildAgentInfo(info);
@@ -270,7 +287,7 @@ export function BackendProvider({ children }: { children: ReactNode }) {
   const reAuthenticate = useCallback(
     async (conn: BackendConnection): Promise<string | null> => {
       try {
-        const res = await fetch(`${conn.url}/api/v1/auth/connect`, {
+        const res = await fetch(`${agentBaseUrl(conn)}/api/v1/auth/connect`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -302,7 +319,7 @@ export function BackendProvider({ children }: { children: ReactNode }) {
       if (!conn.sessionToken) return false;
 
       try {
-        const res = await fetch(`${conn.url}/api/v1/auth/refresh`, {
+        const res = await fetch(`${agentBaseUrl(conn)}/api/v1/auth/refresh`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -570,7 +587,7 @@ export function BackendProvider({ children }: { children: ReactNode }) {
         // Health check — is the agent reachable?
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 3000);
-        const healthRes = await fetch(`${conn.url}/api/v1/health`, {
+        const healthRes = await fetch(`${agentBaseUrl(conn)}/api/v1/health`, {
           signal: controller.signal,
         });
         clearTimeout(timeout);
@@ -586,14 +603,17 @@ export function BackendProvider({ children }: { children: ReactNode }) {
         }
 
         // Re-authenticate with stored credentials
-        const authRes = await fetch(`${conn.url}/api/v1/auth/connect`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            apiKey: conn.apiKey,
-            password: conn.password,
-          }),
-        });
+        const authRes = await fetch(
+          `${agentBaseUrl(conn)}/api/v1/auth/connect`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              apiKey: conn.apiKey,
+              password: conn.password,
+            }),
+          },
+        );
 
         if (!authRes.ok) {
           logger.warn(
@@ -619,7 +639,7 @@ export function BackendProvider({ children }: { children: ReactNode }) {
         // Fetch updated agent info
         let agentInfo = conn.agentInfo;
         try {
-          const infoRes = await fetch(`${conn.url}/api/v1/info`);
+          const infoRes = await fetch(`${agentBaseUrl(conn)}/api/v1/info`);
           if (infoRes.ok) {
             const info = await infoRes.json();
             agentInfo = buildAgentInfo(info);
@@ -711,31 +731,58 @@ export function BackendProvider({ children }: { children: ReactNode }) {
       };
 
       try {
-        // Health check
-        const healthRes = await fetch(`${baseUrl}/api/v1/health`);
-        if (!healthRes.ok) throw new Error("Agent not reachable");
+        if (WEB_MODE) {
+          // In web/Docker mode, test connectivity through the Commander Server
+          // proxy (server-side). The browser cannot reach the Agent directly
+          // because the connection hasn't been stored yet for the proxy router.
+          const testRes = await fetch(
+            "/commander/api/connections/test-connection",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({ url: baseUrl, apiKey, password }),
+            },
+          );
 
-        // Get agent info
-        const infoRes = await fetch(`${baseUrl}/api/v1/info`);
-        const info = await infoRes.json();
+          if (!testRes.ok) {
+            const err = await testRes
+              .json()
+              .catch(() => ({ message: "Connection failed" }));
+            throw new Error(err.message || "Connection failed");
+          }
 
-        // Authenticate
-        const authRes = await fetch(`${baseUrl}/api/v1/auth/connect`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ apiKey, password }),
-        });
+          const { info, auth } = await testRes.json();
+          newConn.sessionToken = auth?.token;
+          newConn.tokenExpiresAt = auth?.expiresIn
+            ? Date.now() + auth.expiresIn * 1000
+            : undefined;
+          newConn.status = "connected";
+          newConn.agentInfo = buildAgentInfo(info);
+        } else {
+          // Direct Agent requests (Electron / local dev mode)
+          const healthRes = await fetch(`${baseUrl}/api/v1/health`);
+          if (!healthRes.ok) throw new Error("Agent not reachable");
 
-        if (!authRes.ok) {
-          throw new Error("Authentication failed — invalid credentials");
+          const infoRes = await fetch(`${baseUrl}/api/v1/info`);
+          const info = await infoRes.json();
+
+          const authRes = await fetch(`${baseUrl}/api/v1/auth/connect`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ apiKey, password }),
+          });
+
+          if (!authRes.ok) {
+            throw new Error("Authentication failed — invalid credentials");
+          }
+
+          const { token, expiresIn } = await authRes.json();
+          newConn.sessionToken = token;
+          newConn.tokenExpiresAt = Date.now() + expiresIn * 1000;
+          newConn.status = "connected";
+          newConn.agentInfo = buildAgentInfo(info);
         }
-
-        const { token, expiresIn } = await authRes.json();
-
-        newConn.sessionToken = token;
-        newConn.tokenExpiresAt = Date.now() + expiresIn * 1000;
-        newConn.status = "connected";
-        newConn.agentInfo = buildAgentInfo(info);
 
         setConnections((prev) => [...prev, newConn]);
 
@@ -838,7 +885,7 @@ export function BackendProvider({ children }: { children: ReactNode }) {
         // Health check
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 3000);
-        const healthRes = await fetch(`${conn.url}/api/v1/health`, {
+        const healthRes = await fetch(`${agentBaseUrl(conn)}/api/v1/health`, {
           signal: controller.signal,
         });
         clearTimeout(timeout);
@@ -848,14 +895,17 @@ export function BackendProvider({ children }: { children: ReactNode }) {
         }
 
         // Re-authenticate
-        const authRes = await fetch(`${conn.url}/api/v1/auth/connect`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            apiKey: conn.apiKey,
-            password: conn.password,
-          }),
-        });
+        const authRes = await fetch(
+          `${agentBaseUrl(conn)}/api/v1/auth/connect`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              apiKey: conn.apiKey,
+              password: conn.password,
+            }),
+          },
+        );
 
         if (!authRes.ok) {
           updateConnection(id, { status: "error" });
@@ -867,7 +917,7 @@ export function BackendProvider({ children }: { children: ReactNode }) {
         // Fetch agent info
         let agentInfo = conn.agentInfo;
         try {
-          const infoRes = await fetch(`${conn.url}/api/v1/info`);
+          const infoRes = await fetch(`${agentBaseUrl(conn)}/api/v1/info`);
           if (infoRes.ok) {
             const info = await infoRes.json();
             agentInfo = buildAgentInfo(info);

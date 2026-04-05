@@ -1,5 +1,8 @@
 import fs from "fs";
 import path from "path";
+import https from "https";
+import http from "http";
+import { URL } from "url";
 import { Router } from "express";
 import { requireSession } from "./middleware.js";
 
@@ -89,6 +92,15 @@ function stripSessionData(connections: StoredConnection[]): StoredConnection[] {
 
 export const connectionsRouter = Router();
 
+/**
+ * Look up a stored connection by its ID.
+ * Used by the agent proxy to resolve target Agent URLs.
+ */
+export function getConnectionById(id: string): StoredConnection | undefined {
+  const connections = loadConnections();
+  return connections.find((c) => c.id === id);
+}
+
 // All routes require an authenticated session
 connectionsRouter.use(requireSession);
 
@@ -114,4 +126,131 @@ connectionsRouter.put("/", (req, res) => {
 connectionsRouter.delete("/", (_req, res) => {
   saveConnections([]);
   res.json({ success: true });
+});
+
+// ── Agent Fetch Utility ──
+
+interface AgentFetchOptions {
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string;
+}
+
+interface AgentFetchResult {
+  status: number;
+  body: string;
+}
+
+/**
+ * Make an HTTP(S) request to an Agent, accepting self-signed certificates.
+ * Used by the test-connection endpoint to verify Agent connectivity server-side.
+ */
+function agentFetch(
+  url: string,
+  options?: AgentFetchOptions,
+): Promise<AgentFetchResult> {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const isHttps = parsed.protocol === "https:";
+    const transport = isHttps ? https : http;
+
+    const reqOptions: http.RequestOptions = {
+      method: options?.method || "GET",
+      hostname: parsed.hostname,
+      port: parsed.port || (isHttps ? 443 : 80),
+      path: parsed.pathname + parsed.search,
+      headers: options?.headers || {},
+      timeout: 10000,
+    };
+
+    if (isHttps) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (reqOptions as any).rejectUnauthorized = false;
+    }
+
+    const req = transport.request(reqOptions, (res) => {
+      let data = "";
+      res.on("data", (chunk: Buffer) => (data += chunk.toString()));
+      res.on("end", () => resolve({ status: res.statusCode ?? 0, body: data }));
+    });
+
+    req.on("error", reject);
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error("Request timed out"));
+    });
+    if (options?.body) req.write(options.body);
+    req.end();
+  });
+}
+
+// POST /commander/api/connections/test-connection — Test Agent connectivity server-side
+// Used during onboarding in web/Docker mode where the browser cannot directly reach the Agent.
+connectionsRouter.post("/test-connection", async (req, res) => {
+  const { url, apiKey, password } = req.body;
+  if (!url || typeof url !== "string") {
+    res.status(400).json({ success: false, message: "URL is required" });
+    return;
+  }
+
+  const baseUrl = url.replace(/\/+$/, "");
+
+  try {
+    // 1. Health check
+    const healthRes = await agentFetch(`${baseUrl}/api/v1/health`);
+    if (healthRes.status !== 200) {
+      res.status(502).json({
+        success: false,
+        message: "Agent not reachable",
+        step: "health",
+      });
+      return;
+    }
+
+    // 2. Get agent info
+    const infoRes = await agentFetch(`${baseUrl}/api/v1/info`);
+    let info: Record<string, unknown> = {};
+    try {
+      info = JSON.parse(infoRes.body);
+    } catch {
+      /* ignore parse errors */
+    }
+
+    // 3. Authenticate (if credentials provided)
+    let auth: Record<string, unknown> | null = null;
+    if (apiKey && password) {
+      const authRes = await agentFetch(`${baseUrl}/api/v1/auth/connect`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey, password }),
+      });
+
+      if (authRes.status !== 200) {
+        res.status(401).json({
+          success: false,
+          message: "Authentication failed — invalid credentials",
+          step: "auth",
+        });
+        return;
+      }
+
+      try {
+        auth = JSON.parse(authRes.body);
+      } catch {
+        /* ignore parse errors */
+      }
+    }
+
+    res.json({ success: true, info, auth });
+  } catch (err) {
+    console.error(
+      "[Connections] test-connection failed:",
+      (err as Error).message,
+    );
+    res.status(502).json({
+      success: false,
+      message: "Cannot reach agent",
+      details: (err as Error).message,
+    });
+  }
 });

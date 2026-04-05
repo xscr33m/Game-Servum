@@ -13,6 +13,8 @@ import {
 } from "./auth.js";
 import { requireSession } from "./middleware.js";
 import { connectionsRouter } from "./connections.js";
+import { agentProxyRouter } from "./agent-proxy.js";
+import { setupAgentWsProxy } from "./agent-ws-proxy.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT || "8080", 10);
@@ -42,11 +44,18 @@ app.use((_req, res, next) => {
 });
 
 // ── Middleware ──
-app.use(express.json({ limit: "1mb" }));
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 app.use(cookieParser() as any);
 
-// ── Rate Limiting (in-memory, per IP) ──
+// ── Agent Proxy (must be before express.json so body stays raw) ──
+app.use(
+  "/commander/agent-proxy",
+  express.raw({ type: "*/*", limit: "50mb" }),
+  agentProxyRouter,
+);
+
+// ── JSON Body Parser (for Commander's own API routes) ──
+app.use(express.json({ limit: "1mb" }));
 
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const RATE_LIMIT_MAX = 5; // max attempts per window
@@ -255,7 +264,11 @@ const server = app.listen(PORT, () => {
   if (TRUST_PROXY) {
     console.log("[Commander] Trust proxy enabled (secure cookies)");
   }
+  console.log("[Commander] Agent proxy enabled (HTTP + WebSocket)");
 });
+
+// ── WebSocket Proxy (Agent connections) ──
+setupAgentWsProxy(server);
 
 // ── Graceful Shutdown ──
 
