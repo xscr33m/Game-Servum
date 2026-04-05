@@ -7,9 +7,44 @@ import jwt from "jsonwebtoken";
 
 const DATA_PATH = process.env.DATA_PATH || "./data";
 const ADMIN_FILE = path.join(DATA_PATH, "admin.json");
-const JWT_SECRET =
-  process.env.JWT_SECRET || crypto.randomBytes(32).toString("hex");
+const JWT_SECRET_FILE = path.join(DATA_PATH, "jwt-secret.key");
 const SESSION_EXPIRY = "24h";
+
+/**
+ * Resolve JWT secret with priority: env var > persisted file > generate new.
+ * Persists generated secrets so sessions survive container restarts.
+ */
+function resolveJwtSecret(): string {
+  // 1. Explicit env var takes priority
+  if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
+
+  // 2. Read from persisted file
+  try {
+    if (fs.existsSync(JWT_SECRET_FILE)) {
+      return fs.readFileSync(JWT_SECRET_FILE, "utf-8").trim();
+    }
+  } catch {
+    // Fall through to generate
+  }
+
+  // 3. Generate and persist
+  const secret = crypto.randomBytes(32).toString("hex");
+  try {
+    if (!fs.existsSync(DATA_PATH)) {
+      fs.mkdirSync(DATA_PATH, { recursive: true });
+    }
+    fs.writeFileSync(JWT_SECRET_FILE, secret, {
+      encoding: "utf-8",
+      mode: 0o600,
+    });
+    console.log("[Auth] Generated and persisted new JWT secret");
+  } catch (err) {
+    console.error("[Auth] Failed to persist JWT secret:", err);
+  }
+  return secret;
+}
+
+const JWT_SECRET = resolveJwtSecret();
 
 interface AdminData {
   passwordHash: string;

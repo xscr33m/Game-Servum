@@ -29,6 +29,7 @@ services:
       # - COMMANDER_PASSWORD=changeme # Uncomment to pre-set password
       # - TRUST_PROXY=true               # Uncomment when behind a TLS reverse proxy
     restart: unless-stopped
+    init: true # Ensures proper signal forwarding (SIGTERM) for graceful shutdown
 
   # ── Optional: Caddy reverse proxy for automatic HTTPS ──
   # Uncomment the following to add TLS termination via Caddy.

@@ -29,9 +29,10 @@ src/
 
 **Public (no session required):**
 
+- `GET /health` — Health check (`{ status, uptime }`)
 - `GET /commander/api/auth/status` — Auth state (`{ configured, authenticated }`)
-- `POST /commander/api/auth/setup` — Set initial admin password (first run only)
-- `POST /commander/api/auth/login` — Authenticate, receive session cookie
+- `POST /commander/api/auth/setup` — Set initial admin password (first run only, rate limited)
+- `POST /commander/api/auth/login` — Authenticate, receive session cookie (rate limited)
 - `POST /commander/api/auth/logout` — Clear session cookie
 
 **Authenticated (session required):**
@@ -57,9 +58,12 @@ src/
 
 - **Authentication**: PBKDF2 (100k iterations, SHA-512) — same algorithm as the Agent
 - **Sessions**: JWT stored in HTTP-only `commander_session` cookie (SameSite, 24h expiry)
-- **Data persistence**: JSON files in `DATA_PATH` (`admin.json`, `connections.json`)
+- **JWT secret persistence**: Auto-generated on first start, saved to `{DATA_PATH}/jwt-secret.key` so sessions survive container restarts. Env var `JWT_SECRET` overrides
+- **Rate limiting**: Login and setup endpoints limited to 5 attempts per IP per 15 minutes (in-memory)
+- **Data persistence**: JSON files in `DATA_PATH` (`admin.json`, `connections.json`, `jwt-secret.key`)
 - **No proxying**: Browser connects to Agents directly — this server only handles auth + connection storage
 - **Build-time mode**: Client is built with `VITE_WEB_MODE=true` to enable web-specific behavior
+- **Graceful shutdown**: Handles SIGTERM/SIGINT for clean container stops
 
 ## Docker
 
@@ -78,3 +82,5 @@ docker compose down -v
 ```
 
 Data is persisted in the `commander-data` Docker volume at `/app/data`.
+
+The container runs as non-root user `nodejs` (UID 1001) and includes a Docker HEALTHCHECK.

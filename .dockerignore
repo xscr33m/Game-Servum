@@ -34,7 +34,7 @@ docs/
 
 # IDE / OS
 
-.DS*Store
+.DS_Store
 Thumbs.db
-*.swp
-\_.swo
+_.swp
+_.swo

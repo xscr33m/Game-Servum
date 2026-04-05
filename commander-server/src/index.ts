@@ -26,9 +26,44 @@ if (TRUST_PROXY) {
 }
 
 // ── Middleware ──
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 app.use(cookieParser() as any);
+
+// ── Rate Limiting (in-memory, per IP) ──
+
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const RATE_LIMIT_MAX = 5; // max attempts per window
+
+interface RateLimitEntry {
+  count: number;
+  resetAt: number;
+}
+
+const rateLimitMap = new Map<string, RateLimitEntry>();
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+  entry.count++;
+  return entry.count <= RATE_LIMIT_MAX;
+}
+
+function resetRateLimit(ip: string): void {
+  rateLimitMap.delete(ip);
+}
+
+// Clean up stale entries periodically (every 15 minutes)
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of rateLimitMap) {
+    if (now > entry.resetAt) rateLimitMap.delete(ip);
+  }
+}, RATE_LIMIT_WINDOW_MS);
 
 // ── Cookie helper ──
 
@@ -47,6 +82,12 @@ function clearSessionCookie(res: express.Response): void {
   res.clearCookie("commander_session", { path: "/" });
 }
 
+// ── Health Check (public, no auth) ──
+
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok", uptime: process.uptime() });
+});
+
 // ── Auth Routes ──
 
 // GET /commander/api/auth/status — Check if configured and authenticated
@@ -59,6 +100,14 @@ app.get("/commander/api/auth/status", (req, res) => {
 
 // POST /commander/api/auth/setup — Set initial admin password
 app.post("/commander/api/auth/setup", (req, res) => {
+  const ip = req.ip || "unknown";
+  if (!checkRateLimit(ip)) {
+    res
+      .status(429)
+      .json({ success: false, message: "Too many attempts. Try again later." });
+    return;
+  }
+
   if (isConfigured()) {
     res.status(400).json({ success: false, message: "Already configured" });
     return;
@@ -80,6 +129,7 @@ app.post("/commander/api/auth/setup", (req, res) => {
   }
 
   // Auto-login after setup
+  resetRateLimit(ip);
   const token = createSessionToken();
   setSessionCookie(res, token);
   res.json({ success: true });
@@ -87,6 +137,14 @@ app.post("/commander/api/auth/setup", (req, res) => {
 
 // POST /commander/api/auth/login — Authenticate with password
 app.post("/commander/api/auth/login", (req, res) => {
+  const ip = req.ip || "unknown";
+  if (!checkRateLimit(ip)) {
+    res
+      .status(429)
+      .json({ success: false, message: "Too many attempts. Try again later." });
+    return;
+  }
+
   if (!isConfigured()) {
     res.status(400).json({ success: false, message: "Not configured yet" });
     return;
@@ -103,6 +161,7 @@ app.post("/commander/api/auth/login", (req, res) => {
     return;
   }
 
+  resetRateLimit(ip);
   const token = createSessionToken();
   setSessionCookie(res, token);
   res.json({ success: true });
@@ -168,7 +227,7 @@ app.get("/{*splat}", (_req, res) => {
 // Initialize admin from env var (if set and not yet configured)
 initFromEnv();
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`[Commander] Web server running on port ${PORT}`);
   if (isConfigured()) {
     console.log("[Commander] Admin password is configured");
@@ -181,3 +240,18 @@ app.listen(PORT, () => {
     console.log("[Commander] Trust proxy enabled (secure cookies)");
   }
 });
+
+// ── Graceful Shutdown ──
+
+function shutdown(signal: string): void {
+  console.log(`[Commander] ${signal} received, shutting down...`);
+  server.close(() => {
+    console.log("[Commander] Server closed");
+    process.exit(0);
+  });
+  // Force exit after 10s if server.close() hangs
+  setTimeout(() => process.exit(1), 10_000).unref();
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

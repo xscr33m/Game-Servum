@@ -39,7 +39,8 @@ function loadConnections(): StoredConnection[] {
     if (!fs.existsSync(CONNECTIONS_FILE)) return [];
     const raw = fs.readFileSync(CONNECTIONS_FILE, "utf-8");
     return JSON.parse(raw) as StoredConnection[];
-  } catch {
+  } catch (err) {
+    console.error("[Connections] Failed to load connections:", err);
     return [];
   }
 }
