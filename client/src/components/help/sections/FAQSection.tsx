@@ -43,6 +43,12 @@ const faqs = [
       "Yes! The Commander can be deployed as a Docker container for browser-based access. Use docker compose up -d to start it. The Docker container runs a lightweight web server with its own admin authentication. It connects to your Windows Agent(s) over the network just like the desktop app.",
   },
   {
+    question:
+      "Why can't the Docker Commander connect to my Agent on a local/private IP?",
+    answer:
+      "In Docker/web mode, the Commander Server proxies all requests to the Agent server-side. If the Commander runs in the cloud (e.g. on a VPS) and the Agent is on a private network (192.168.x.x), the server cannot reach it — private IPs are not routable over the internet. To fix this, make the Agent reachable via a public IP, port forwarding with DynDNS, or a VPN/tunnel (e.g. Tailscale, WireGuard). The Electron desktop app does not have this limitation since it runs on your local machine.",
+  },
+  {
     question: "What happens if my server crashes?",
     answer:
       "Game-Servum includes crash protection. If a server process terminates unexpectedly, it will be automatically restarted after a 10-second delay. If the server crashes more than 3 times within 10 minutes, automatic restart is disabled and the status changes to Error.",

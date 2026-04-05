@@ -404,6 +404,50 @@ export function GuidesSection() {
               in the environment if you use a reverse proxy.
             </p>
           </div>
+          <div className="space-y-2">
+            <h4 className="font-semibold text-foreground">
+              Network requirements
+            </h4>
+            <p>
+              In Docker/web mode, all communication between the browser and the
+              Agent is routed through the Commander Server. The browser never
+              connects to the Agent directly — the Commander Server acts as a
+              proxy.
+            </p>
+            <p>
+              This means the Commander Server (Docker container) must be able to
+              reach the Agent over the network. If the Commander runs in the
+              cloud (e.g. on a VPS) and the Agent is on a private/local network
+              (e.g. 192.168.x.x), the connection will fail because private IP
+              addresses are not reachable from the internet.
+            </p>
+            <div className="rounded-md bg-muted/50 p-3 space-y-2">
+              <p className="font-medium text-foreground text-xs">
+                How to make your Agent reachable:
+              </p>
+              <ul className="list-disc list-inside space-y-1 ml-1 text-xs">
+                <li>
+                  <strong>Public IP / Dedicated Server:</strong> If the Agent
+                  runs on a server with a public IP (e.g. Hetzner, OVH), no
+                  extra setup is needed.
+                </li>
+                <li>
+                  <strong>Port Forwarding + DynDNS:</strong> Forward port 3001
+                  on your router to the Agent machine and use a DynDNS service
+                  (e.g. ipv64.net, DuckDNS) for a stable domain name.
+                </li>
+                <li>
+                  <strong>VPN / Tunnel:</strong> Use Tailscale, WireGuard, or
+                  Cloudflare Tunnel to connect your VPS to your local network.
+                </li>
+              </ul>
+            </div>
+            <p>
+              The Electron desktop app does not have this limitation — it runs
+              on your local machine and can connect to Agents on the same
+              network directly.
+            </p>
+          </div>
           <div className="rounded-md bg-muted/50 p-3 text-xs">
             <strong>Note:</strong> The Docker deployment runs only the Commander
             (frontend). The Agent still needs to run on a Windows machine where
