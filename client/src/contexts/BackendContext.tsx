@@ -691,7 +691,12 @@ export function BackendProvider({ children }: { children: ReactNode }) {
   // ── Add a new backend connection ──
   const addConnection = useCallback(
     async (url: string, apiKey: string, password: string, name: string) => {
-      const id = crypto.randomUUID();
+      // crypto.randomUUID() requires a secure context (HTTPS/localhost).
+      // Fall back to a manual UUID for plain-HTTP deployments (e.g. Docker on LAN).
+      const id =
+        typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
       const baseUrl = url.replace(/\/+$/, "");
 
       // Test connectivity
