@@ -40,6 +40,17 @@ app.use((_req, res, next) => {
     "Permissions-Policy",
     "camera=(), microphone=(), geolocation=()",
   );
+  // When behind TLS-terminating proxy: enforce HTTPS via HSTS and
+  // auto-upgrade any accidental HTTP sub-resource requests.
+  if (TRUST_PROXY) {
+    // HSTS: tell browsers to always use HTTPS (1 year)
+    res.setHeader(
+      "Strict-Transport-Security",
+      "max-age=31536000; includeSubDomains",
+    );
+    // Upgrade any http:// sub-resource requests to https:// automatically
+    res.setHeader("Content-Security-Policy", "upgrade-insecure-requests");
+  }
   next();
 });
 
