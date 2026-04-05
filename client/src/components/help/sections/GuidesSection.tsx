@@ -325,12 +325,12 @@ export function GuidesSection() {
             </ol>
           </div>
           <div className="space-y-2">
-            <h4 className="font-semibold text-foreground">Managing API keys</h4>
+            <h4 className="font-semibold text-foreground">How it works</h4>
             <p>
-              You can create additional API keys, change passwords, and revoke
-              keys from the Commander via the API. Each key is hashed (SHA-256)
-              before storage and passwords use PBKDF2 (100k iterations,
-              SHA-512).
+              Your API key is hashed (SHA-256) and your password is stored using
+              PBKDF2 (100k iterations, SHA-512) — credentials are never stored
+              in plain text. The Commander receives a JWT session token (valid
+              for 24 hours) after authentication and refreshes it automatically.
             </p>
           </div>
           <div className="rounded-md bg-muted/50 p-3 text-xs">
