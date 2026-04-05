@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +10,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { FaSpinner, FaCircleExclamation, FaPlug } from "react-icons/fa6";
+import {
+  FaSpinner,
+  FaCircleExclamation,
+  FaLockOpen,
+  FaPlug,
+} from "react-icons/fa6";
 import { useBackend } from "@/hooks/useBackend";
 
 interface ConnectAgentStepProps {
@@ -29,6 +34,29 @@ export function ConnectAgentStep({ onNext }: ConnectAgentStepProps) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Warn when the URL targets a non-localhost address without HTTPS
+  const showInsecureWarning = useMemo(() => {
+    const trimmed = url.trim();
+    if (!trimmed) return false;
+    if (trimmed.startsWith("https://")) return false;
+    // Extract hostname from the raw input
+    const withProto = trimmed.startsWith("http://")
+      ? trimmed
+      : `http://${trimmed}`;
+    try {
+      const hostname = new URL(withProto).hostname;
+      if (
+        hostname === "localhost" ||
+        hostname === "127.0.0.1" ||
+        hostname === "::1"
+      )
+        return false;
+      return true;
+    } catch {
+      return false;
+    }
+  }, [url]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -117,6 +145,16 @@ export function ConnectAgentStep({ onNext }: ConnectAgentStepProps) {
               disabled={loading}
               required
             />
+            {showInsecureWarning && (
+              <Alert className="bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400">
+                <FaLockOpen className="h-4 w-4" />
+                <AlertDescription>
+                  This connection will not be encrypted. Credentials will be
+                  transmitted in plain text. Use <strong>https://</strong> or
+                  connect via localhost / VPN for secure access.
+                </AlertDescription>
+              </Alert>
+            )}
           </div>
 
           <div className="space-y-2">

@@ -40,6 +40,7 @@ src/
 
 - **config.ts** — Environment config, path resolution
 - **auth.ts** — PBKDF2 + JWT authentication
+- **tlsManager.ts** — TLS/HTTPS certificate management (auto-enabled with self-signed cert)
 - **serverProcess.ts** — Process spawning, crash protection, startup detection
 - **serverInstall.ts** — SteamCMD installation & updates
 - **modManager.ts** — Workshop mod install/update/uninstall, `-mod=` param generation

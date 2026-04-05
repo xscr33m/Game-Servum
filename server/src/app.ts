@@ -13,6 +13,7 @@ import { authRouter } from "./routes/auth.js";
 import logsRouter from "./routes/logs.js";
 import { agentAuth } from "./middleware/auth.js";
 import { getConfig } from "./services/config.js";
+import { getTlsConfig } from "./services/tlsManager.js";
 import { logger } from "./core/logger.js";
 
 const app = express();
@@ -43,6 +44,7 @@ app.get("/api/v1/health", (_req, res) => {
 });
 
 app.get("/api/v1/info", (_req, res) => {
+  const tlsConfig = getTlsConfig();
   res.json({
     name: "Game-Servum Agent",
     version: APP_VERSION,
@@ -53,6 +55,7 @@ app.get("/api/v1/info", (_req, res) => {
     apiVersion: API_VERSION,
     minCompatibleVersion: MIN_COMPATIBLE_AGENT_VERSION,
     requiresAuth: config.authEnabled,
+    tlsEnabled: tlsConfig.enabled,
     features: ["steamcmd", "mods", "rcon", "player-tracking", "scheduler"],
   });
 });
