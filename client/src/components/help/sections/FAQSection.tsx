@@ -9,7 +9,7 @@ const faqs = [
   {
     question: "Do I need a Steam account?",
     answer:
-      "It depends on the game. Some games (like 7 Days to Die) can be downloaded with anonymous SteamCMD access. Others (like DayZ) require a Steam account that owns the game. The Commander will tell you when a login is required.",
+      "It depends on the game. Some games (like 7 Days to Die and ARK) can be downloaded with anonymous SteamCMD access. Others (like DayZ) require a Steam account that owns the game. The Commander will tell you when a login is required.",
   },
   {
     question: "Can I run multiple servers at the same time?",
@@ -17,9 +17,30 @@ const faqs = [
       "Yes! You can create and run as many servers as your hardware supports. Each server uses its own set of ports, and Game-Servum checks for port conflicts automatically.",
   },
   {
+    question: "Is the connection between Commander and Agent encrypted?",
+    answer:
+      "Yes. The Agent enables HTTPS (TLS) by default using a self-signed certificate that is generated automatically on first start. All API and WebSocket connections are encrypted. The Electron desktop app accepts self-signed certificates automatically. In a browser, you need to accept the certificate once by opening the Agent's health endpoint directly.",
+  },
+  {
+    question:
+      "What is a self-signed certificate and why does my browser warn me?",
+    answer:
+      "A self-signed certificate encrypts the connection just like a regular certificate, but it is not signed by a trusted Certificate Authority (CA). Your browser shows a warning because it cannot verify who issued the certificate. This is normal and expected for local/private servers. Accept the certificate once in your browser and the warning won't appear again for that Agent.",
+  },
+  {
+    question: "Can I use my own TLS certificate?",
+    answer:
+      "Yes. You can replace the auto-generated self-signed certificate with your own via the Agent's TLS API endpoint. Provide paths to your certificate and private key files on the Agent machine. If you use a reverse proxy (e.g. nginx, Traefik) for TLS termination, you can disable the Agent's built-in TLS by setting TLS_ENABLED=false.",
+  },
+  {
     question: "How do I connect the Commander to a remote Agent?",
     answer:
-      'Click the "+" button in the header bar to add a new Agent connection. Enter the Agent\'s IP address and port (default: 3001). The Commander communicates with the Agent over HTTP and WebSocket. Make sure the port is open in your firewall.',
+      'Click the "+" button in the header to add a new Agent connection. Enter the Agent\'s address (e.g. https://192.168.1.100:3001), your API key, and password. The default port is 3001. Make sure the port is open in your firewall — the Agent can create firewall rules automatically.',
+  },
+  {
+    question: "Can I run the Commander in Docker?",
+    answer:
+      "Yes! The Commander can be deployed as a Docker container for browser-based access. Use docker compose up -d to start it. The Docker container runs a lightweight web server with its own admin authentication. It connects to your Windows Agent(s) over the network just like the desktop app.",
   },
   {
     question: "What happens if my server crashes?",
@@ -29,12 +50,27 @@ const faqs = [
   {
     question: "How do I update a game server?",
     answer:
-      'You can update a server manually from the server detail page, or enable automatic update detection. When an update is detected, Game-Servum can automatically stop the server, apply the update via SteamCMD, and restart it. Configure this in the server\'s "Settings" tab.',
+      "You can update a server manually from the server detail page (Overview tab), or enable automatic update detection. When an update is detected, Game-Servum can automatically stop the server, apply the update via SteamCMD, and restart it. Configure auto-restart on update in the server's Settings tab.",
+  },
+  {
+    question: "How do backups work?",
+    answer:
+      "Open the Backups tab on any server to create a ZIP archive of the server files. You can choose between a full backup (entire directory) or selective backup (specific paths). The server is stopped during backup and restarted afterward. Backups are stored in the Agent's data directory and can be restored at any time.",
+  },
+  {
+    question: "Does the Agent update itself?",
+    answer:
+      "Yes. The Agent checks for updates on GitHub Releases every 4 hours. When a new version is available, it can be installed from the Commander's Settings page. The update process stops the Windows Service, replaces the Agent files, and restarts automatically.",
   },
   {
     question: "Where is my data stored?",
     answer:
-      "The Agent stores its database and configuration in the data directory (default: C:\\ProgramData\\Game-Servum\\ on Windows). Game server files are stored in the servers directory. The Commander stores connection credentials in localStorage (browser) or a local JSON file (Electron app).",
+      "The Agent stores its database and configuration in the data directory (default: C:\\ProgramData\\Game-Servum\\ on Windows). Game server files are stored in the servers directory. The Commander (Electron) stores connection credentials locally. The Docker Commander stores credentials in a persistent volume.",
+  },
+  {
+    question: "Can I manage firewall rules from the Commander?",
+    answer:
+      'Yes (Windows only). Each server\'s Settings tab has a Firewall Rules section that shows which rules exist and which are missing. Click "Create Rules" to automatically add the required Windows Firewall rules (ports, protocols) for that game server.',
   },
   {
     question: "Is Game-Servum free?",

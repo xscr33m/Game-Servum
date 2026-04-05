@@ -47,7 +47,9 @@ export function AboutSection() {
         <p className="text-sm text-muted-foreground leading-relaxed">
           Open Source Game Server Manager powered by SteamCMD. Manage DayZ, 7
           Days to Die, ARK, and other dedicated game servers from a modern
-          Commander — locally or across multiple machines.
+          Commander — as a desktop app, in Docker, or directly in your browser.
+          Connect to one or more Agents across your network with built-in TLS
+          encryption and JWT authentication.
         </p>
       </div>
 

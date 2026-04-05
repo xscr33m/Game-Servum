@@ -4,9 +4,25 @@ import {
   FaCode,
   FaClock,
   FaShieldHalved,
+  FaFolderOpen,
+  FaPlug,
+  FaFloppyDisk,
+  FaLock,
 } from "react-icons/fa6";
 
 const tips = [
+  {
+    icon: FaLock,
+    title: "HTTPS by Default",
+    description:
+      "The Agent enables TLS encryption automatically on first start. The Electron desktop app accepts self-signed certificates without extra steps. In a browser, open the Agent's health endpoint once to accept the certificate.",
+  },
+  {
+    icon: FaShieldHalved,
+    title: "Authentication & Credentials",
+    description:
+      "Game-Servum uses API-Key + JWT authentication by default. The Agent generates initial credentials on first start — check CREDENTIALS.txt in the data directory. Delete the file for safety after saving your credentials.",
+  },
   {
     icon: FaCode,
     title: "Template Variables",
@@ -32,10 +48,22 @@ const tips = [
       "The Config tab provides a game-specific configuration editor with descriptions for each setting. Changes are written directly to the server's config files — no manual file editing needed.",
   },
   {
-    icon: FaShieldHalved,
-    title: "Authentication & Security",
+    icon: FaFolderOpen,
+    title: "File Explorer",
     description:
-      "Game-Servum uses API-Key + JWT authentication by default. The Agent generates initial credentials on first start — check CREDENTIALS.txt in the data directory. Delete the file for safety after connecting the Commander.",
+      "Use the Files tab to browse, edit, upload, and download server files directly from the Commander. The code editor supports syntax highlighting and the sidebar is resizable.",
+  },
+  {
+    icon: FaFloppyDisk,
+    title: "Server Backups",
+    description:
+      "Create ZIP backups of your game servers from the Backups tab. Choose between full backups or selective paths. Restore from any previous backup to roll back changes.",
+  },
+  {
+    icon: FaPlug,
+    title: "Multi-Agent Management",
+    description:
+      "Connect to multiple Agents from a single Commander. Use the Agent selector in the header to switch between different machines. Each connection has its own credentials and status.",
   },
 ];
 
