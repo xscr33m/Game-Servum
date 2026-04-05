@@ -83,7 +83,8 @@ export function ConnectAgentStep({ onNext }: ConnectAgentStepProps) {
         !normalizedUrl.startsWith("http://") &&
         !normalizedUrl.startsWith("https://")
       ) {
-        normalizedUrl = `http://${normalizedUrl}`;
+        // Agent defaults to HTTPS (self-signed cert) — try HTTPS first
+        normalizedUrl = `https://${normalizedUrl}`;
       }
 
       const conn = await addConnection(
