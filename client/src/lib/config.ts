@@ -45,9 +45,17 @@ const STORAGE_KEY = "game-servum-connections";
  * Synchronous load — reads cached data for initial render.
  * In Electron: returns pre-loaded data from ElectronCredentialStore cache.
  * In browser:  reads from localStorage directly.
+ * In web mode:  returns empty (connections loaded async after mount).
  */
 export function loadConnections(): BackendConnection[] {
   console.log("[config] loadConnections() called");
+
+  // Web mode: connections are stored server-side, loaded asynchronously
+  if (import.meta.env.VITE_WEB_MODE === "true") {
+    console.log("[config] Web mode — returning empty (async load after mount)");
+    return [];
+  }
+
   const store = getCredentialStore();
 
   // Electron store has pre-loaded cache from init() — use it directly

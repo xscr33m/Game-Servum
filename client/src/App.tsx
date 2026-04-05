@@ -14,11 +14,13 @@ import { TooltipProvider } from "./components/ui/tooltip";
 import { UpdateNotification } from "./components/UpdateNotification";
 import { BackendProvider } from "./contexts/BackendContext";
 import { UnsavedChangesProvider } from "./contexts/UnsavedChangesContext";
+import { LoginGuard } from "./components/auth/LoginGuard";
 
 // Electron loads from file:// — BrowserRouter doesn't work, use HashRouter instead
 const isElectron =
   typeof window !== "undefined" &&
   !!(window as unknown as Record<string, unknown>).electronAPI;
+const isWebMode = import.meta.env.VITE_WEB_MODE === "true";
 
 function RootLayout() {
   return (
@@ -44,7 +46,7 @@ const router = createRouter([
 ]);
 
 function App() {
-  return (
+  const content = (
     <BackendProvider>
       <TooltipProvider delayDuration={300}>
         <RouterProvider router={router} />
@@ -53,6 +55,13 @@ function App() {
       {isElectron && <UpdateNotification />}
     </BackendProvider>
   );
+
+  // In web mode, wrap the entire app in a login guard
+  if (isWebMode) {
+    return <LoginGuard>{content}</LoginGuard>;
+  }
+
+  return content;
 }
 
 export default App;

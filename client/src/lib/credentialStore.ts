@@ -217,13 +217,73 @@ export class ElectronCredentialStore implements CredentialStore {
   }
 }
 
+// ── Web Credential Store (Commander Web Server backend) ──
+// Used when running as a Docker-hosted web app (VITE_WEB_MODE=true).
+// Persists connections server-side via /commander/api/connections.
+
+class WebCredentialStore implements CredentialStore {
+  async load(): Promise<BackendConnection[]> {
+    try {
+      const res = await fetch("/commander/api/connections", {
+        credentials: "same-origin",
+      });
+      if (res.status === 401) {
+        // Session expired — trigger re-login
+        window.dispatchEvent(new CustomEvent("commander:session-expired"));
+        return [];
+      }
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? cleanStaleStatuses(data) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  async save(connections: BackendConnection[]): Promise<void> {
+    const toSave = stripSensitiveSessionData(connections);
+    try {
+      const res = await fetch("/commander/api/connections", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify(toSave),
+      });
+      if (res.status === 401) {
+        window.dispatchEvent(new CustomEvent("commander:session-expired"));
+      }
+    } catch {
+      console.error("[WebCredentialStore] Save failed");
+    }
+  }
+
+  async clear(): Promise<void> {
+    try {
+      await fetch("/commander/api/connections", {
+        method: "DELETE",
+        credentials: "same-origin",
+      });
+    } catch {
+      console.error("[WebCredentialStore] Clear failed");
+    }
+  }
+}
+
 // ── Singleton ──
+
+const isWebMode = import.meta.env.VITE_WEB_MODE === "true";
 
 let storeInstance: CredentialStore | null = null;
 
 export function getCredentialStore(): CredentialStore {
   if (!storeInstance) {
-    storeInstance = new LocalCredentialStore();
+    if (isWebMode) {
+      storeInstance = new WebCredentialStore();
+    } else if (getElectronCredentials()) {
+      storeInstance = new ElectronCredentialStore();
+    } else {
+      storeInstance = new LocalCredentialStore();
+    }
   }
   return storeInstance;
 }

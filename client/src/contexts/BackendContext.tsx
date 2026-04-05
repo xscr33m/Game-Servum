@@ -9,6 +9,7 @@ import {
 import type { WSMessage } from "@/types";
 import type { BackendConnection } from "@/types";
 import { loadConnections, saveConnectionsAsync } from "@/lib/config";
+import { getCredentialStore } from "@/lib/credentialStore";
 import { createApiClient, type ApiClient } from "@/lib/api";
 import {
   WebSocketManager,
@@ -115,21 +116,48 @@ export function BackendProvider({ children }: { children: ReactNode }) {
     return JSON.stringify(persistable);
   }, [connections]);
 
+  // In web mode, don't persist until the initial server load has completed.
+  // Otherwise the mount fires with connections=[] and wipes the server data.
+  const webLoadComplete = useRef(import.meta.env.VITE_WEB_MODE !== "true");
+
   useEffect(() => {
+    if (!webLoadComplete.current) return;
     saveConnectionsAsync(connections);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [persistableSnapshot]);
+
+  // ── Web mode: load connections from server asynchronously ──
+  const hasRunWebLoad = useRef(false);
+  useEffect(() => {
+    if (import.meta.env.VITE_WEB_MODE !== "true") return;
+    if (hasRunWebLoad.current) return;
+    hasRunWebLoad.current = true;
+
+    const store = getCredentialStore();
+    store.load().then((loaded) => {
+      webLoadComplete.current = true;
+      if (loaded.length > 0) {
+        logger.info(
+          `[Init] Web mode: loaded ${loaded.length} stored connection(s)`,
+        );
+        setConnections(loaded);
+        // Set active ID from stored data
+        const active = loaded.find((c) => c.isActive);
+        if (active) setActiveId(active.id);
+        // Trigger eager connect for loaded connections
+        eagerConnect(loaded);
+      }
+    });
+  }, []);
 
   // ── Eagerly connect all stored agents on mount ──
   // When the app loads (or is refreshed), immediately try to authenticate
   // all stored connections so they don't stay "disconnected" until the
   // auto-reconnect polling kicks in for the active one.
   const hasRunInitialConnect = useRef(false);
-  useEffect(() => {
-    if (hasRunInitialConnect.current) return;
-    hasRunInitialConnect.current = true;
 
-    const stored = connections.filter((c) => c.apiKey && c.password && c.url);
+  function eagerConnect(conns: BackendConnection[]) {
+    const stored = conns.filter((c) => c.apiKey && c.password && c.url);
     if (stored.length === 0) return;
 
     logger.info(`[Init] Connecting to ${stored.length} stored agent(s)...`);
@@ -142,14 +170,11 @@ export function BackendProvider({ children }: { children: ReactNode }) {
         logger.info(
           `[Init] Agent "${conn.name}" has persisted "${conn.status}" status — waiting for agent to come back...`,
         );
-        // Status is already set from persisted data — auto-reconnect effect
-        // will pick it up since wsConnected starts as false
         continue;
       }
 
       (async () => {
         try {
-          // Quick health check
           const controller = new AbortController();
           const timeout = setTimeout(() => controller.abort(), 3000);
           const healthRes = await fetch(`${conn.url}/api/v1/health`, {
@@ -165,7 +190,6 @@ export function BackendProvider({ children }: { children: ReactNode }) {
             return;
           }
 
-          // Authenticate
           const authRes = await fetch(`${conn.url}/api/v1/auth/connect`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -185,7 +209,6 @@ export function BackendProvider({ children }: { children: ReactNode }) {
 
           const { token, expiresIn } = await authRes.json();
 
-          // Fetch agent info
           let agentInfo = conn.agentInfo;
           try {
             const infoRes = await fetch(`${conn.url}/api/v1/info`);
@@ -212,7 +235,6 @@ export function BackendProvider({ children }: { children: ReactNode }) {
             ),
           );
         } catch {
-          // Agent unreachable — will be picked up by auto-reconnect
           setConnections((prev) =>
             prev.map((c) =>
               c.id === conn.id ? { ...c, status: "reconnecting" } : c,
@@ -221,6 +243,16 @@ export function BackendProvider({ children }: { children: ReactNode }) {
         }
       })();
     }
+  }
+
+  useEffect(() => {
+    if (hasRunInitialConnect.current) return;
+    hasRunInitialConnect.current = true;
+
+    // In web mode, eager connect is triggered by the web load effect
+    if (import.meta.env.VITE_WEB_MODE === "true") return;
+
+    eagerConnect(connections);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
