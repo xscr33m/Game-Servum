@@ -35,17 +35,13 @@ export function ConnectAgentStep({ onNext }: ConnectAgentStepProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Warn when the URL targets a non-localhost address without HTTPS
+  // Warn only when user explicitly typed http:// to a non-localhost address.
+  // No protocol = defaults to https:// on submit, so no warning needed.
   const showInsecureWarning = useMemo(() => {
     const trimmed = url.trim();
-    if (!trimmed) return false;
-    if (trimmed.startsWith("https://")) return false;
-    // Extract hostname from the raw input
-    const withProto = trimmed.startsWith("http://")
-      ? trimmed
-      : `http://${trimmed}`;
+    if (!trimmed.startsWith("http://")) return false;
     try {
-      const hostname = new URL(withProto).hostname;
+      const hostname = new URL(trimmed).hostname;
       if (
         hostname === "localhost" ||
         hostname === "127.0.0.1" ||
@@ -77,16 +73,16 @@ export function ConnectAgentStep({ onNext }: ConnectAgentStepProps) {
 
     setLoading(true);
 
-    try {
-      let normalizedUrl = url.trim();
-      if (
-        !normalizedUrl.startsWith("http://") &&
-        !normalizedUrl.startsWith("https://")
-      ) {
-        // Agent defaults to HTTPS (self-signed cert) — try HTTPS first
-        normalizedUrl = `https://${normalizedUrl}`;
-      }
+    let normalizedUrl = url.trim();
+    if (
+      !normalizedUrl.startsWith("http://") &&
+      !normalizedUrl.startsWith("https://")
+    ) {
+      // Agent defaults to HTTPS (self-signed cert) — try HTTPS first
+      normalizedUrl = `https://${normalizedUrl}`;
+    }
 
+    try {
       const conn = await addConnection(
         normalizedUrl,
         apiKey.trim(),
@@ -95,7 +91,23 @@ export function ConnectAgentStep({ onNext }: ConnectAgentStepProps) {
       );
       await onNext(conn.url, conn.sessionToken!);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Connection failed";
+      let msg = err instanceof Error ? err.message : "Connection failed";
+
+      // Detect self-signed certificate rejection in browser
+      if (
+        msg.includes("Failed to fetch") ||
+        msg.includes("NetworkError") ||
+        msg.includes("CERT")
+      ) {
+        const agentUrl = normalizedUrl;
+        if (agentUrl.startsWith("https://")) {
+          msg =
+            `Cannot connect — your browser does not trust the agent's certificate. ` +
+            `Open ${agentUrl}/api/v1/health in a new tab, accept the certificate warning, ` +
+            `then try connecting again.`;
+        }
+      }
+
       setError(msg);
     } finally {
       setLoading(false);
@@ -150,9 +162,9 @@ export function ConnectAgentStep({ onNext }: ConnectAgentStepProps) {
               <Alert className="bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400">
                 <FaLockOpen className="h-4 w-4" />
                 <AlertDescription>
-                  This connection will not be encrypted. Credentials will be
-                  transmitted in plain text. Use <strong>https://</strong> or
-                  connect via localhost / VPN for secure access.
+                  Using <strong>http://</strong> — credentials will be
+                  transmitted in plain text. Remove the <strong>http://</strong>{" "}
+                  prefix to connect via HTTPS (default), or use a VPN.
                 </AlertDescription>
               </Alert>
             )}
