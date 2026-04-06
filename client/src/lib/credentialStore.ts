@@ -287,3 +287,15 @@ export function getCredentialStore(): CredentialStore {
   }
   return storeInstance;
 }
+
+/**
+ * Initialize the credential store (must be called before React renders).
+ * In Electron: pre-loads connections from disk into the synchronous cache.
+ * In other modes: no-op.
+ */
+export async function initCredentialStore(): Promise<void> {
+  const store = getCredentialStore();
+  if (store instanceof ElectronCredentialStore) {
+    await store.init();
+  }
+}

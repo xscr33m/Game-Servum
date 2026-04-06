@@ -588,7 +588,7 @@ function createFetchApi(
     }
 
     if (response.status === 401) {
-      throw new ApiAuthError("Invalid or expired session token");
+      await handleUnauthorized(response);
     }
 
     if (!response.ok) {
@@ -607,6 +607,28 @@ class ApiAuthError extends Error {
     super(message);
     this.name = "ApiAuthError";
   }
+}
+
+/**
+ * Handle a 401 response — distinguishes Commander session expiry from Agent token expiry
+ * in web/Docker mode, and throws the appropriate ApiAuthError.
+ */
+async function handleUnauthorized(response: Response): Promise<never> {
+  if (import.meta.env.VITE_WEB_MODE === "true") {
+    try {
+      const body = await response.clone().json();
+      const msg = body?.message || "";
+      if (msg === "Not authenticated" || msg === "Invalid or expired session") {
+        window.dispatchEvent(new CustomEvent("commander:session-expired"));
+        throw new ApiAuthError(
+          "Commander session expired — please log in again",
+        );
+      }
+    } catch (e) {
+      if (e instanceof ApiAuthError) throw e;
+    }
+  }
+  throw new ApiAuthError("Invalid or expired session token");
 }
 
 function createSteamcmdApi(fetchApi: FetchApiFn): SteamcmdApiClient {
@@ -1221,7 +1243,7 @@ function createServersApi(
       }
 
       if (response.status === 401) {
-        throw new ApiAuthError("Invalid or expired session token");
+        await handleUnauthorized(response);
       }
 
       if (!response.ok) {
@@ -1277,7 +1299,7 @@ function createServersApi(
       }
 
       if (response.status === 401) {
-        throw new ApiAuthError("Invalid or expired session token");
+        await handleUnauthorized(response);
       }
 
       if (!response.ok) {
@@ -1349,7 +1371,7 @@ function createServersApi(
       }
 
       if (response.status === 401) {
-        throw new ApiAuthError("Invalid or expired session token");
+        await handleUnauthorized(response);
       }
 
       if (!response.ok) {

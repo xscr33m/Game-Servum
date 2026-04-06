@@ -155,11 +155,11 @@ export function BackendProvider({ children }: { children: ReactNode }) {
           `[Init] Web mode: loaded ${loaded.length} stored connection(s)`,
         );
         setConnections(loaded);
-        // Set active ID from stored data
+        // Don't set activeId yet — defer until eagerConnect obtains a token.
+        // Setting it now would trigger the API client/WS recreation effect
+        // before auth completes, causing 401 errors.
         const active = loaded.find((c) => c.isActive);
-        if (active) setActiveId(active.id);
-        // Trigger eager connect for loaded connections
-        eagerConnect(loaded);
+        eagerConnect(loaded, active?.id);
       }
     });
   }, []);
@@ -170,9 +170,14 @@ export function BackendProvider({ children }: { children: ReactNode }) {
   // auto-reconnect polling kicks in for the active one.
   const hasRunInitialConnect = useRef(false);
 
-  function eagerConnect(conns: BackendConnection[]) {
+  function eagerConnect(conns: BackendConnection[], deferredActiveId?: string) {
     const stored = conns.filter((c) => c.apiKey && c.password && c.url);
-    if (stored.length === 0) return;
+    if (stored.length === 0) {
+      // No connectable agents — still activate the stored active connection
+      // so the UI shows the right panel (even if it can't connect yet).
+      if (deferredActiveId) setActiveId(deferredActiveId);
+      return;
+    }
 
     logger.info(`[Init] Connecting to ${stored.length} stored agent(s)...`);
 
@@ -184,6 +189,7 @@ export function BackendProvider({ children }: { children: ReactNode }) {
         logger.info(
           `[Init] Agent "${conn.name}" has persisted "${conn.status}" status — waiting for agent to come back...`,
         );
+        if (deferredActiveId === conn.id) setActiveId(deferredActiveId);
         continue;
       }
 
@@ -201,6 +207,7 @@ export function BackendProvider({ children }: { children: ReactNode }) {
                 c.id === conn.id ? { ...c, status: "reconnecting" } : c,
               ),
             );
+            if (deferredActiveId === conn.id) setActiveId(deferredActiveId);
             return;
           }
 
@@ -221,6 +228,7 @@ export function BackendProvider({ children }: { children: ReactNode }) {
                 c.id === conn.id ? { ...c, status: "error" } : c,
               ),
             );
+            if (deferredActiveId === conn.id) setActiveId(deferredActiveId);
             return;
           }
 
@@ -251,12 +259,18 @@ export function BackendProvider({ children }: { children: ReactNode }) {
                 : c,
             ),
           );
+          // Activate the deferred connection now that it has a valid token.
+          // This ensures the API client/WS are created only after auth succeeds.
+          if (deferredActiveId === conn.id) {
+            setActiveId(deferredActiveId);
+          }
         } catch {
           setConnections((prev) =>
             prev.map((c) =>
               c.id === conn.id ? { ...c, status: "reconnecting" } : c,
             ),
           );
+          if (deferredActiveId === conn.id) setActiveId(deferredActiveId);
         }
       })();
     }
