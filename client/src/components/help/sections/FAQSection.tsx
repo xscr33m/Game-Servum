@@ -79,6 +79,11 @@ const faqs = [
       'Yes (Windows only). Each server\'s Settings tab has a Firewall Rules section that shows which rules exist and which are missing. Click "Create Rules" to automatically add the required Windows Firewall rules (ports, protocols) for that game server.',
   },
   {
+    question: "What are mod list files and how do I use them?",
+    answer:
+      "DayZ uses mod_list.txt and server_mod_list.txt files to define which mods are loaded. In the Mods tab, you can export these files from your current mod setup (for sharing or backup) and import them to automatically install missing mods. This makes it easy to replicate a mod configuration on a new server.",
+  },
+  {
     question: "Is Game-Servum free?",
     answer:
       "Yes, Game-Servum is completely free and open source under the GPL-3.0 license. You can use and modify it freely.",

@@ -216,6 +216,35 @@ export function GuidesSection() {
               </li>
             </ul>
           </div>
+          <div className="space-y-2">
+            <h4 className="font-semibold text-foreground">
+              Mod list files (DayZ)
+            </h4>
+            <p>
+              DayZ servers use{" "}
+              <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                mod_list.txt
+              </code>{" "}
+              and{" "}
+              <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                server_mod_list.txt
+              </code>{" "}
+              files to define which mods are loaded. Game-Servum can export and
+              import these files for easy sharing and migration.
+            </p>
+            <ul className="list-disc list-inside space-y-1 ml-1">
+              <li>
+                <strong>Export</strong> — Generates mod list files from your
+                current mod configuration. Use this to share your mod setup with
+                others or as a backup.
+              </li>
+              <li>
+                <strong>Import</strong> — Reads a mod list file and
+                automatically installs any mods that are not yet on the server.
+                Great for setting up a server with the same mods as another.
+              </li>
+            </ul>
+          </div>
           <div className="rounded-md bg-muted/50 p-3 text-xs">
             <strong>Note:</strong> 7 Days to Die does not support Steam Workshop
             mods. Mods for 7DTD must be installed manually via the File
