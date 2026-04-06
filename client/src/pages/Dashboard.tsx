@@ -72,7 +72,7 @@ export function Dashboard() {
 
   const { api, subscribe, isConnected, activeConnection, connections } =
     useBackend();
-  const { contentClass } = useContentWidth();
+  const { contentClass, mode: contentWidthMode } = useContentWidth();
 
   // Restore from navigation cache if the active agent matches
   useEffect(() => {
@@ -725,7 +725,13 @@ export function Dashboard() {
                     </div>
                   )
                 ) : (
-                  <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                  <div
+                    className={
+                      contentWidthMode === "full"
+                        ? "grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
+                        : "grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3"
+                    }
+                  >
                     {servers.map((server) => (
                       <ServerCard
                         key={server.id}
