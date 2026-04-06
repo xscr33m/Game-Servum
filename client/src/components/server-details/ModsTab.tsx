@@ -89,7 +89,7 @@ export function ModsTab({ server }: ModsTabProps) {
   const [persistentError, setPersistentError] = useState<string | null>(null);
   const [actionInProgress, setActionInProgress] = useState<number | null>(null);
   const [modToRemove, setModToRemove] = useState<ServerMod | null>(null);
-  const [addModOpen, setAddModOpen] = useState(true);
+  const [addModOpen, setAddModOpen] = useState(false);
   const [modListOpen, setModListOpen] = useState(false);
   const [includeDisabled, setIncludeDisabled] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -343,7 +343,7 @@ export function ModsTab({ server }: ModsTabProps) {
         )}
 
         {/* ─── Add Workshop Mod (collapsible) ─── */}
-        <div className="pb-6 border-b">
+        <div className="py-6 border-b">
           <button
             type="button"
             className="flex items-center justify-between w-full text-left cursor-pointer group"
@@ -401,7 +401,7 @@ export function ModsTab({ server }: ModsTabProps) {
                     type="checkbox"
                     checked={isServerMod}
                     onChange={(e) => setIsServerMod(e.target.checked)}
-                    className="rounded border-input hover:cursor-pointer"
+                    className="rounded border-input accent-success hover:cursor-pointer"
                   />
                   <FaServer className="h-3.5 w-3.5 text-muted-foreground" />
                   Server-side only mod
@@ -423,6 +423,90 @@ export function ModsTab({ server }: ModsTabProps) {
             </div>
           )}
         </div>
+
+        {/* ─── Mod List Files ─── */}
+        {capabilities?.modListFiles && (
+          <div className="py-6 border-b">
+            <button
+              type="button"
+              className="flex items-center justify-between w-full text-left cursor-pointer group"
+              onClick={() => setModListOpen((o) => !o)}
+            >
+              <div className="flex items-center gap-2">
+                <FaFileLines className="h-4 w-4 text-ring" />
+                <span className="text-sm font-medium text-muted-foreground">
+                  Mod List Files
+                </span>
+              </div>
+              {modListOpen ? (
+                <FaChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+              ) : (
+                <FaChevronRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+              )}
+            </button>
+
+            {modListOpen && (
+              <div className="mt-4 space-y-4">
+                <p className="text-xs text-muted-foreground">
+                  Export your installed mods as{" "}
+                  <code className="text-foreground/80">mod_list.txt</code> and{" "}
+                  <code className="text-foreground/80">
+                    server_mod_list.txt
+                  </code>{" "}
+                  files in the server root directory, or import mods from
+                  existing mod list files. Previous mod list files are
+                  automatically backed up before exporting.
+                </p>
+
+                <div className="flex flex-col sm:flex-row gap-3">
+                  {/* Export */}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={handleExportModList}
+                      disabled={exporting || mods.length === 0}
+                      variant="outline"
+                      className="w-full sm:w-auto"
+                    >
+                      {exporting ? (
+                        <FaSpinner className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                      ) : (
+                        <FaFileExport className="h-3.5 w-3.5 mr-1.5" />
+                      )}
+                      Export Mod List
+                    </Button>
+                  </div>
+
+                  {/* Import */}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={handleImportModList}
+                      disabled={importing}
+                      variant="outline"
+                      className="w-full sm:w-auto"
+                    >
+                      {importing ? (
+                        <FaSpinner className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                      ) : (
+                        <FaFileImport className="h-3.5 w-3.5 mr-1.5" />
+                      )}
+                      Import from Mod List
+                    </Button>
+                  </div>
+                </div>
+
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={includeDisabled}
+                    onChange={(e) => setIncludeDisabled(e.target.checked)}
+                    className="rounded border-input accent-success hover:cursor-pointer"
+                  />
+                  Include disabled mods in export
+                </label>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ─── Installed Mods ─── */}
         <div className="py-6 border-b">
@@ -591,90 +675,6 @@ export function ModsTab({ server }: ModsTabProps) {
             </div>
           )}
         </div>
-
-        {/* ─── Mod List Files ─── */}
-        {capabilities?.modListFiles && (
-          <div className="py-6 border-b">
-            <button
-              type="button"
-              className="flex items-center justify-between w-full text-left cursor-pointer group"
-              onClick={() => setModListOpen((o) => !o)}
-            >
-              <div className="flex items-center gap-2">
-                <FaFileLines className="h-4 w-4 text-ring" />
-                <span className="text-sm font-medium text-muted-foreground">
-                  Mod List Files
-                </span>
-              </div>
-              {modListOpen ? (
-                <FaChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
-              ) : (
-                <FaChevronRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
-              )}
-            </button>
-
-            {modListOpen && (
-              <div className="mt-4 space-y-4">
-                <p className="text-xs text-muted-foreground">
-                  Export your installed mods as{" "}
-                  <code className="text-foreground/80">mod_list.txt</code> and{" "}
-                  <code className="text-foreground/80">
-                    server_mod_list.txt
-                  </code>{" "}
-                  files in the server root directory, or import mods from
-                  existing mod list files. Previous mod list files are
-                  automatically backed up before exporting.
-                </p>
-
-                <div className="flex flex-col sm:flex-row gap-3">
-                  {/* Export */}
-                  <div className="flex items-center gap-2">
-                    <Button
-                      onClick={handleExportModList}
-                      disabled={exporting || mods.length === 0}
-                      variant="outline"
-                      className="w-full sm:w-auto"
-                    >
-                      {exporting ? (
-                        <FaSpinner className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                      ) : (
-                        <FaFileExport className="h-3.5 w-3.5 mr-1.5" />
-                      )}
-                      Export Mod List
-                    </Button>
-                  </div>
-
-                  {/* Import */}
-                  <div className="flex items-center gap-2">
-                    <Button
-                      onClick={handleImportModList}
-                      disabled={importing}
-                      variant="outline"
-                      className="w-full sm:w-auto"
-                    >
-                      {importing ? (
-                        <FaSpinner className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                      ) : (
-                        <FaFileImport className="h-3.5 w-3.5 mr-1.5" />
-                      )}
-                      Import from Mod List
-                    </Button>
-                  </div>
-                </div>
-
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={includeDisabled}
-                    onChange={(e) => setIncludeDisabled(e.target.checked)}
-                    className="rounded border-input hover:cursor-pointer"
-                  />
-                  Include disabled mods in export
-                </label>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* ─── Launch Parameters ─── */}
         <div className="py-6">
