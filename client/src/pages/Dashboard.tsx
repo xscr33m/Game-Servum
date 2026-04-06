@@ -354,22 +354,25 @@ export function Dashboard() {
     );
   }
 
+  // Render wizard as a full page — no dashboard behind it
+  if (showWizard) {
+    return (
+      <OnboardingWizard
+        onClose={() => {
+          setShowWizard(false);
+          setSearchParams({}, { replace: true });
+        }}
+        onComplete={() => {
+          setShowWizard(false);
+          setSearchParams({}, { replace: true });
+          loadData();
+        }}
+      />
+    );
+  }
+
   return (
     <div className="h-screen flex flex-col bg-background">
-      {/* Wizard overlay */}
-      {showWizard && (
-        <OnboardingWizard
-          onClose={() => {
-            setShowWizard(false);
-            setSearchParams({}, { replace: true });
-          }}
-          onComplete={() => {
-            setShowWizard(false);
-            setSearchParams({}, { replace: true });
-            loadData();
-          }}
-        />
-      )}
       {/* Header */}
       <AppHeader
         left={

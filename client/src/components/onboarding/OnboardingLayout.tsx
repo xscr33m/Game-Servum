@@ -19,7 +19,7 @@ interface OnboardingLayoutProps {
 
 /**
  * Shared layout wrapper for all onboarding steps.
- * Renders branding, a horizontal stepper, and the step content in a centered card.
+ * Renders branding, a horizontal stepper, and the step content as a full page.
  */
 export function OnboardingLayout({
   steps,
@@ -31,9 +31,9 @@ export function OnboardingLayout({
   const currentIndex = steps.findIndex((s) => s.key === currentStepKey);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-background flex flex-col items-center px-4 py-8 sm:py-12 overflow-y-auto">
       {/* Branding */}
-      <div className="flex items-center gap-3 mb-8">
+      <div className="flex items-center gap-3 mb-6 sm:mb-8 shrink-0">
         <img
           src={publicAsset("commander-icon.png")}
           alt="Game-Servum"
@@ -45,15 +45,15 @@ export function OnboardingLayout({
       </div>
 
       {/* Step Indicator */}
-      <div className="flex items-center gap-2 mb-8">
+      <div className="flex items-center gap-1.5 sm:gap-2 mb-6 sm:mb-8 shrink-0 flex-wrap justify-center">
         {steps.map((step, i) => {
           const isActive = step.key === currentStepKey;
           const isCompleted = i < currentIndex;
           return (
-            <div key={step.key} className="flex items-center gap-2">
+            <div key={step.key} className="flex items-center gap-1.5 sm:gap-2">
               {i > 0 && (
                 <div
-                  className={`w-12 h-px ${isCompleted || isActive ? "bg-ring" : "bg-border"}`}
+                  className={`w-6 sm:w-12 h-px ${isCompleted || isActive ? "bg-ring" : "bg-border"}`}
                 />
               )}
               <div className="flex items-center gap-1.5">
@@ -94,7 +94,7 @@ export function OnboardingLayout({
       {onClose && (
         <button
           onClick={onClose}
-          className="mt-4 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          className="mt-6 text-sm text-muted-foreground hover:text-foreground transition-colors shrink-0"
         >
           Close and continue later
         </button>

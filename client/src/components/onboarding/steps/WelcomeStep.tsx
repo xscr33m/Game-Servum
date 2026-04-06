@@ -42,7 +42,7 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Brief feature highlights */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="flex items-start gap-2.5 rounded-lg border border-border/50 p-3">
             <FaGamepad className="h-4 w-4 text-ring mt-0.5 shrink-0" />
             <div>
