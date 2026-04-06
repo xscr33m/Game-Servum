@@ -112,6 +112,10 @@ npm run build:commander    # Commander-only installer (~90 MB)
 | **Agent**     | Windows Service (Node.js + WinSW) | Headless game server host, managed remotely |
 | **Commander** | Electron app (Commander UI only)  | Remote management (connects to Agents)      |
 
+> **⚠️ Windows SmartScreen Warning:** The installers are currently **not code-signed**, so Windows may show a SmartScreen warning ("Windows protected your PC"). This is expected and not a security issue — it simply means the installer doesn't have a commercial code-signing certificate. To proceed, click **"More info"** → **"Run anyway"**. Code signing certificates cost several hundred euros per year, which is not feasible for a free open-source project at this time. You can always verify the integrity of the download by checking the release on [GitHub](https://github.com/xscr33m/Game-Servum/releases).
+
+> **🔒 Official download sources:** Only download Game-Servum from the [GitHub Releases](https://github.com/xscr33m/Game-Servum/releases) page or via [game-servum.com](https://game-servum.com). Do not download from third-party websites — they may distribute modified or malicious versions.
+
 ### Linux Commander
 
 **Build on Linux:** AppImages must be built on a Linux system (CachyOS, Ubuntu, etc.)
