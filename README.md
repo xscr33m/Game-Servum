@@ -129,6 +129,47 @@ The Linux build contains **only the Commander** for remote management of Windows
 - FUSE/libfuse2 for AppImage execution
 - Network access to Windows Agents
 
+### Docker (Commander Web)
+
+Run the Commander as a Docker container — no Electron or desktop environment required. Connects to remote Windows Agents over the network.
+
+**Option A: Use pre-built image from ghcr.io**
+
+```bash
+docker pull ghcr.io/xscr33m/game-servum-commander:latest
+```
+
+Or in `docker-compose.yml`:
+
+```yaml
+services:
+  commander:
+    image: ghcr.io/xscr33m/game-servum-commander:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - commander-data:/app/data
+    restart: unless-stopped
+```
+
+**Option B: Build locally from source**
+
+```bash
+docker compose up -d
+```
+
+This uses the `Dockerfile` and `docker-compose.yml` included in the repository to build and run the Commander locally.
+
+**Environment variables:**
+
+| Variable             | Default  | Description                                     |
+| -------------------- | -------- | ----------------------------------------------- |
+| `PORT`               | `8080`   | Server port                                     |
+| `COMMANDER_PASSWORD` | _(none)_ | Pre-set admin password (if omitted, set via UI) |
+| `TRUST_PROXY`        | `false`  | Set to `true` behind a TLS reverse proxy        |
+
+See [`docker-compose.yml`](docker-compose.yml) for the full configuration including optional Caddy reverse proxy for HTTPS.
+
 ## Auto-Update System
 
 Both Agent and Commander include automatic updates via GitHub Releases:

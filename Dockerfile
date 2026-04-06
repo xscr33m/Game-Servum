@@ -28,6 +28,11 @@ RUN cd dist/web && npm install --omit=dev
 # ── Runtime stage ──
 FROM node:20-alpine
 
+# OCI labels for ghcr.io package metadata and automatic repository linking
+LABEL org.opencontainers.image.source="https://github.com/xscr33m/Game-Servum"
+LABEL org.opencontainers.image.description="Game-Servum Commander — Web-based game server management dashboard"
+LABEL org.opencontainers.image.licenses="GPL-3.0"
+
 WORKDIR /app
 
 # Copy built output
