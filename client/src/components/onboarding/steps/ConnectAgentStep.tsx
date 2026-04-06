@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +10,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { FaSpinner, FaCircleExclamation, FaPlug } from "react-icons/fa6";
+import {
+  FaSpinner,
+  FaCircleExclamation,
+  FaLockOpen,
+  FaPlug,
+} from "react-icons/fa6";
 import { useBackend } from "@/hooks/useBackend";
 
 interface ConnectAgentStepProps {
@@ -28,7 +33,26 @@ export function ConnectAgentStep({ onNext }: ConnectAgentStepProps) {
   const [apiKey, setApiKey] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<React.ReactNode | null>(null);
+
+  // Warn only when user explicitly typed http:// to a non-localhost address.
+  // No protocol = defaults to https:// on submit, so no warning needed.
+  const showInsecureWarning = useMemo(() => {
+    const trimmed = url.trim();
+    if (!trimmed.startsWith("http://")) return false;
+    try {
+      const hostname = new URL(trimmed).hostname;
+      if (
+        hostname === "localhost" ||
+        hostname === "127.0.0.1" ||
+        hostname === "::1"
+      )
+        return false;
+      return true;
+    } catch {
+      return false;
+    }
+  }, [url]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -49,15 +73,16 @@ export function ConnectAgentStep({ onNext }: ConnectAgentStepProps) {
 
     setLoading(true);
 
-    try {
-      let normalizedUrl = url.trim();
-      if (
-        !normalizedUrl.startsWith("http://") &&
-        !normalizedUrl.startsWith("https://")
-      ) {
-        normalizedUrl = `http://${normalizedUrl}`;
-      }
+    let normalizedUrl = url.trim();
+    if (
+      !normalizedUrl.startsWith("http://") &&
+      !normalizedUrl.startsWith("https://")
+    ) {
+      // Agent defaults to HTTPS (self-signed cert) — try HTTPS first
+      normalizedUrl = `https://${normalizedUrl}`;
+    }
 
+    try {
       const conn = await addConnection(
         normalizedUrl,
         apiKey.trim(),
@@ -67,7 +92,34 @@ export function ConnectAgentStep({ onNext }: ConnectAgentStepProps) {
       await onNext(conn.url, conn.sessionToken!);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Connection failed";
-      setError(msg);
+
+      // Detect self-signed certificate rejection in browser
+      if (
+        (msg.includes("Failed to fetch") ||
+          msg.includes("NetworkError") ||
+          msg.includes("CERT")) &&
+        normalizedUrl.startsWith("https://")
+      ) {
+        const healthUrl = `${normalizedUrl}/api/v1/health`;
+        setError(
+          <>
+            Cannot connect — your browser does not trust the agent's
+            certificate. Open{" "}
+            <a
+              href={healthUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline font-medium hover:opacity-80"
+            >
+              {healthUrl}
+            </a>{" "}
+            in a new tab, accept the certificate warning, then try connecting
+            again.
+          </>,
+        );
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -117,6 +169,16 @@ export function ConnectAgentStep({ onNext }: ConnectAgentStepProps) {
               disabled={loading}
               required
             />
+            {showInsecureWarning && (
+              <Alert className="bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400">
+                <FaLockOpen className="h-4 w-4" />
+                <AlertDescription>
+                  Using <strong>http://</strong> — credentials will be
+                  transmitted in plain text. Remove the <strong>http://</strong>{" "}
+                  prefix to connect via HTTPS (default), or use a VPN.
+                </AlertDescription>
+              </Alert>
+            )}
           </div>
 
           <div className="space-y-2">

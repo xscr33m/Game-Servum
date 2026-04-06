@@ -39,6 +39,12 @@ const frontendCredits: Credit[] = [
     license: "MIT",
   },
   {
+    name: "CodeMirror",
+    description: "Code editor component",
+    url: "https://codemirror.net",
+    license: "MIT",
+  },
+  {
     name: "Electron",
     description: "Desktop application framework",
     url: "https://www.electronjs.org",
@@ -48,6 +54,18 @@ const frontendCredits: Credit[] = [
     name: "React Icons",
     description: "Icon library (Font Awesome, etc.)",
     url: "https://react-icons.github.io/react-icons",
+    license: "MIT",
+  },
+  {
+    name: "React Router",
+    description: "Client-side routing",
+    url: "https://reactrouter.com",
+    license: "MIT",
+  },
+  {
+    name: "Sonner",
+    description: "Toast notification library",
+    url: "https://sonner.emilkowal.ski",
     license: "MIT",
   },
 ];
@@ -69,6 +87,24 @@ const backendCredits: Credit[] = [
     name: "sql.js",
     description: "SQLite compiled to WebAssembly",
     url: "https://sql.js.org",
+    license: "MIT",
+  },
+  {
+    name: "selfsigned",
+    description: "Self-signed TLS certificate generation",
+    url: "https://github.com/jfromaniello/selfsigned",
+    license: "MIT",
+  },
+  {
+    name: "jsonwebtoken",
+    description: "JWT authentication tokens",
+    url: "https://github.com/auth0/node-jsonwebtoken",
+    license: "MIT",
+  },
+  {
+    name: "Archiver",
+    description: "ZIP archive creation for backups",
+    url: "https://github.com/archiverjs/node-archiver",
     license: "MIT",
   },
   {

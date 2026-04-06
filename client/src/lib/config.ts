@@ -3,11 +3,18 @@
 
 import type { BackendConnection } from "@/types";
 
+const isWebMode = import.meta.env.VITE_WEB_MODE === "true";
+
 /**
  * Returns the API base URL for a given connection.
+ * In web mode, requests are proxied through the Commander Server
+ * to avoid cross-origin / Private Network Access / self-signed cert issues.
  */
 export function getApiBase(connection?: BackendConnection | null): string {
   if (connection?.url) {
+    if (isWebMode) {
+      return `/commander/agent-proxy/${connection.id}${new URL(connection.url).pathname.replace(/\/$/, "")}/api/v1`;
+    }
     return `${connection.url}/api/v1`;
   }
   // Development fallback (if no connection specified)
@@ -16,9 +23,17 @@ export function getApiBase(connection?: BackendConnection | null): string {
 
 /**
  * Returns the WebSocket URL for a given connection.
+ * In web mode, WebSocket is proxied through the Commander Server.
  */
 export function getWsUrl(connection?: BackendConnection | null): string {
   if (connection?.url) {
+    if (isWebMode) {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const tokenParam = connection.sessionToken
+        ? `?token=${connection.sessionToken}`
+        : "";
+      return `${protocol}//${window.location.host}/commander/agent-ws/${connection.id}${tokenParam}`;
+    }
     const url = new URL(connection.url);
     const protocol = url.protocol === "https:" ? "wss:" : "ws:";
     const tokenParam = connection.sessionToken
@@ -45,9 +60,17 @@ const STORAGE_KEY = "game-servum-connections";
  * Synchronous load — reads cached data for initial render.
  * In Electron: returns pre-loaded data from ElectronCredentialStore cache.
  * In browser:  reads from localStorage directly.
+ * In web mode:  returns empty (connections loaded async after mount).
  */
 export function loadConnections(): BackendConnection[] {
   console.log("[config] loadConnections() called");
+
+  // Web mode: connections are stored server-side, loaded asynchronously
+  if (import.meta.env.VITE_WEB_MODE === "true") {
+    console.log("[config] Web mode — returning empty (async load after mount)");
+    return [];
+  }
+
   const store = getCredentialStore();
 
   // Electron store has pre-loaded cache from init() — use it directly

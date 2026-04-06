@@ -1,4 +1,5 @@
 import { createServer } from "http";
+import { createServer as createHttpsServer } from "https";
 import { WebSocketServer, type WebSocket } from "ws";
 import type { IncomingMessage } from "http";
 import { app } from "./app.js";
@@ -8,6 +9,7 @@ import {
   ensureInitialCredentials,
   verifySessionToken,
 } from "./services/auth.js";
+import { initializeTls, loadTlsCredentials } from "./services/tlsManager.js";
 import { spawn } from "child_process";
 import {
   restoreServerStates,
@@ -54,6 +56,9 @@ async function main() {
   // Generate initial credentials on first start (if auth enabled)
   ensureInitialCredentials();
 
+  // Initialize TLS (auto-generates self-signed cert on first start)
+  await initializeTls();
+
   // Restore server states (check if any servers were running before restart)
   restoreServerStates();
 
@@ -70,8 +75,15 @@ async function main() {
   // Start periodic agent update checks (every 4 hours)
   startAutoUpdateCheck(4);
 
-  // Create HTTP server
-  const server = createServer(app);
+  // Create HTTP or HTTPS server based on TLS configuration
+  const tlsCreds = loadTlsCredentials();
+  const isHttps = tlsCreds !== null;
+  const server = isHttps
+    ? createHttpsServer({ cert: tlsCreds.cert, key: tlsCreds.key }, app)
+    : createServer(app);
+
+  const protocol = isHttps ? "https" : "http";
+  const wsProtocol = isHttps ? "wss" : "ws";
 
   // Create WebSocket server with auth verification
   const wss = new WebSocketServer({
@@ -139,10 +151,12 @@ async function main() {
 
   // Start server
   server.listen(config.port, config.host, () => {
-    logger.info("[Server] HTTP and WebSocket server listening", {
-      http: `http://${config.host}:${config.port}`,
-      websocket: `ws://${config.host}:${config.port}/ws`,
+    logger.info("[Server] Server listening", {
+      protocol,
+      url: `${protocol}://${config.host}:${config.port}`,
+      websocket: `${wsProtocol}://${config.host}:${config.port}/ws`,
       auth: config.authEnabled ? "enabled" : "disabled",
+      tls: isHttps ? "enabled" : "disabled",
     });
 
     // Also print to console for visibility
@@ -150,9 +164,10 @@ async function main() {
 ╔════════════════════════════════════════
 ║         Game-Servum Agent              
 ╠════════════════════════════════════════
-║  HTTP:      http://${config.host}:${config.port}      
-║  WebSocket: ws://${config.host}:${config.port}/ws     
+║  ${protocol.toUpperCase().padEnd(6)}    ${protocol}://${config.host}:${config.port}      
+║  WebSocket: ${wsProtocol}://${config.host}:${config.port}/ws     
 ║  Auth:      ${config.authEnabled ? "enabled " : "disabled"}
+║  TLS:       ${isHttps ? "enabled " : "disabled"}
 ╚════════════════════════════════════════
     `);
   });
@@ -203,7 +218,7 @@ async function main() {
     // Close HTTP server (releases the port)
     await new Promise<void>((resolve) => {
       server.close(() => {
-        logger.info("[Shutdown] HTTP server closed");
+        logger.info("[Shutdown] Server closed");
         resolve();
       });
     });

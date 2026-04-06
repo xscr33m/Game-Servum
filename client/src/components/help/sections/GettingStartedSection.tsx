@@ -18,7 +18,7 @@ const steps = [
     icon: FaPlug,
     title: "2. Connect the Commander",
     description:
-      "Open the Commander (this app) and connect it to your Agent by entering the Agent's IP address, port, API-key and password. You can connect to multiple Agents from a single Commander.",
+      "Open the Commander (this app) and connect it to your Agent by entering the Agent's address, API-key, and password. The Agent uses HTTPS with a self-signed certificate by default — the Commander will guide you through accepting it. You can connect to multiple Agents from a single Commander.",
   },
   {
     icon: FaSteam,
@@ -71,7 +71,7 @@ export function GettingStartedSection() {
             <p className="text-xs text-muted-foreground leading-relaxed">
               Runs on Windows as a background service. Manages game servers,
               SteamCMD, mods, and all server-side operations. One Agent per
-              Windows machine.
+              Windows machine. Communicates over HTTPS (TLS enabled by default).
             </p>
           </div>
           <div className="rounded-md border bg-muted/30 p-4">
@@ -80,9 +80,23 @@ export function GettingStartedSection() {
               <span className="text-sm font-semibold">Commander</span>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Runs on Windows, Linux, or macOS — either as a desktop app or in
-              the browser. Connects to one or more Agents over the network.
+              The control panel that connects to your Agents. Available in three
+              modes:
             </p>
+            <ul className="text-xs text-muted-foreground leading-relaxed mt-2 space-y-1 ml-3 list-disc">
+              <li>
+                <strong>Desktop App</strong> — Electron app for Windows, Linux,
+                macOS
+              </li>
+              <li>
+                <strong>Docker / Web</strong> — Self-hosted in Docker,
+                accessible from any browser
+              </li>
+              <li>
+                <strong>Browser</strong> — Direct browser access during
+                development
+              </li>
+            </ul>
           </div>
         </div>
       </div>

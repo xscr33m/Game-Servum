@@ -8,10 +8,11 @@
   "workspaces": [
     "packages/shared",
     "client",
-    "server"
+    "server",
+    "commander-server"
   ],
   "scripts": {
-    "clean": "npm cache clean --force && node -e \"const fs = require('fs'); const path = require('path'); const dirs = ['packages/shared/dist', 'server/dist', 'client/dist', 'dist']; dirs.forEach(d => { const p = path.join(process.cwd(), d); if (fs.existsSync(p)) fs.rmSync(p, {recursive: true}); });\"",
+    "clean": "npm cache clean --force && node -e \"const fs = require('fs'); const path = require('path'); const dirs = ['packages/shared/dist', 'server/dist', 'client/dist', 'commander-server/dist', 'dist']; dirs.forEach(d => { const p = path.join(process.cwd(), d); if (fs.existsSync(p)) fs.rmSync(p, {recursive: true}); });\"",
     "dev": "concurrently \"npm run dev -w @game-servum/shared\" \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "npm run dev --workspace=server",
     "dev:client": "npm run dev --workspace=client",
@@ -19,6 +20,7 @@
     "build:agent": "npm run build -w @game-servum/shared && npm run build --workspace=server && node scripts/build-agent-windows.mjs",
     "build:commander": "npm run build -w @game-servum/shared && npm run build --workspace=client && node scripts/build-commander-windows.mjs",
     "build:linux": "npm run build -w @game-servum/shared && npm run build --workspace=client && node scripts/build-commander-linux.mjs",
+    "build:web": "npm run build -w @game-servum/shared && node scripts/build-commander-web.mjs",
     "version:bump": "node scripts/bump-version.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"

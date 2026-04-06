@@ -55,6 +55,14 @@ export default defineConfig([
     },
   },
 
+  // Commander Server: Node.js globals
+  {
+    files: ["commander-server/src/**/*.ts"],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
+
   // Shared: Node.js globals
   {
     files: ["packages/shared/src/**/*.ts"],

@@ -217,9 +217,447 @@ export function GuidesSection() {
             </ul>
           </div>
           <div className="rounded-md bg-muted/50 p-3 text-xs">
+            <strong>Note:</strong> 7 Days to Die does not support Steam Workshop
+            mods. Mods for 7DTD must be installed manually via the File
+            Explorer.
+          </div>
+          <div className="rounded-md bg-muted/50 p-3 text-xs">
             <strong>Tip:</strong> The server must be stopped to add or remove
             mods. Mod load parameters are generated automatically and appended
             to the server's launch parameters.
+          </div>
+        </Guide>
+
+        {/* Guide: Security & TLS */}
+        <Guide title="Security & HTTPS (TLS)">
+          <p>
+            Game-Servum encrypts all communication between the Commander and
+            Agent using HTTPS (TLS). This is enabled automatically on first
+            start.
+          </p>
+          <div className="space-y-2">
+            <h4 className="font-semibold text-foreground">How TLS works</h4>
+            <p>
+              When the Agent starts for the first time, it generates a
+              self-signed TLS certificate (RSA 2048-bit, valid for 10 years).
+              All API and WebSocket connections are then served over HTTPS and
+              WSS (secure WebSocket).
+            </p>
+          </div>
+          <div className="space-y-2">
+            <h4 className="font-semibold text-foreground">
+              Accepting self-signed certificates
+            </h4>
+            <ul className="list-disc list-inside space-y-1 ml-1">
+              <li>
+                <strong>Electron (Desktop App)</strong> — Self-signed
+                certificates are accepted automatically. No extra steps needed.
+              </li>
+              <li>
+                <strong>Browser / Docker</strong> — Your browser will show a
+                security warning because the certificate is not issued by a
+                trusted authority. Open the Agent&apos;s health endpoint (e.g.{" "}
+                <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                  https://your-agent-ip:3001/api/v1/health
+                </code>
+                ) directly in your browser and accept the certificate. After
+                that, the Commander will connect normally.
+              </li>
+            </ul>
+          </div>
+          <div className="space-y-2">
+            <h4 className="font-semibold text-foreground">
+              Using your own certificate
+            </h4>
+            <p>
+              You can replace the self-signed certificate with your own via the
+              TLS API endpoint. Provide paths to your certificate and private
+              key files on the Agent machine.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <h4 className="font-semibold text-foreground">Disabling TLS</h4>
+            <p>
+              If you need plain HTTP (e.g. behind a reverse proxy that handles
+              TLS), set the environment variable{" "}
+              <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                TLS_ENABLED=false
+              </code>{" "}
+              on the Agent and restart it.
+            </p>
+          </div>
+          <div className="rounded-md bg-muted/50 p-3 text-xs">
+            <strong>Tip:</strong> The Commander shows a warning banner when
+            connected to an Agent over unencrypted HTTP.
+          </div>
+        </Guide>
+
+        {/* Guide: Authentication */}
+        <Guide title="Authentication & Credentials">
+          <p>
+            Game-Servum uses API-Key + Password authentication secured with JWT
+            session tokens. Authentication is enabled by default.
+          </p>
+          <div className="space-y-2">
+            <h4 className="font-semibold text-foreground">
+              First-time credentials
+            </h4>
+            <ol className="list-decimal list-inside space-y-1 ml-1">
+              <li>
+                When the Agent starts for the first time, it generates an API
+                key and password automatically.
+              </li>
+              <li>
+                These credentials are written to a{" "}
+                <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                  CREDENTIALS.txt
+                </code>{" "}
+                file in the Agent&apos;s data directory (default:{" "}
+                <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                  C:\ProgramData\Game-Servum\
+                </code>
+                ).
+              </li>
+              <li>
+                Enter the API key and password when connecting the Commander to
+                the Agent for the first time.
+              </li>
+            </ol>
+          </div>
+          <div className="space-y-2">
+            <h4 className="font-semibold text-foreground">How it works</h4>
+            <p>
+              Your API key is hashed (SHA-256) and your password is stored using
+              PBKDF2 (100k iterations, SHA-512) — credentials are never stored
+              in plain text. The Commander receives a JWT session token (valid
+              for 24 hours) after authentication and refreshes it automatically.
+            </p>
+          </div>
+          <div className="rounded-md bg-muted/50 p-3 text-xs">
+            <strong>Security tip:</strong> Delete the CREDENTIALS.txt file after
+            you&apos;ve saved the credentials in a secure place.
+          </div>
+        </Guide>
+
+        {/* Guide: Docker Deployment */}
+        <Guide title="Docker / Web Deployment">
+          <p>
+            The Commander can be hosted as a web application using Docker,
+            making it accessible from any browser without installing a desktop
+            app.
+          </p>
+          <div className="space-y-2">
+            <h4 className="font-semibold text-foreground">Quick setup</h4>
+            <ol className="list-decimal list-inside space-y-1 ml-1">
+              <li>
+                Clone the repository and navigate to the project directory.
+              </li>
+              <li>
+                Copy{" "}
+                <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                  .env.example
+                </code>{" "}
+                to{" "}
+                <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                  .env
+                </code>{" "}
+                and configure the Commander Server settings (port, data path).
+              </li>
+              <li>
+                Run{" "}
+                <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                  docker compose up -d
+                </code>{" "}
+                to start the container.
+              </li>
+              <li>
+                Open{" "}
+                <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                  http://your-host:8080
+                </code>{" "}
+                in your browser to access the Commander.
+              </li>
+              <li>
+                On first launch, you&apos;ll be prompted to set an admin
+                password.
+              </li>
+            </ol>
+          </div>
+          <div className="space-y-2">
+            <h4 className="font-semibold text-foreground">How it works</h4>
+            <p>
+              The Docker container runs a lightweight Node.js server that serves
+              the Commander frontend and handles session authentication. Agent
+              connections and credentials are stored in a persistent data
+              volume.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <h4 className="font-semibold text-foreground">TLS with Docker</h4>
+            <p>
+              The Commander Server itself runs on HTTP inside the container. For
+              HTTPS, use a reverse proxy (e.g. Traefik, nginx, Caddy) in front
+              of the container. Set{" "}
+              <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                TRUST_PROXY=true
+              </code>{" "}
+              in the environment if you use a reverse proxy.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <h4 className="font-semibold text-foreground">
+              Network requirements
+            </h4>
+            <p>
+              In Docker/web mode, all communication between the browser and the
+              Agent is routed through the Commander Server. The browser never
+              connects to the Agent directly — the Commander Server acts as a
+              proxy.
+            </p>
+            <p>
+              This means the Commander Server (Docker container) must be able to
+              reach the Agent over the network. If the Commander runs in the
+              cloud (e.g. on a VPS) and the Agent is on a private/local network
+              (e.g. 192.168.x.x), the connection will fail because private IP
+              addresses are not reachable from the internet.
+            </p>
+            <div className="rounded-md bg-muted/50 p-3 space-y-2">
+              <p className="font-medium text-foreground text-xs">
+                How to make your Agent reachable:
+              </p>
+              <ul className="list-disc list-inside space-y-1 ml-1 text-xs">
+                <li>
+                  <strong>Public IP / Dedicated Server:</strong> If the Agent
+                  runs on a server with a public IP (e.g. Hetzner, OVH), no
+                  extra setup is needed.
+                </li>
+                <li>
+                  <strong>Port Forwarding + DynDNS:</strong> Forward port 3001
+                  on your router to the Agent machine and use a DynDNS service
+                  (e.g. ipv64.net, DuckDNS) for a stable domain name.
+                </li>
+                <li>
+                  <strong>VPN / Tunnel:</strong> Use Tailscale, WireGuard, or
+                  Cloudflare Tunnel to connect your VPS to your local network.
+                </li>
+              </ul>
+            </div>
+            <p>
+              The Electron desktop app does not have this limitation — it runs
+              on your local machine and can connect to Agents on the same
+              network directly.
+            </p>
+          </div>
+          <div className="rounded-md bg-muted/50 p-3 text-xs">
+            <strong>Note:</strong> The Docker deployment runs only the Commander
+            (frontend). The Agent still needs to run on a Windows machine where
+            your game servers are hosted.
+          </div>
+        </Guide>
+
+        {/* Guide: Server Backups */}
+        <Guide title="Server Backups">
+          <p>
+            Game-Servum can create full or partial backups of your game servers
+            as ZIP archives.
+          </p>
+          <div className="space-y-2">
+            <h4 className="font-semibold text-foreground">Creating a backup</h4>
+            <ol className="list-decimal list-inside space-y-1 ml-1">
+              <li>
+                Open the server detail page and go to the{" "}
+                <strong>Backups</strong> tab.
+              </li>
+              <li>
+                Click <strong>Create Backup</strong>. You can optionally provide
+                a name and tags.
+              </li>
+              <li>
+                The server will be stopped automatically during the backup
+                process and restarted afterward (if it was running).
+              </li>
+              <li>Progress is shown in real-time via WebSocket updates.</li>
+            </ol>
+          </div>
+          <div className="space-y-2">
+            <h4 className="font-semibold text-foreground">
+              Customizing backups
+            </h4>
+            <ul className="list-disc list-inside space-y-1 ml-1">
+              <li>
+                <strong>Full backup</strong> — Archives the entire server
+                directory.
+              </li>
+              <li>
+                <strong>Selective backup</strong> — Choose specific paths to
+                include or exclude. Each game provides sensible defaults.
+              </li>
+              <li>
+                <strong>Restore</strong> — Select a backup from the history to
+                restore the server to that state.
+              </li>
+            </ul>
+          </div>
+          <div className="rounded-md bg-muted/50 p-3 text-xs">
+            <strong>Tip:</strong> Backups are stored in the Agent&apos;s data
+            directory. Keep an eye on disk space for large game servers.
+          </div>
+        </Guide>
+
+        {/* Guide: File Explorer */}
+        <Guide title="File Explorer">
+          <p>
+            The Files tab in the server detail page gives you direct access to
+            browse and edit your server&apos;s files — no need for remote
+            desktop or FTP.
+          </p>
+          <div className="space-y-2">
+            <h4 className="font-semibold text-foreground">Features</h4>
+            <ul className="list-disc list-inside space-y-1 ml-1">
+              <li>
+                <strong>Browse</strong> — Navigate the server&apos;s directory
+                tree. Folders are lazy-loaded for performance.
+              </li>
+              <li>
+                <strong>Edit</strong> — Open text files in a syntax-highlighted
+                code editor (CodeMirror). Changes are saved directly to the
+                server.
+              </li>
+              <li>
+                <strong>Upload</strong> — Drag and drop files to upload them.
+                Conflicts (existing files) are detected and you&apos;re asked to
+                confirm overwriting.
+              </li>
+              <li>
+                <strong>Download / Delete</strong> — Download individual files
+                or delete them from the server.
+              </li>
+            </ul>
+          </div>
+          <div className="space-y-2">
+            <h4 className="font-semibold text-foreground">
+              Browsable directories
+            </h4>
+            <p>
+              For security, each game only exposes specific directories. For
+              example, DayZ shows{" "}
+              <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                profiles/
+              </code>{" "}
+              and{" "}
+              <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                mpmissions/
+              </code>
+              , while ARK shows its{" "}
+              <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                Saved/Config/
+              </code>{" "}
+              directory.
+            </p>
+          </div>
+          <div className="rounded-md bg-muted/50 p-3 text-xs">
+            <strong>Tip:</strong> The sidebar is resizable — drag the divider to
+            adjust the directory tree width. On mobile, the sidebar collapses
+            into a toggleable panel.
+          </div>
+        </Guide>
+
+        {/* Guide: Firewall Rules */}
+        <Guide title="Firewall Rules (Windows)">
+          <p>
+            Game-Servum can automatically create Windows Firewall rules for your
+            game servers so players can connect without manual rule
+            configuration.
+          </p>
+          <div className="space-y-2">
+            <h4 className="font-semibold text-foreground">How it works</h4>
+            <ol className="list-decimal list-inside space-y-1 ml-1">
+              <li>
+                Open the server detail page and go to the{" "}
+                <strong>Settings</strong> tab.
+              </li>
+              <li>
+                Find the <strong>Firewall Rules</strong> section. It shows which
+                rules are currently active and which are missing.
+              </li>
+              <li>
+                Click <strong>Create Rules</strong> to add the missing rules.
+                Rules are named{" "}
+                <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                  Game-Servum - ServerName (Description)
+                </code>
+                .
+              </li>
+            </ol>
+          </div>
+          <div className="space-y-2">
+            <h4 className="font-semibold text-foreground">
+              Game-specific rules
+            </h4>
+            <p>
+              Each game defines its own required ports and protocols. For
+              example, DayZ needs UDP rules for game ports, RCON, and Steam
+              Query. ARK needs UDP for game/peer, TCP for RCON, and UDP for
+              Steam Query.
+            </p>
+          </div>
+          <div className="rounded-md bg-muted/50 p-3 text-xs">
+            <strong>Note:</strong> Firewall management is only available on
+            Windows. The Agent uses{" "}
+            <code className="text-xs bg-muted px-1 py-0.5 rounded">
+              netsh advfirewall
+            </code>{" "}
+            commands and requires appropriate permissions.
+          </div>
+        </Guide>
+
+        {/* Guide: Scheduled Restarts & Messages */}
+        <Guide title="Scheduled Restarts & RCON Messages">
+          <p>
+            Keep your servers healthy with automatic restarts and keep players
+            informed with recurring RCON broadcast messages.
+          </p>
+          <div className="space-y-2">
+            <h4 className="font-semibold text-foreground">
+              Scheduled restarts
+            </h4>
+            <ol className="list-decimal list-inside space-y-1 ml-1">
+              <li>
+                Open the server&apos;s <strong>Settings</strong> tab and find
+                the <strong>Scheduled Restart</strong> section.
+              </li>
+              <li>Set a restart interval (e.g. every 4 hours).</li>
+              <li>
+                Configure pre-restart warning times (e.g. 30 min, 15 min, 5 min,
+                1 min before restart).
+              </li>
+              <li>
+                Customize the warning message template. Use{" "}
+                <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                  {"{MINUTES}"}
+                </code>{" "}
+                as a placeholder for the remaining minutes.
+              </li>
+            </ol>
+          </div>
+          <div className="space-y-2">
+            <h4 className="font-semibold text-foreground">
+              Recurring RCON messages
+            </h4>
+            <p>
+              Broadcast custom messages to players at configurable intervals.
+              For example, server rules, Discord links, or upcoming events. Each
+              message can have its own interval and supports template variables
+              like{" "}
+              <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                {"{SERVER_NAME}"}
+              </code>
+              ,{" "}
+              <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                {"{PLAYER_COUNT}"}
+              </code>
+              , and custom per-server variables.
+            </p>
           </div>
         </Guide>
       </div>

@@ -13,6 +13,13 @@ import {
   downloadUpdate,
   installUpdate,
 } from "../services/agentUpdater.js";
+import {
+  getTlsConfig,
+  enableTlsSelfSigned,
+  enableTlsCustomCert,
+  disableTls,
+  validateCertFiles,
+} from "../services/tlsManager.js";
 import { APP_VERSION } from "@game-servum/shared";
 import { logger } from "../core/logger.js";
 import { setRestartFlag } from "../core/shutdown.js";
@@ -234,6 +241,100 @@ router.post("/updater/install", async (_req, res) => {
     const message =
       err instanceof Error ? err.message : "Failed to trigger update install";
     res.status(500).json({ success: false, message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  TLS / HTTPS MANAGEMENT
+// ══════════════════════════════════════════════════════════════════
+
+// GET /api/system/tls — returns current TLS configuration
+router.get("/tls", (_req, res) => {
+  try {
+    const tlsConfig = getTlsConfig();
+    res.json(tlsConfig);
+  } catch (err) {
+    logger.error("[System] Failed to get TLS config:", err);
+    res.status(500).json({ error: "Failed to get TLS configuration" });
+  }
+});
+
+// PUT /api/system/tls — update TLS configuration
+router.put("/tls", async (req, res) => {
+  try {
+    const { enabled, certPath, keyPath } = req.body;
+
+    if (typeof enabled !== "boolean") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid request: enabled must be a boolean",
+      });
+    }
+
+    if (!enabled) {
+      disableTls();
+      return res.json({
+        success: true,
+        message: "TLS disabled. Restart the agent for changes to take effect.",
+        restartRequired: true,
+      });
+    }
+
+    // Enable with custom cert or self-signed
+    if (certPath && keyPath) {
+      if (typeof certPath !== "string" || typeof keyPath !== "string") {
+        return res.status(400).json({
+          success: false,
+          message: "certPath and keyPath must be strings",
+        });
+      }
+      const config = enableTlsCustomCert(certPath, keyPath);
+      return res.json({
+        success: true,
+        message:
+          "TLS enabled with custom certificate. Restart the agent for changes to take effect.",
+        restartRequired: true,
+        config,
+      });
+    }
+
+    // Self-signed
+    const config = await enableTlsSelfSigned();
+    res.json({
+      success: true,
+      message:
+        "TLS enabled with self-signed certificate. Restart the agent for changes to take effect.",
+      restartRequired: true,
+      config,
+    });
+  } catch (err) {
+    logger.error("[System] Failed to update TLS config:", err);
+    const message =
+      err instanceof Error ? err.message : "Failed to update TLS configuration";
+    res.status(500).json({ success: false, message });
+  }
+});
+
+// POST /api/system/tls/validate — validate certificate files without applying
+router.post("/tls/validate", (req, res) => {
+  try {
+    const { certPath, keyPath } = req.body;
+
+    if (!certPath || !keyPath) {
+      return res.status(400).json({
+        success: false,
+        message: "Both certPath and keyPath are required",
+      });
+    }
+
+    const result = validateCertFiles(certPath, keyPath);
+    res.json({
+      valid: result.valid,
+      error: result.error,
+    });
+  } catch (err) {
+    logger.error("[System] Failed to validate TLS cert:", err);
+    res.status(500).json({ error: "Failed to validate certificate files" });
   }
 });
 

@@ -11,6 +11,7 @@ import {
   FaCircleQuestion,
   FaDownload,
   FaTriangleExclamation,
+  FaArrowRightFromBracket,
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +38,8 @@ import { useContentWidth } from "@/hooks/useContentWidth";
 import { cn } from "@/lib/utils";
 import type { GameServer, SteamCMDStatus } from "@/types";
 import { APP_VERSION } from "@game-servum/shared";
+
+const isWebMode = import.meta.env.VITE_WEB_MODE === "true";
 
 // ── Module-level navigation cache ──
 // Survives SPA navigation (Dashboard → ServerDetail → Dashboard) but not
@@ -69,7 +72,7 @@ export function Dashboard() {
 
   const { api, subscribe, isConnected, activeConnection, connections } =
     useBackend();
-  const { contentClass } = useContentWidth();
+  const { contentClass, mode: contentWidthMode } = useContentWidth();
 
   // Restore from navigation cache if the active agent matches
   useEffect(() => {
@@ -466,6 +469,27 @@ export function Dashboard() {
                 <FaGear className="h-4 w-4" />
               </Button>
             </Tip>
+            {isWebMode && (
+              <Tip content="Logout">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={async () => {
+                    try {
+                      await fetch("/commander/api/auth/logout", {
+                        method: "POST",
+                        credentials: "same-origin",
+                      });
+                    } catch {
+                      // Ignore
+                    }
+                    window.location.reload();
+                  }}
+                >
+                  <FaArrowRightFromBracket className="h-4 w-4" />
+                </Button>
+              </Tip>
+            )}
           </>
         }
         mobileMenuTitle="Commander"
@@ -554,6 +578,26 @@ export function Dashboard() {
                 <FaGear className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm">Settings</span>
               </button>
+              {isWebMode && (
+                <button
+                  data-mobile-nav
+                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left text-destructive"
+                  onClick={async () => {
+                    try {
+                      await fetch("/commander/api/auth/logout", {
+                        method: "POST",
+                        credentials: "same-origin",
+                      });
+                    } catch {
+                      // Ignore
+                    }
+                    window.location.reload();
+                  }}
+                >
+                  <FaArrowRightFromBracket className="h-4 w-4" />
+                  <span className="text-sm">Logout</span>
+                </button>
+              )}
             </div>
 
             {/* Version info */}
@@ -681,7 +725,13 @@ export function Dashboard() {
                     </div>
                   )
                 ) : (
-                  <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                  <div
+                    className={
+                      contentWidthMode === "full"
+                        ? "grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
+                        : "grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3"
+                    }
+                  >
                     {servers.map((server) => (
                       <ServerCard
                         key={server.id}

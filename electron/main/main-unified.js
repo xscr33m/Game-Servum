@@ -22,6 +22,7 @@ const {
   nativeImage,
   shell,
   ipcMain,
+  session,
 } = require("electron");
 const path = require("path");
 const fs = require("fs");
@@ -746,6 +747,28 @@ app.on("second-instance", () => {
 
 app.whenReady().then(async () => {
   ensureDirectories();
+
+  // Accept self-signed certificates from Game-Servum Agents.
+  // Without this, fetch() and WebSocket in the renderer would reject
+  // connections to agents running with auto-generated self-signed certs.
+  session.defaultSession.setCertificateVerifyProc((request, callback) => {
+    // Allow self-signed certs (error = "net::ERR_CERT_AUTHORITY_INVALID")
+    // The Agent auto-generates a self-signed cert on first start.
+    if (
+      request.errorCode !== 0 &&
+      request.verificationResult === "net::ERR_CERT_AUTHORITY_INVALID"
+    ) {
+      logger.debug("[TLS] Accepting self-signed certificate", {
+        hostname: request.hostname,
+      });
+      callback(0); // 0 = accept
+      return;
+    }
+
+    // For all other cases, use Chromium's default verification
+    callback(-3); // -3 = use default Chromium result
+  });
+
   commander_start();
 
   app.on("activate", () => {

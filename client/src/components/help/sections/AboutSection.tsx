@@ -4,6 +4,7 @@ import {
   FaHeart,
   FaArrowUpRightFromSquare,
   FaScaleBalanced,
+  FaDiscord,
 } from "react-icons/fa6";
 import { publicAsset } from "@/lib/assets";
 import { APP_VERSION } from "@game-servum/shared";
@@ -47,7 +48,9 @@ export function AboutSection() {
         <p className="text-sm text-muted-foreground leading-relaxed">
           Open Source Game Server Manager powered by SteamCMD. Manage DayZ, 7
           Days to Die, ARK, and other dedicated game servers from a modern
-          Commander — locally or across multiple machines.
+          Commander — as a desktop app, in Docker, or directly in your browser.
+          Connect to one or more Agents across your network with built-in TLS
+          encryption and JWT authentication.
         </p>
       </div>
 
@@ -63,6 +66,21 @@ export function AboutSection() {
           <div className="flex-1">
             <p className="font-medium text-foreground">GitHub</p>
             <p className="text-xs">Source code, issues, and releases</p>
+          </div>
+          <FaArrowUpRightFromSquare className="h-3 w-3 opacity-40" />
+        </a>
+        <a
+          href="https://discord.gg/5CrDj8ba6C"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-3 px-4 py-3 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+        >
+          <FaDiscord className="h-4 w-4 shrink-0" />
+          <div className="flex-1">
+            <p className="font-medium text-foreground">Discord</p>
+            <p className="text-xs">
+              Community server for support and discussion
+            </p>
           </div>
           <FaArrowUpRightFromSquare className="h-3 w-3 opacity-40" />
         </a>
