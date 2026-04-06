@@ -42,6 +42,7 @@ export function getConfig(): AppConfig {
     steamcmdPath: resolvePath(process.env.STEAMCMD_PATH, "steamcmd"),
     serversPath: resolvePath(process.env.SERVERS_PATH, "servers"),
     dataPath: resolvePath(process.env.DATA_PATH, "data"),
+    backupsPath: resolvePath(process.env.BACKUPS_PATH, "backups"),
     logsPath: resolvePath(process.env.LOGS_PATH, "logs"),
 
     // Netzwerk

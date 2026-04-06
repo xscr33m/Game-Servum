@@ -461,7 +461,7 @@ function applyRetention(serverId: number): void {
 // ── Helpers ────────────────────────────────────────────────────────
 
 function getBackupStoragePath(serverId: number): string {
-  return path.join(getConfig().dataPath, "backups", String(serverId));
+  return path.join(getConfig().backupsPath, String(serverId));
 }
 
 function getStoredFilePath(backupId: string): string | null {

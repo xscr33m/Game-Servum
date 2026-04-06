@@ -42,6 +42,7 @@ export interface AppConfig {
   steamcmdPath: string;
   serversPath: string;
   dataPath: string;
+  backupsPath: string;
   logsPath: string;
   port: number;
   host: string;

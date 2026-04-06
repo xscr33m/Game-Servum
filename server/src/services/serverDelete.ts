@@ -67,7 +67,7 @@ export async function performBackgroundDeletion(
       logger.info(`[Delete] Removed server files: ${installPath}`);
     }
 
-    // Note: Backup files in data/backups/{serverId}/ are intentionally
+    // Note: Backup files in backups/{serverId}/ are intentionally
     // preserved unless the user explicitly chose to delete them.
     if (deleteBackups) {
       cleanupServerBackups(id);
