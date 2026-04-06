@@ -41,6 +41,8 @@ export interface GameCapabilities {
   directMessage: boolean;
   /** How priority queue management works: 'file' = text file, false = not supported */
   priorityQueue: "file" | false;
+  /** Whether the game supports mod list file export/import (e.g. DayZ mod_list.txt) */
+  modListFiles?: boolean;
 }
 
 // Database models

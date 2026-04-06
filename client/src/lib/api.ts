@@ -318,6 +318,22 @@ interface ServersApiClient {
     serverId: number,
     modIds: number[],
   ) => Promise<{ success: boolean; message: string }>;
+  exportModList: (
+    serverId: number,
+    includeDisabled?: boolean,
+  ) => Promise<{
+    success: boolean;
+    message: string;
+    modListWritten: boolean;
+    serverModListWritten: boolean;
+    backups: { modList: string | null; serverModList: string | null };
+  }>;
+  importModList: (serverId: number) => Promise<{
+    success: boolean;
+    message: string;
+    imported: number;
+    skipped: number;
+  }>;
   getPlayers: (serverId: number) => Promise<{
     online: Array<{
       steamId: string;
@@ -1044,6 +1060,26 @@ function createServersApi(
           body: JSON.stringify({ modIds }),
         },
       ),
+    exportModList: (serverId: number, includeDisabled?: boolean) =>
+      fetchApi<{
+        success: boolean;
+        message: string;
+        modListWritten: boolean;
+        serverModListWritten: boolean;
+        backups: { modList: string | null; serverModList: string | null };
+      }>(`/servers/${serverId}/mods/export-modlist`, {
+        method: "POST",
+        body: JSON.stringify({ includeDisabled: includeDisabled ?? false }),
+      }),
+    importModList: (serverId: number) =>
+      fetchApi<{
+        success: boolean;
+        message: string;
+        imported: number;
+        skipped: number;
+      }>(`/servers/${serverId}/mods/import-modlist`, {
+        method: "POST",
+      }),
     getPlayers: (serverId: number) =>
       fetchApi<{
         online: Array<{

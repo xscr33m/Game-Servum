@@ -460,7 +460,7 @@ function applyRetention(serverId: number): void {
 
 // ── Helpers ────────────────────────────────────────────────────────
 
-function getBackupStoragePath(serverId: number): string {
+export function getBackupStoragePath(serverId: number): string {
   return path.join(getConfig().backupsPath, String(serverId));
 }
 

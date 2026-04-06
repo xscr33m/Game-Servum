@@ -124,6 +124,22 @@ export interface ModCopyResult {
   modName?: string;
 }
 
+// ── Mod List Export/Import Result ────────────────────────────────────
+
+export interface ExportModListResult {
+  modListWritten: boolean;
+  serverModListWritten: boolean;
+  backups: {
+    modList: string | null;
+    serverModList: string | null;
+  };
+}
+
+export interface ParseModListResult {
+  clientMods: string[];
+  serverMods: string[];
+}
+
 // ── GameAdapter Interface ────────────────────────────────────────────
 
 export interface GameAdapter {
@@ -381,6 +397,25 @@ export interface GameAdapter {
    * Called after the first successful server start once configs exist.
    */
   writeInitialSettingsToConfig?(server: GameServer): void;
+
+  // ── Mod List Files ─────────────────────────────────────────────
+
+  /**
+   * Export installed mods as mod list files (e.g. DayZ mod_list.txt / server_mod_list.txt).
+   * Backs up existing files with a timestamp into backupDir before overwriting.
+   */
+  exportModList?(
+    mods: ServerMod[],
+    serverInstallPath: string,
+    backupDir: string,
+    includeDisabled?: boolean,
+  ): ExportModListResult;
+
+  /**
+   * Parse mod list files from the server directory and return workshop IDs.
+   * Returns separate arrays for client mods and server-only mods.
+   */
+  parseModList?(serverInstallPath: string): ParseModListResult;
 
   // ── Backup ──────────────────────────────────────────────────────
 

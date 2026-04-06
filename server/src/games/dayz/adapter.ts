@@ -28,6 +28,8 @@ import type {
   LogPaths,
   StartupDetector,
   BackupPathConfig,
+  ExportModListResult,
+  ParseModListResult,
 } from "../types.js";
 import type { GameServer } from "../../types/index.js";
 import type { ServerMod } from "../../types/index.js";
@@ -131,6 +133,7 @@ export class DayZAdapter extends BaseGameAdapter {
       profilesPath: true,
       directMessage: true,
       priorityQueue: "file",
+      modListFiles: true,
     },
     broadcastCommand: "say -1 {MESSAGE}",
     playerListCommand: "players",
@@ -799,6 +802,112 @@ export class DayZAdapter extends BaseGameAdapter {
         "**/BattlEye/BEServer_x64_active_*",
       ],
     };
+  }
+
+  // ── Mod List Files ───────────────────────────────────────────────
+
+  exportModList(
+    mods: ServerMod[],
+    serverInstallPath: string,
+    backupDir: string,
+    includeDisabled = false,
+  ): ExportModListResult {
+    const result: ExportModListResult = {
+      modListWritten: false,
+      serverModListWritten: false,
+      backups: { modList: null, serverModList: null },
+    };
+
+    // Filter mods: must be installed/update_available, optionally enabled-only
+    const eligibleMods = mods.filter(
+      (m) =>
+        (m.status === "installed" || m.status === "update_available") &&
+        (includeDisabled || m.enabled),
+    );
+
+    const clientMods = eligibleMods
+      .filter((m) => !m.isServerMod)
+      .sort((a, b) => a.loadOrder - b.loadOrder);
+    const serverMods = eligibleMods
+      .filter((m) => m.isServerMod)
+      .sort((a, b) => a.loadOrder - b.loadOrder);
+
+    const timestamp = new Date().toISOString().replace(/:/g, "-");
+
+    // Ensure backup directory exists
+    if (
+      (clientMods.length > 0 || serverMods.length > 0) &&
+      !fs.existsSync(backupDir)
+    ) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+
+    // Export mod_list.txt (client mods)
+    if (clientMods.length > 0) {
+      const modListPath = path.join(serverInstallPath, "mod_list.txt");
+
+      // Backup existing file
+      if (fs.existsSync(modListPath)) {
+        const backupName = `mod_list_${timestamp}.txt`;
+        fs.copyFileSync(modListPath, path.join(backupDir, backupName));
+        result.backups.modList = backupName;
+      }
+
+      const content = clientMods
+        .map(
+          (m) =>
+            `#${m.name}\n#https://steamcommunity.com/sharedfiles/filedetails/?id=${m.workshopId}\n${m.workshopId}`,
+        )
+        .join("\n");
+      fs.writeFileSync(modListPath, content + "\n", "utf-8");
+      result.modListWritten = true;
+    }
+
+    // Export server_mod_list.txt (server-only mods)
+    if (serverMods.length > 0) {
+      const serverModListPath = path.join(
+        serverInstallPath,
+        "server_mod_list.txt",
+      );
+
+      // Backup existing file
+      if (fs.existsSync(serverModListPath)) {
+        const backupName = `server_mod_list_${timestamp}.txt`;
+        fs.copyFileSync(serverModListPath, path.join(backupDir, backupName));
+        result.backups.serverModList = backupName;
+      }
+
+      const content = serverMods
+        .map(
+          (m) =>
+            `#${m.name}\n#https://steamcommunity.com/sharedfiles/filedetails/?id=${m.workshopId}\n${m.workshopId}`,
+        )
+        .join("\n");
+      fs.writeFileSync(serverModListPath, content + "\n", "utf-8");
+      result.serverModListWritten = true;
+    }
+
+    return result;
+  }
+
+  parseModList(serverInstallPath: string): ParseModListResult {
+    const result: ParseModListResult = { clientMods: [], serverMods: [] };
+
+    const parseFile = (filePath: string): string[] => {
+      if (!fs.existsSync(filePath)) return [];
+      const content = fs.readFileSync(filePath, "utf-8");
+      return content
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line && !line.startsWith("#") && /^\d+$/.test(line));
+    };
+
+    result.clientMods = parseFile(path.join(serverInstallPath, "mod_list.txt"));
+    result.serverMods = parseFile(
+      path.join(serverInstallPath, "server_mod_list.txt"),
+    );
+
+    return result;
   }
 
   // ── Private Helpers ──────────────────────────────────────────────

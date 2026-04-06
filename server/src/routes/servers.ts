@@ -94,6 +94,7 @@ import {
   isBackupRunning,
   backupFileExists,
   getBackupFilePath,
+  getBackupStoragePath,
 } from "../services/backupManager.js";
 import {
   parseWorkshopId,
@@ -2078,6 +2079,148 @@ router.post("/:id/mods/reorder", (req: Request, res: Response) => {
   }
 
   res.json({ success: true, message: "Mod order updated" });
+});
+
+// POST /api/servers/:id/mods/export-modlist - Export mods as mod list files
+router.post("/:id/mods/export-modlist", (req: Request, res: Response) => {
+  const serverId = parseInt(req.params.id, 10);
+  const { includeDisabled } = req.body as { includeDisabled?: boolean };
+
+  const server = getServerById(serverId);
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  const adapter = getGameAdapter(server.gameId);
+  if (
+    !adapter?.definition.capabilities.modListFiles ||
+    !adapter.exportModList
+  ) {
+    return res
+      .status(400)
+      .json({ error: "Mod list files are not supported for this game" });
+  }
+
+  const mods = getModsByServerId(serverId);
+  const backupDir = getBackupStoragePath(serverId);
+
+  try {
+    const result = adapter.exportModList(
+      mods,
+      server.installPath,
+      backupDir,
+      includeDisabled ?? false,
+    );
+
+    const parts: string[] = [];
+    if (result.modListWritten) parts.push("mod_list.txt");
+    if (result.serverModListWritten) parts.push("server_mod_list.txt");
+
+    const backupParts: string[] = [];
+    if (result.backups.modList) backupParts.push(result.backups.modList);
+    if (result.backups.serverModList)
+      backupParts.push(result.backups.serverModList);
+
+    let message =
+      parts.length > 0
+        ? `Exported ${parts.join(" and ")}`
+        : "No mods to export";
+    if (backupParts.length > 0) {
+      message += `. Backups created: ${backupParts.join(", ")}`;
+    }
+
+    res.json({
+      success: true,
+      message,
+      modListWritten: result.modListWritten,
+      serverModListWritten: result.serverModListWritten,
+      backups: result.backups,
+    });
+  } catch (err) {
+    logger.error(
+      `[Mods] Failed to export mod list for server ${serverId}: ${(err as Error).message}`,
+    );
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// POST /api/servers/:id/mods/import-modlist - Import mods from mod list files
+router.post("/:id/mods/import-modlist", async (req: Request, res: Response) => {
+  const serverId = parseInt(req.params.id, 10);
+
+  const server = getServerById(serverId);
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter?.definition.capabilities.modListFiles || !adapter.parseModList) {
+    return res
+      .status(400)
+      .json({ error: "Mod list files are not supported for this game" });
+  }
+
+  const parsed = adapter.parseModList(server.installPath);
+  const allWorkshopIds = [
+    ...parsed.clientMods.map((id) => ({ workshopId: id, isServerMod: false })),
+    ...parsed.serverMods.map((id) => ({ workshopId: id, isServerMod: true })),
+  ];
+
+  if (allWorkshopIds.length === 0) {
+    return res.json({
+      success: true,
+      message: "No mods found in mod list files",
+      imported: 0,
+      skipped: 0,
+    });
+  }
+
+  const existingMods = getModsByServerId(serverId);
+  const existingWorkshopIds = new Set(existingMods.map((m) => m.workshopId));
+
+  let imported = 0;
+  let skipped = 0;
+
+  for (const entry of allWorkshopIds) {
+    if (existingWorkshopIds.has(entry.workshopId)) {
+      skipped++;
+      continue;
+    }
+
+    let modName = `Workshop Mod ${entry.workshopId}`;
+    try {
+      const modInfo = await getWorkshopModInfo(entry.workshopId);
+      if (modInfo?.name) {
+        modName = modInfo.name;
+      }
+    } catch (e) {
+      logger.info(`Could not fetch mod info for ${entry.workshopId}:`, e);
+    }
+
+    const modId = createMod({
+      serverId,
+      workshopId: entry.workshopId,
+      name: modName,
+      isServerMod: entry.isServerMod,
+    });
+
+    installMod(modId).catch((err) => {
+      logger.error(`Mod installation failed for ${modId}:`, err);
+    });
+
+    existingWorkshopIds.add(entry.workshopId);
+    imported++;
+  }
+
+  res.json({
+    success: true,
+    message:
+      imported > 0
+        ? `Imported ${imported} mod${imported !== 1 ? "s" : ""}, skipped ${skipped} already installed`
+        : `All ${skipped} mods are already installed`,
+    imported,
+    skipped,
+  });
 });
 
 // ==================== Player Routes ====================
