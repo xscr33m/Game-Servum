@@ -78,7 +78,8 @@ const electronPkg = {
       icon: "build/icon.png",
     },
     nsis: {
-      oneClick: true,
+      oneClick: false,
+      allowToChangeInstallationDirectory: true,
       artifactName: `Game-Servum-Commander-Setup-v${APP_VERSION}.\${ext}`,
     },
   },
