@@ -4,8 +4,13 @@
  * Manages timed server restarts with in-game RCON warnings.
  * Each server can have one schedule with configurable:
  * - Restart interval (hours)
+ * - Optional restart time anchor (HH:mm) for fixed clock-time restarts
  * - Warning times before restart (minutes)
  * - Warning message template with {MINUTES} placeholder
+ *
+ * When restartTime is set (e.g. "06:00" with intervalHours=6), restarts
+ * occur at fixed clock times: 06:00, 12:00, 18:00, 00:00.
+ * When restartTime is null, restarts are purely interval-based from now.
  *
  * Warnings are sent via the game-specific broadcast command (e.g. `#broadcast` for DayZ).
  * After the final warning, the server is stopped and restarted.
@@ -31,6 +36,43 @@ const restartTimers = new Map<number, ReturnType<typeof setTimeout>>();
 const warningTimers = new Map<number, ReturnType<typeof setTimeout>[]>();
 
 /**
+ * Calculate the next restart time for a time-anchored schedule.
+ *
+ * Given a restartTime like "06:00" and interval of 6h, this generates
+ * all daily restart slots (06:00, 12:00, 18:00, 00:00) and returns
+ * the next one after `now`.
+ */
+function calculateNextTimeBasedRestart(
+  restartTime: string,
+  intervalHours: number,
+  now: Date,
+): Date {
+  const [hours, minutes] = restartTime.split(":").map(Number);
+  const intervalMs = intervalHours * 60 * 60 * 1000;
+
+  // Build anchor at restartTime today
+  const todayAnchor = new Date(now);
+  todayAnchor.setHours(hours, minutes, 0, 0);
+
+  // Find the most recent anchor point at or before now
+  // by stepping back from todayAnchor if needed
+  let anchor = todayAnchor;
+  if (anchor > now) {
+    // Go back one day first
+    anchor = new Date(anchor.getTime() - 24 * 60 * 60 * 1000);
+  }
+
+  // Step forward from the anchor by intervalMs to find the next slot after now
+  // First, align to the nearest past slot
+  while (anchor.getTime() + intervalMs <= now.getTime()) {
+    anchor = new Date(anchor.getTime() + intervalMs);
+  }
+
+  // The next restart is one interval after the last past slot
+  return new Date(anchor.getTime() + intervalMs);
+}
+
+/**
  * Start or update a scheduled restart for a server
  */
 export function startSchedule(serverId: number): void {
@@ -51,7 +93,14 @@ export function startSchedule(serverId: number): void {
   const now = new Date();
   let nextRestart: Date;
 
-  if (schedule.nextRestart) {
+  if (schedule.restartTime) {
+    // Time-based scheduling: calculate next fixed clock time
+    nextRestart = calculateNextTimeBasedRestart(
+      schedule.restartTime,
+      schedule.intervalHours,
+      now,
+    );
+  } else if (schedule.nextRestart) {
     const stored = new Date(schedule.nextRestart);
     if (stored > now) {
       nextRestart = stored;
@@ -224,9 +273,21 @@ function rescheduleAfterRestart(serverId: number, lastRestart?: string): void {
   const schedule = getScheduleByServerId(serverId);
   if (!schedule || !schedule.enabled) return;
 
-  const nextRestart = new Date(
-    Date.now() + schedule.intervalHours * 60 * 60 * 1000,
-  );
+  let nextRestart: Date;
+  if (schedule.restartTime) {
+    // Time-based: calculate the next fixed clock-time slot
+    nextRestart = calculateNextTimeBasedRestart(
+      schedule.restartTime,
+      schedule.intervalHours,
+      new Date(),
+    );
+  } else {
+    // Interval-based: next restart is intervalHours from now
+    nextRestart = new Date(
+      Date.now() + schedule.intervalHours * 60 * 60 * 1000,
+    );
+  }
+
   updateScheduleNextRestart(serverId, nextRestart.toISOString(), lastRestart);
 
   // Re-start the schedule cycle

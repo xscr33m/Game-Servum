@@ -833,7 +833,7 @@ export function updateLogSettings(
 // Server schedule queries
 export function getScheduleByServerId(serverId: number): ServerSchedule | null {
   const result = getDb().exec(
-    `SELECT id, server_id, interval_hours, warning_minutes, warning_message, enabled, last_restart, next_restart
+    `SELECT id, server_id, interval_hours, warning_minutes, warning_message, enabled, last_restart, next_restart, restart_time
      FROM server_schedules WHERE server_id = ?`,
     [serverId],
   );
@@ -850,6 +850,7 @@ export function getScheduleByServerId(serverId: number): ServerSchedule | null {
     enabled: (row[5] as number) === 1,
     lastRestart: row[6] as string | null,
     nextRestart: row[7] as string | null,
+    restartTime: (row[8] as string) || null,
   };
 }
 
@@ -859,21 +860,24 @@ export function upsertSchedule(
   warningMinutes: number[],
   warningMessage: string,
   enabled: boolean,
+  restartTime: string | null = null,
 ): ServerSchedule {
   getDb().run(
-    `INSERT INTO server_schedules (server_id, interval_hours, warning_minutes, warning_message, enabled)
-     VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO server_schedules (server_id, interval_hours, warning_minutes, warning_message, enabled, restart_time)
+     VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(server_id) DO UPDATE SET
        interval_hours = excluded.interval_hours,
        warning_minutes = excluded.warning_minutes,
        warning_message = excluded.warning_message,
-       enabled = excluded.enabled`,
+       enabled = excluded.enabled,
+       restart_time = excluded.restart_time`,
     [
       serverId,
       intervalHours,
       JSON.stringify(warningMinutes),
       warningMessage,
       enabled ? 1 : 0,
+      restartTime,
     ],
   );
   saveDatabase();
@@ -906,7 +910,7 @@ export function deleteSchedule(serverId: number): void {
 
 export function getAllEnabledSchedules(): ServerSchedule[] {
   const result = getDb().exec(
-    `SELECT id, server_id, interval_hours, warning_minutes, warning_message, enabled, last_restart, next_restart
+    `SELECT id, server_id, interval_hours, warning_minutes, warning_message, enabled, last_restart, next_restart, restart_time
      FROM server_schedules WHERE enabled = 1`,
   );
 
@@ -921,6 +925,7 @@ export function getAllEnabledSchedules(): ServerSchedule[] {
     enabled: (row[5] as number) === 1,
     lastRestart: row[6] as string | null,
     nextRestart: row[7] as string | null,
+    restartTime: (row[8] as string) || null,
   }));
 }
 

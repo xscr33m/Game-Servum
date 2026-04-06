@@ -3,6 +3,10 @@ export interface ServerSchedule {
   id: number;
   serverId: number;
   intervalHours: number;
+  /** Optional time-of-day anchor in "HH:mm" format (e.g. "06:00"). When set,
+   *  restarts occur at fixed clock times starting from this time, repeating
+   *  every `intervalHours`. When null, restarts are purely interval-based. */
+  restartTime: string | null;
   warningMinutes: number[];
   warningMessage: string;
   enabled: boolean;

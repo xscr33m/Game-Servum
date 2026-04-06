@@ -118,6 +118,7 @@ interface ServersApiClient {
       warningMinutes: number[];
       warningMessage: string;
       enabled: boolean;
+      restartTime?: string | null;
     },
   ) => Promise<{
     success: boolean;
@@ -769,6 +770,7 @@ function createServersApi(
         warningMinutes: number[];
         warningMessage: string;
         enabled: boolean;
+        restartTime?: string | null;
       },
     ) =>
       fetchApi<{

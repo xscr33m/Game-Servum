@@ -761,13 +761,19 @@ router.get("/:id/schedule", (req: Request, res: Response) => {
 // PUT /api/servers/:id/schedule - Create or update restart schedule
 router.put("/:id/schedule", (req: Request, res: Response) => {
   const id = parseInt(req.params.id, 10);
-  const { intervalHours, warningMinutes, warningMessage, enabled } =
-    req.body as {
-      intervalHours: number;
-      warningMinutes: number[];
-      warningMessage: string;
-      enabled: boolean;
-    };
+  const {
+    intervalHours,
+    warningMinutes,
+    warningMessage,
+    enabled,
+    restartTime,
+  } = req.body as {
+    intervalHours: number;
+    warningMinutes: number[];
+    warningMessage: string;
+    enabled: boolean;
+    restartTime?: string | null;
+  };
   const server = getServerById(id);
 
   if (!server) {
@@ -797,12 +803,29 @@ router.put("/:id/schedule", (req: Request, res: Response) => {
     return res.status(400).json({ error: "Warning message is required" });
   }
 
+  // Validate restartTime format if provided
+  const normalizedRestartTime = restartTime || null;
+  if (normalizedRestartTime !== null) {
+    if (!/^\d{2}:\d{2}$/.test(normalizedRestartTime)) {
+      return res
+        .status(400)
+        .json({ error: "Restart time must be in HH:mm format" });
+    }
+    const [h, m] = normalizedRestartTime.split(":").map(Number);
+    if (h < 0 || h > 23 || m < 0 || m > 59) {
+      return res
+        .status(400)
+        .json({ error: "Restart time must be a valid time (00:00 - 23:59)" });
+    }
+  }
+
   const schedule = upsertSchedule(
     id,
     intervalHours,
     warningMinutes,
     warningMessage.trim(),
     enabled,
+    normalizedRestartTime,
   );
 
   // Start or clear the schedule based on enabled state

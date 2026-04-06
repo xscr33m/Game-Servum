@@ -69,6 +69,7 @@ export const migration: Migration = {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         server_id INTEGER NOT NULL UNIQUE,
         interval_hours INTEGER NOT NULL DEFAULT 4,
+        restart_time TEXT DEFAULT NULL,
         warning_minutes TEXT NOT NULL DEFAULT '[15,5,1]',
         warning_message TEXT NOT NULL DEFAULT 'Server restart in {MINUTES} minutes!',
         enabled INTEGER DEFAULT 0,

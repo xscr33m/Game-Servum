@@ -155,6 +155,7 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
   const [schedule, setSchedule] = useState<ServerSchedule | null>(null);
   const [scheduleLoading, setScheduleLoading] = useState(true);
   const [scheduleInterval, setScheduleInterval] = useState("4");
+  const [scheduleRestartTime, setScheduleRestartTime] = useState("");
   const [scheduleWarnings, setScheduleWarnings] = useState("15,5,1");
   const [scheduleMessage, setScheduleMessage] = useState(
     "Server restart in {MINUTES} minutes!",
@@ -312,6 +313,7 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
     if (!schedule) {
       return (
         scheduleInterval !== "4" ||
+        scheduleRestartTime !== "" ||
         scheduleWarnings !== "15,5,1" ||
         scheduleMessage !== "Server restart in {MINUTES} minutes!" ||
         scheduleEnabled !== false
@@ -319,6 +321,7 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
     }
     return (
       scheduleInterval !== schedule.intervalHours.toString() ||
+      scheduleRestartTime !== (schedule.restartTime ?? "") ||
       scheduleWarnings !== schedule.warningMinutes.join(",") ||
       scheduleMessage !== schedule.warningMessage ||
       scheduleEnabled !== schedule.enabled
@@ -326,6 +329,7 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
   }, [
     schedule,
     scheduleInterval,
+    scheduleRestartTime,
     scheduleWarnings,
     scheduleMessage,
     scheduleEnabled,
@@ -492,6 +496,7 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
       setSchedule(result.schedule);
       if (result.schedule) {
         setScheduleInterval(result.schedule.intervalHours.toString());
+        setScheduleRestartTime(result.schedule.restartTime ?? "");
         setScheduleWarnings(result.schedule.warningMinutes.join(","));
         setScheduleMessage(result.schedule.warningMessage);
         setScheduleEnabled(result.schedule.enabled);
@@ -530,6 +535,20 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
       return;
     }
 
+    // Validate restart time if provided
+    const restartTime = scheduleRestartTime.trim() || null;
+    if (restartTime !== null) {
+      if (!/^\d{2}:\d{2}$/.test(restartTime)) {
+        setScheduleError("First restart time must be in HH:mm format");
+        return;
+      }
+      const [h, m] = restartTime.split(":").map(Number);
+      if (h < 0 || h > 23 || m < 0 || m > 59) {
+        setScheduleError("First restart time must be a valid time");
+        return;
+      }
+    }
+
     const warnings = scheduleWarnings
       .split(",")
       .map((s) => parseInt(s.trim(), 10))
@@ -553,6 +572,7 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
         warningMinutes: warnings,
         warningMessage: scheduleMessage.trim(),
         enabled: scheduleEnabled,
+        restartTime,
       });
       setSchedule(result.schedule);
       toastSuccess("Schedule saved");
@@ -564,6 +584,7 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
   }, [
     server.id,
     scheduleInterval,
+    scheduleRestartTime,
     scheduleWarnings,
     scheduleMessage,
     scheduleEnabled,
@@ -573,11 +594,13 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
   function handleRevertSchedule() {
     if (schedule) {
       setScheduleInterval(schedule.intervalHours.toString());
+      setScheduleRestartTime(schedule.restartTime ?? "");
       setScheduleWarnings(schedule.warningMinutes.join(","));
       setScheduleMessage(schedule.warningMessage);
       setScheduleEnabled(schedule.enabled);
     } else {
       setScheduleInterval("4");
+      setScheduleRestartTime("");
       setScheduleWarnings("15,5,1");
       setScheduleMessage("Server restart in {MINUTES} minutes!");
       setScheduleEnabled(false);
@@ -1027,7 +1050,10 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
             {/* Collapsed summary */}
             {!scheduleOpen && !scheduleLoading && scheduleEnabled && (
               <p className="text-xs text-muted-foreground mt-2 ml-6">
-                Every {scheduleInterval}h · Warnings at {scheduleWarnings} min
+                {scheduleRestartTime
+                  ? `Starting at ${scheduleRestartTime}, every ${scheduleInterval}h`
+                  : `Every ${scheduleInterval}h`}{" "}
+                · Warnings at {scheduleWarnings} min
                 {schedule?.nextRestart && schedule.enabled && (
                   <>
                     {" "}
@@ -1049,8 +1075,25 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
                   />
                 </div>
 
-                {/* Interval + Warning times */}
-                <div className="grid grid-cols-2 gap-4">
+                {/* Interval + Restart Time + Warning times */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground block mb-1">
+                      First Restart Time
+                    </label>
+                    <Input
+                      className="font-mono text-sm"
+                      type="time"
+                      value={scheduleRestartTime}
+                      onChange={(e) => setScheduleRestartTime(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {scheduleRestartTime
+                        ? `Restarts anchored at ${scheduleRestartTime}`
+                        : "Optional. Leave empty for interval-only."}
+                    </p>
+                  </div>
+
                   <div>
                     <label className="text-sm font-medium text-muted-foreground block mb-1">
                       Restart Interval (hours)
@@ -1107,6 +1150,31 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
                     onInsert={handleInsertVariable}
                   />
                 </div>
+
+                {/* Restart schedule preview */}
+                {scheduleRestartTime &&
+                  (() => {
+                    const interval = parseInt(scheduleInterval, 10);
+                    if (isNaN(interval) || interval < 1 || interval > 24)
+                      return null;
+                    const [h, m] = scheduleRestartTime.split(":").map(Number);
+                    if (isNaN(h) || isNaN(m)) return null;
+                    const times: string[] = [];
+                    let totalMinutes = h * 60 + m;
+                    for (let i = 0; i < Math.ceil(24 / interval); i++) {
+                      const wrapped = totalMinutes % (24 * 60);
+                      times.push(
+                        `${String(Math.floor(wrapped / 60)).padStart(2, "0")}:${String(wrapped % 60).padStart(2, "0")}`,
+                      );
+                      totalMinutes += interval * 60;
+                      if (totalMinutes >= 24 * 60 + (h * 60 + m)) break;
+                    }
+                    return (
+                      <p className="text-xs text-muted-foreground">
+                        Restart times: {times.join(", ")}
+                      </p>
+                    );
+                  })()}
 
                 {/* Next / last restart info */}
                 {schedule && (
