@@ -689,6 +689,67 @@ export function GuidesSection() {
             </p>
           </div>
         </Guide>
+
+        {/* Guide: Anonymous Statistics */}
+        <Guide title="Anonymous Statistics (Opt-in)">
+          <p>
+            Game-Servum can optionally report anonymous usage statistics to help
+            the developer understand how the software is used. This feature is
+            <strong> disabled by default</strong> and must be explicitly
+            enabled.
+          </p>
+          <div className="space-y-2">
+            <h4 className="font-semibold text-foreground">
+              What is collected?
+            </h4>
+            <ul className="list-disc list-inside space-y-1 ml-1">
+              <li>Total number of game servers managed</li>
+              <li>Number of servers per game (e.g. DayZ, ARK)</li>
+              <li>Total mods installed across all servers</li>
+              <li>Total unique players tracked</li>
+              <li>Agent version</li>
+            </ul>
+          </div>
+          <div className="space-y-2">
+            <h4 className="font-semibold text-foreground">
+              What is NOT collected?
+            </h4>
+            <ul className="list-disc list-inside space-y-1 ml-1">
+              <li>No IP addresses or location data</li>
+              <li>No server names, player names, or Steam IDs</li>
+              <li>No configuration files or passwords</li>
+              <li>No personal data of any kind</li>
+            </ul>
+          </div>
+          <div className="space-y-2">
+            <h4 className="font-semibold text-foreground">
+              How to enable or disable
+            </h4>
+            <ol className="list-decimal list-inside space-y-1 ml-1">
+              <li>
+                Go to <strong>Settings</strong> and find the{" "}
+                <strong>Privacy</strong> section.
+              </li>
+              <li>
+                Toggle <strong>Anonymous Statistics</strong> on or off.
+              </li>
+              <li>
+                When enabled, the Agent registers with a random UUID and reports
+                stats every 12 hours.
+              </li>
+              <li>
+                When disabled, the Agent deregisters and deletes all stored
+                credentials immediately.
+              </li>
+            </ol>
+          </div>
+          <div className="rounded-md bg-muted/50 p-3 text-xs">
+            <strong>Privacy:</strong> Each Agent is identified only by a random
+            UUID that is not linked to any user account, IP address, or hardware
+            identifier. The aggregated data is displayed publicly on the
+            Game-Servum website.
+          </div>
+        </Guide>
       </div>
     </div>
   );

@@ -88,6 +88,11 @@ const faqs = [
     answer:
       "Yes, Game-Servum is completely free and open source under the GPL-3.0 license. You can use and modify it freely.",
   },
+  {
+    question: "What anonymous statistics does Game-Servum collect?",
+    answer:
+      "When you opt in via Settings > Privacy, the Agent periodically reports anonymous aggregate counts: total servers managed, total mods installed, total unique players tracked, and a breakdown by game. No personal data, IP addresses, server names, or player identities are ever sent. Each Agent is identified by a random UUID. You can disable this at any time — the Agent will deregister and delete all stored credentials.",
+  },
 ];
 
 export function FAQSection() {
