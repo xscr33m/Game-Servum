@@ -12,6 +12,7 @@ import {
   updateModWorkshopTimestamp,
   deleteMod,
   getServerById,
+  incrementAppSetting,
 } from "../db/index.js";
 import { getSteamConfig } from "../db/index.js";
 import type { ServerMod } from "../types/index.js";
@@ -276,6 +277,9 @@ export async function installMod(
             `[Mod Install] Mod ${mod.workshopId} installed successfully as ${copyResult.modName}`,
           );
           updateModStatus(modId, "installed", copyResult.modName || mod.name);
+
+          // Increment cumulative stats counter for live stats reporting
+          incrementAppSetting("stats_mods_installed_total");
 
           // Fetch and store the workshop time_updated for future update checks
           try {

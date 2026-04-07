@@ -25,6 +25,13 @@ export const WS_PATH = "/ws";
 /** Token lifetime in seconds (24h) */
 export const TOKEN_LIFETIME_SECONDS = 86400;
 
+/** Live Stats aggregation API base URL */
+export const STATS_API_BASE_URL =
+  "https://api.xscr33mlabs.com/game-servum/stats";
+
+/** Interval in hours between stats reports */
+export const STATS_REPORT_INTERVAL_HOURS = 12;
+
 /**
  * Steam reserved port ranges that should not be used for game server query ports.
  * These are used internally by Steam server browser / SteamNetworking.

@@ -11,6 +11,7 @@ import {
   FaArrowsLeftRight,
   FaKey,
   FaArrowRightFromBracket,
+  FaChartSimple,
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -85,6 +86,8 @@ export function Settings() {
     return getElectronSettings().getItem("auto_update_enabled") !== "false";
   });
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [statsEnabled, setStatsEnabled] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(false);
 
   // Desktop app settings (load synchronously from app-settings.json)
   const [launchOnStartup, setLaunchOnStartup] = useState(() => {
@@ -130,6 +133,13 @@ export function Settings() {
           "system_monitoring_enabled",
           String(s.monitoringEnabled),
         );
+      })
+      .catch(() => {});
+
+    api.system
+      .getStatsSettings()
+      .then((s) => {
+        setStatsEnabled(s.enabled);
       })
       .catch(() => {});
 
@@ -331,6 +341,62 @@ export function Settings() {
                   </Button>
                 </div>
               )}
+            </div>
+          </section>
+
+          {/* ── Privacy ── */}
+          <section className="rounded-lg border bg-card mb-6">
+            <div className="px-4 py-3 border-b bg-muted/30">
+              <h2 className="font-semibold text-sm">Privacy</h2>
+            </div>
+            <div className="divide-y">
+              <div className="px-4 py-3 flex items-center justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <FaChartSimple className="h-3.5 w-3.5 text-muted-foreground" />
+                    <Label
+                      htmlFor="stats-toggle"
+                      className="text-sm font-medium cursor-pointer"
+                    >
+                      Anonymous Stats
+                    </Label>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Periodically share anonymous usage statistics (server count,
+                    mod count, player count) to help improve Game-Servum. No
+                    server names, player names, or IPs are ever sent.
+                  </p>
+                </div>
+                <Switch
+                  id="stats-toggle"
+                  checked={statsEnabled}
+                  disabled={!isConnected || statsLoading}
+                  onCheckedChange={async (checked) => {
+                    setStatsLoading(true);
+                    try {
+                      const result = await api.system.updateStatsSettings({
+                        enabled: checked,
+                      });
+                      if (result.success) {
+                        setStatsEnabled(checked);
+                        toastSuccess(
+                          checked
+                            ? "Anonymous stats enabled"
+                            : "Anonymous stats disabled",
+                        );
+                      } else {
+                        toastError(
+                          result.message || "Failed to update setting",
+                        );
+                      }
+                    } catch {
+                      toastError("Failed to update setting");
+                    } finally {
+                      setStatsLoading(false);
+                    }
+                  }}
+                />
+              </div>
             </div>
           </section>
 

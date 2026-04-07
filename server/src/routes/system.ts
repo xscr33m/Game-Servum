@@ -23,6 +23,11 @@ import {
 import { APP_VERSION } from "@game-servum/shared";
 import { logger } from "../core/logger.js";
 import { setRestartFlag } from "../core/shutdown.js";
+import {
+  getStatsSettings,
+  enableStatsCollection,
+  disableStatsCollection,
+} from "../services/statsReporter.js";
 
 const router = Router();
 
@@ -335,6 +340,38 @@ router.post("/tls/validate", (req, res) => {
   } catch (err) {
     logger.error("[System] Failed to validate TLS cert:", err);
     res.status(500).json({ error: "Failed to validate certificate files" });
+  }
+});
+
+// ── Anonymous Stats Settings ────────────────────────────────────────────
+
+// GET /api/system/stats-settings — returns stats collection settings
+router.get("/stats-settings", (_req, res) => {
+  try {
+    const settings = getStatsSettings();
+    res.json(settings);
+  } catch (err) {
+    logger.error("[System] Failed to get stats settings:", err);
+    res.status(500).json({ error: "Failed to get stats settings" });
+  }
+});
+
+// PUT /api/system/stats-settings — enable or disable stats collection
+router.put("/stats-settings", async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    if (typeof enabled !== "boolean") {
+      return res.status(400).json({ error: "'enabled' must be a boolean" });
+    }
+
+    const result = enabled
+      ? await enableStatsCollection()
+      : await disableStatsCollection();
+
+    res.json(result);
+  } catch (err) {
+    logger.error("[System] Failed to update stats settings:", err);
+    res.status(500).json({ error: "Failed to update stats settings" });
   }
 });
 

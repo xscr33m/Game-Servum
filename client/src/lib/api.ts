@@ -513,6 +513,10 @@ interface SystemApiClient {
   installUpdate: () => Promise<{ success: boolean; message: string }>;
   restart: () => Promise<{ success: boolean; message: string }>;
   shutdown: () => Promise<{ success: boolean; message: string }>;
+  getStatsSettings: () => Promise<{ enabled: boolean; agentId: string | null }>;
+  updateStatsSettings: (settings: {
+    enabled: boolean;
+  }) => Promise<{ success: boolean; message: string }>;
 }
 
 interface HealthApiClient {
@@ -1505,6 +1509,18 @@ function createSystemApi(fetchApi: FetchApiFn): SystemApiClient {
       fetchApi<{ success: boolean; message: string }>("/system/shutdown", {
         method: "POST",
       }),
+    getStatsSettings: () =>
+      fetchApi<{ enabled: boolean; agentId: string | null }>(
+        "/system/stats-settings",
+      ),
+    updateStatsSettings: (settings: { enabled: boolean }) =>
+      fetchApi<{ success: boolean; message: string }>(
+        "/system/stats-settings",
+        {
+          method: "PUT",
+          body: JSON.stringify(settings),
+        },
+      ),
   };
 }
 

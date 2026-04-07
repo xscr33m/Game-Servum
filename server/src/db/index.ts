@@ -325,7 +325,9 @@ export function createServer(
   const result = getDb().exec("SELECT last_insert_rowid()");
   const lastId = result[0].values[0][0] as number;
 
-  saveDatabase();
+  // Increment cumulative stats counter for live stats reporting
+  incrementAppSetting("stats_servers_created_total");
+
   return lastId;
 }
 
@@ -1161,6 +1163,15 @@ export function setAppSetting(key: string, value: string): void {
     [key, value],
   );
   saveDatabase();
+}
+
+/**
+ * Atomically increment a numeric app setting by the given amount.
+ * If the key does not exist, it is created with the increment value.
+ */
+export function incrementAppSetting(key: string, amount = 1): void {
+  const current = parseInt(getAppSetting(key) ?? "0", 10) || 0;
+  setAppSetting(key, String(current + amount));
 }
 
 // ─── Mod Workshop Timestamp ─────────────────────────────────────────────

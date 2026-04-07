@@ -24,6 +24,10 @@ import {
 } from "./services/agentUpdater.js";
 import { initializeUpdateCheckers } from "./services/updateChecker.js";
 import {
+  initStatsReporter,
+  stopStatsReporter,
+} from "./services/statsReporter.js";
+import {
   startMetricsCollection,
   stopMetricsCollection,
 } from "./services/systemMonitor.js";
@@ -74,6 +78,9 @@ async function main() {
 
   // Start periodic agent update checks (every 4 hours)
   startAutoUpdateCheck(4);
+
+  // Initialize anonymous stats reporter (if enabled)
+  initStatsReporter();
 
   // Create HTTP or HTTPS server based on TLS configuration
   const tlsCreds = loadTlsCredentials();
@@ -185,6 +192,9 @@ async function main() {
 
     // Stop periodic update checks
     stopAutoUpdateCheck();
+
+    // Stop stats reporter
+    stopStatsReporter();
 
     // Before stopping servers: if this is a restart, remember which servers
     // were running so they can be auto-started after the agent comes back.
