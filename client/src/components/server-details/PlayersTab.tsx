@@ -470,7 +470,11 @@ export function PlayersTab({ server }: PlayersTabProps) {
             .map((line) => line.trim())
             .filter(Boolean)
             .join(";");
-          await api.servers.saveFile(server.id, "priority.txt", semicolonContent);
+          await api.servers.saveFile(
+            server.id,
+            "priority.txt",
+            semicolonContent,
+          );
           setOriginalPriority(priorityContent);
         }
       },
@@ -510,10 +514,13 @@ export function PlayersTab({ server }: PlayersTabProps) {
               contentClass,
             )}
           >
-            <TabsList>
-              <TabsTrigger value="overview" className="gap-2">
+            <TabsList className="w-full sm:w-auto">
+              <TabsTrigger
+                value="overview"
+                className="gap-2 flex-1 sm:flex-initial"
+              >
                 <FaUsers className="h-4 w-4 text-ring/70" />
-                Players
+                <span className="hidden xs:inline">Players</span>
                 {onlineCount > 0 && (
                   <Badge variant="success" className="ml-1">
                     {onlineCount}
@@ -521,34 +528,46 @@ export function PlayersTab({ server }: PlayersTabProps) {
                 )}
               </TabsTrigger>
               {hasWhitelist && (
-                <TabsTrigger value="whitelist" className="gap-2">
+                <TabsTrigger
+                  value="whitelist"
+                  className="gap-2 flex-1 sm:flex-initial"
+                >
                   <FaShield className="h-4 w-4 text-ring/70" />
-                  Whitelist
+                  <span className="hidden xs:inline">Whitelist</span>
                   {whitelistChanged && (
                     <Badge variant="warning" className="ml-1">
-                      Modified
+                      <span className="hidden xs:inline">Modified</span>
+                      <span className="xs:hidden">!</span>
                     </Badge>
                   )}
                 </TabsTrigger>
               )}
               {hasBanList && (
-                <TabsTrigger value="ban" className="gap-2">
+                <TabsTrigger
+                  value="ban"
+                  className="gap-2 flex-1 sm:flex-initial"
+                >
                   <FaBan className="h-4 w-4 text-ring/70" />
-                  Ban List
+                  <span className="hidden xs:inline">Ban List</span>
                   {banChanged && (
                     <Badge variant="warning" className="ml-1">
-                      Modified
+                      <span className="hidden xs:inline">Modified</span>
+                      <span className="xs:hidden">!</span>
                     </Badge>
                   )}
                 </TabsTrigger>
               )}
               {hasPriority && (
-                <TabsTrigger value="priority" className="gap-2">
+                <TabsTrigger
+                  value="priority"
+                  className="gap-2 flex-1 sm:flex-initial"
+                >
                   <FaStar className="h-4 w-4 text-ring/70" />
-                  Priority
+                  <span className="hidden xs:inline">Priority</span>
                   {priorityChanged && (
                     <Badge variant="warning" className="ml-1">
-                      Modified
+                      <span className="hidden xs:inline">Modified</span>
+                      <span className="xs:hidden">!</span>
                     </Badge>
                   )}
                 </TabsTrigger>
@@ -815,8 +834,9 @@ export function PlayersTab({ server }: PlayersTabProps) {
                                   </Button>
                                 </Tip>
                               )}
-                              {hasPriority && player.steam64Id && (
-                                isPrioritized(player.steam64Id) ? (
+                              {hasPriority &&
+                                player.steam64Id &&
+                                (isPrioritized(player.steam64Id) ? (
                                   <Tip content="Remove from priority queue">
                                     <Button
                                       variant="ghost"
@@ -850,8 +870,7 @@ export function PlayersTab({ server }: PlayersTabProps) {
                                       <FaStar className="h-4 w-4" />
                                     </Button>
                                   </Tip>
-                                )
-                              )}
+                                ))}
                             </div>
                           )}
                         </div>
@@ -1100,8 +1119,9 @@ export function PlayersTab({ server }: PlayersTabProps) {
                                     </Button>
                                   </Tip>
                                 )}
-                                {hasPriority && player.steam64Id && (
-                                  isPrioritized(player.steam64Id) ? (
+                                {hasPriority &&
+                                  player.steam64Id &&
+                                  (isPrioritized(player.steam64Id) ? (
                                     <Tip content="Remove from priority queue">
                                       <Button
                                         variant="ghost"
@@ -1135,8 +1155,7 @@ export function PlayersTab({ server }: PlayersTabProps) {
                                         <FaStar className="h-3.5 w-3.5" />
                                       </Button>
                                     </Tip>
-                                  )
-                                )}
+                                  ))}
                               </div>
                             )}
                         </div>
