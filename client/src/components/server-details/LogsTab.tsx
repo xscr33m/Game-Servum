@@ -122,6 +122,8 @@ export function LogsTab({ server }: LogsTabProps) {
 
   const logContentRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<number | null>(null);
+  const selectedLogRef = useRef(selectedLog);
+  selectedLogRef.current = selectedLog;
 
   // Filter log content by search query
   const filteredContent = useMemo(() => {
@@ -192,14 +194,13 @@ export function LogsTab({ server }: LogsTabProps) {
 
   // Load log file list + archives
   const loadLogFiles = useCallback(async () => {
-    setLoading(true);
     try {
       const data = await api.servers.getLogs(server.id);
       setCurrentLogs(data.current);
       setArchives(data.archives);
 
       // Auto-select first current log if nothing selected
-      if (data.current.length > 0 && !selectedLog) {
+      if (data.current.length > 0 && !selectedLogRef.current) {
         setSelectedLog(data.current[0].name);
         setViewingSource("current");
         loadLogContent(data.current[0].name, "current");
@@ -209,7 +210,7 @@ export function LogsTab({ server }: LogsTabProps) {
     } finally {
       setLoading(false);
     }
-  }, [loadLogContent, selectedLog, server.id, api.servers]);
+  }, [loadLogContent, server.id, api.servers]);
 
   // Load settings
   const loadSettings = useCallback(async () => {
@@ -262,7 +263,7 @@ export function LogsTab({ server }: LogsTabProps) {
     setAutoRefresh(false);
     setSearchQuery("");
     setSidebarOpen(false);
-    loadLogContent(filename, "current");
+    loadLogContent(filename, "current", false);
   }
 
   async function handleToggleArchive(sessionName: string) {
@@ -292,7 +293,7 @@ export function LogsTab({ server }: LogsTabProps) {
     setAutoRefresh(false);
     setSearchQuery("");
     setSidebarOpen(false);
-    loadLogContent(filename, { archive: sessionName });
+    loadLogContent(filename, { archive: sessionName }, false);
   }
 
   async function executeDeleteArchive(sessionName: string) {
