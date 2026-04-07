@@ -49,7 +49,6 @@ function deriveAppToken(agentId: string): string {
 
 interface StatsPayload {
   servers_total: number;
-  servers_running: number;
   servers_by_game: Record<string, number>;
   mods_total: number;
   players_total: number;
@@ -65,9 +64,6 @@ function collectStats(): StatsPayload {
   );
   // Use MAX of counter vs. current server list (in case counter wasn't there before)
   const serversTotal = Math.max(serversCreatedTotal, servers.length);
-
-  // Snapshot: currently running servers
-  const serversRunning = servers.filter((s) => s.status === "running").length;
 
   // Snapshot: server count per game
   const serversByGame: Record<string, number> = {};
@@ -99,7 +95,6 @@ function collectStats(): StatsPayload {
 
   return {
     servers_total: serversTotal,
-    servers_running: serversRunning,
     servers_by_game: serversByGame,
     mods_total: modsTotal,
     players_total: playersTotal,
