@@ -63,16 +63,18 @@ npm ci                             # Install from verified lock file
 npm run dev                  # Starts shared (watch) + client (:5173) + server (:3001) via concurrently
 npm run dev:client           # Vite dev server with HMR + proxy to backend
 npm run dev:server           # tsx watch mode
+npm run audit:check          # npm audit --audit-level=high (runs automatically before every build)
 npm run build                # Build shared → server (tsc) → client (vite build)
 npm run build:agent          # Build Agent-only Windows installer (~100 MB) — Windows only
 npm run build:commander      # Build Commander-only Windows installer (~90 MB) — Windows only
 npm run build:linux          # Build Commander AppImage for Linux (Commander-only, no Agent) — Linux only
-npm run update:check         # Check all workspace packages for available updates (dry-run)
-npm run update:install       # Update workspace packages to latest versions
+npm run build:web            # Build Commander for Docker/web deployment
 npm run clean                # Clear build caches and dist folders
 npm run lint                 # ESLint across all workspaces (client, server, shared)
 npm run lint:fix             # ESLint with auto-fix
 ```
+
+**Security:** All `build*` commands run `npm run audit:check` as their first step. If `npm audit` finds High or Critical vulnerabilities, the build aborts immediately.
 
 **Platform-Specific Build Requirements:**
 

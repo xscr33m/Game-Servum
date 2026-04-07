@@ -186,7 +186,8 @@ Both Agent and Commander include automatic updates via GitHub Releases:
 ## Build Commands
 
 ```bash
-npm run dev                # Windows dev servers (shared watch + client + agent)
+npm run dev                # Dev servers (shared watch + client + agent)
+npm run audit:check        # Security audit (runs automatically before every build)
 npm run build              # Build all packages (shared → server → client)
 
 # Windows builds (requires Windows)
@@ -195,7 +196,12 @@ npm run build:commander    # Build Commander installer (NSIS)
 
 # Linux build (requires Linux)
 npm run build:linux        # Build Commander AppImage
+
+# Docker / Web
+npm run build:web          # Build Commander for Docker/web deployment
 ```
+
+> **Security note:** All `build*` commands run `npm run audit:check` first. If High or Critical vulnerabilities are found, the build aborts.
 
 ## Tech Stack
 
