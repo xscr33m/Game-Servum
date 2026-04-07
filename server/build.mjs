@@ -65,9 +65,6 @@ await build({
     "process.env.NODE_ENV": '"production"',
   },
 
-  // Resolve conditions
-  conditions: ["node", "import"],
-
   // Log level
   logLevel: "info",
 });
