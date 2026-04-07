@@ -74,8 +74,7 @@ app.get("/api/v1/info", (_req, res) => {
 // Agent Status Page (localhost only, no auth required)
 app.get("/", (req, res, _next) => {
   // Security: Only allow access from localhost
-  const clientIp =
-    req.ip || req.socket.remoteAddress || req.connection.remoteAddress || "";
+  const clientIp = req.ip || req.socket.remoteAddress || "";
   const isLocalhost =
     clientIp === "127.0.0.1" ||
     clientIp === "::1" ||
