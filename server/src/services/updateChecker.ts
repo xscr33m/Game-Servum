@@ -23,6 +23,7 @@ import {
   clearModUpdateStatus,
   getSteamConfig,
   getBackupSettings,
+  updateServerStatus,
 } from "../db/index.js";
 import { checkModsForUpdates, installMod } from "./modManager.js";
 import { stopServer, startServer, isServerRunning } from "./serverProcess.js";
@@ -876,4 +877,136 @@ export function initializeUpdateCheckers(runningServerIds: number[]): void {
  */
 export function hasPendingUpdateRestart(serverId: number): boolean {
   return pendingUpdateRestarts.has(serverId);
+}
+
+/**
+ * Apply pending updates to a stopped server (game update + mod reinstall).
+ * Unlike performUpdateRestart, this does NOT stop or start the server —
+ * it expects the server to already be stopped.
+ */
+export async function applyServerUpdates(
+  serverId: number,
+): Promise<{ success: boolean; message: string }> {
+  const server = getServerById(serverId);
+  if (!server) {
+    return { success: false, message: "Server not found" };
+  }
+
+  if (isServerRunning(serverId)) {
+    return {
+      success: false,
+      message: "Server is running — stop it before applying updates",
+    };
+  }
+
+  // Re-check what updates are available
+  const checkResult = await triggerUpdateCheck(serverId);
+  const { updatedMods, gameUpdateAvailable } = checkResult;
+
+  if (!gameUpdateAvailable && updatedMods.length === 0) {
+    return { success: true, message: "No updates available" };
+  }
+
+  const gameDef = getGameDefinition(server.gameId);
+  const reason = gameUpdateAvailable
+    ? `game update + ${updatedMods.length} mod(s)`
+    : `${updatedMods.length} mod update(s)`;
+  logger.info(
+    `[UpdateChecker] Server ${serverId}: applying manual update (${reason})`,
+  );
+
+  // Set status to "updating"
+  updateServerStatus(serverId, "updating");
+  broadcast("server:status", { serverId, status: "updating" });
+
+  try {
+    // Update game server if needed
+    if (gameUpdateAvailable) {
+      logger.info(
+        `[UpdateChecker] Server ${serverId}: updating game server (app ${server.appId})`,
+      );
+
+      broadcast("update:applied", {
+        serverId,
+        message: "Updating game server...",
+        gameUpdateAvailable: true,
+        mods: updatedMods,
+      });
+
+      const useAnonymous = gameDef ? !gameDef.requiresLogin : true;
+      const steamConfig = getSteamConfig();
+      const updateResult = await updateServer(
+        serverId,
+        server.gameId,
+        server.appId,
+        server.installPath,
+        server.name,
+        server.port,
+        useAnonymous,
+        steamConfig?.username,
+      );
+
+      if (!updateResult.success) {
+        logger.error(
+          `[UpdateChecker] Game server update failed:`,
+          updateResult.message,
+        );
+      } else {
+        logger.info(
+          `[UpdateChecker] Game server update completed successfully`,
+        );
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+
+    // Reinstall updated mods
+    if (updatedMods.length > 0) {
+      logger.info(
+        `[UpdateChecker] Server ${serverId}: reinstalling ${updatedMods.length} updated mod(s)`,
+      );
+
+      broadcast("update:applied", {
+        serverId,
+        message: `Installing ${updatedMods.length} mod update(s)...`,
+        mods: updatedMods,
+      });
+
+      for (const mod of updatedMods) {
+        try {
+          logger.info(
+            `[UpdateChecker] Reinstalling mod ${mod.workshopId} (${mod.name})`,
+          );
+          await installMod(mod.modId);
+          clearModUpdateStatus(mod.modId);
+        } catch (error) {
+          logger.error(
+            `[UpdateChecker] Failed to reinstall mod ${mod.workshopId}:`,
+            error,
+          );
+        }
+      }
+    }
+
+    // Restore status to "stopped"
+    updateServerStatus(serverId, "stopped");
+    broadcast("server:status", { serverId, status: "stopped" });
+
+    const parts: string[] = [];
+    if (gameUpdateAvailable) parts.push("game server");
+    if (updatedMods.length > 0) parts.push(`${updatedMods.length} mod(s)`);
+    return {
+      success: true,
+      message: `Updated ${parts.join(" and ")} successfully`,
+    };
+  } catch (error) {
+    // Restore status on failure
+    updateServerStatus(serverId, "stopped");
+    broadcast("server:status", { serverId, status: "stopped" });
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    logger.error(
+      `[UpdateChecker] Manual update failed for server ${serverId}: ${msg}`,
+    );
+    return { success: false, message: `Update failed: ${msg}` };
+  }
 }

@@ -195,6 +195,7 @@ interface ServersApiClient {
     steamcmdOutput?: string;
     loginRequired?: boolean;
   }>;
+  applyUpdates: (id: number) => Promise<{ success: boolean; message: string }>;
   getDirectories: (id: number) => Promise<{ directories: string[] }>;
   getDiskUsage: (
     id: number,
@@ -880,6 +881,11 @@ function createServersApi(
       }>(`/servers/${id}/check-updates`, {
         method: "POST",
       }),
+    applyUpdates: (id: number) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${id}/apply-updates`,
+        { method: "POST" },
+      ),
     getDirectories: (id: number) =>
       fetchApi<{ directories: string[] }>(`/servers/${id}/directories`),
     getDiskUsage: (id: number) =>

@@ -85,6 +85,7 @@ import {
   triggerUpdateCheck,
   startUpdateChecker,
   hasPendingUpdateRestart,
+  applyServerUpdates,
 } from "../services/updateChecker.js";
 import { performBackgroundDeletion } from "../services/serverDelete.js";
 import {
@@ -1147,6 +1148,35 @@ router.post("/:id/check-updates", async (req: Request, res: Response) => {
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Unknown error";
     res.status(500).json({ error: `Failed to check for updates: ${msg}` });
+  }
+});
+
+// POST /api/servers/:id/apply-updates - Apply pending updates to a stopped server
+router.post("/:id/apply-updates", async (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  if (isServerRunning(id)) {
+    return res
+      .status(409)
+      .json({ error: "Server is running — stop it before applying updates" });
+  }
+
+  try {
+    // Run updates in background, respond immediately
+    res.json({
+      success: true,
+      message: "Update started",
+    });
+
+    await applyServerUpdates(id);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    logger.error(`[Routes] Failed to apply updates for server ${id}: ${msg}`);
   }
 });
 

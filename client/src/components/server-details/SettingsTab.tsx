@@ -1708,6 +1708,7 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
         open={urCheckDialogOpen}
         onOpenChange={setUrCheckDialogOpen}
         serverId={server.id}
+        serverStatus={server.status}
       />
     </>
   );
