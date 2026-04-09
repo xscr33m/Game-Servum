@@ -134,11 +134,17 @@ export function AgentControlPanel({ onAddAgent }: AgentControlPanelProps) {
   }, [fetchInfo, fetchAgentSettings, fetchUpdateState]);
 
   // Listen for real-time agent update WebSocket events
+  // Game server updates broadcast the same event types but always include
+  // a `serverId` in the payload — skip those to avoid confusing a game
+  // server update with an agent self-update.
   useEffect(() => {
     if (!isConnected) return;
     const unsubscribe = subscribe((message) => {
-      if (message.type === "update:detected") {
-        const { currentVersion, latestVersion } = message.payload as {
+      const payload = message.payload as Record<string, unknown> | undefined;
+      const isServerEvent = payload && "serverId" in payload;
+
+      if (message.type === "update:detected" && !isServerEvent) {
+        const { currentVersion, latestVersion } = payload as {
           currentVersion: string;
           latestVersion: string;
         };
@@ -149,13 +155,12 @@ export function AgentControlPanel({ onAddAgent }: AgentControlPanelProps) {
           latestVersion,
           checking: false,
         }));
-      } else if (message.type === "update-check:complete") {
-        const { updateAvailable, currentVersion, latestVersion } =
-          message.payload as {
-            updateAvailable: boolean;
-            currentVersion: string;
-            latestVersion: string;
-          };
+      } else if (message.type === "update-check:complete" && !isServerEvent) {
+        const { updateAvailable, currentVersion, latestVersion } = payload as {
+          updateAvailable: boolean;
+          currentVersion: string;
+          latestVersion: string;
+        };
         setUpdateState((prev) => ({
           ...prev!,
           updateAvailable,
@@ -167,13 +172,13 @@ export function AgentControlPanel({ onAddAgent }: AgentControlPanelProps) {
           toastInfo("Agent is up to date");
         }
         manualCheckRef.current = false;
-      } else if (message.type === "update:applied") {
+      } else if (message.type === "update:applied" && !isServerEvent) {
         setUpdateState((prev) => ({
           ...prev!,
           downloaded: true,
           downloading: false,
         }));
-      } else if (message.type === "update:restart") {
+      } else if (message.type === "update:restart" && !isServerEvent) {
         toastInfo("Agent is restarting to install update...");
         if (activeConnection) {
           updateConnectionStatus(activeConnection.id, "updating");
