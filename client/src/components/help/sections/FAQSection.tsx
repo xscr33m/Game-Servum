@@ -93,6 +93,16 @@ const faqs = [
     answer:
       "When you opt in via Settings > Privacy, the Agent periodically reports anonymous aggregate counts: total servers managed, total mods installed, total unique players tracked, and a breakdown by game. No personal data, IP addresses, server names, or player identities are ever sent. Each Agent is identified by a random UUID. You can disable this at any time — the Agent will deregister and delete all stored credentials.",
   },
+  {
+    question: "Are the Windows installers code-signed?",
+    answer:
+      "Yes. Starting with v0.9.9, all Windows installers are digitally signed with a Certum Open Source Code Signing certificate. You can verify the signature by right-clicking the installer → Properties → Digital Signatures. Windows SmartScreen may still show a brief warning until the certificate builds enough reputation.",
+  },
+  {
+    question: "How can I verify my download?",
+    answer:
+      "All releases include a SHA256SUMS file with checksums for every artifact, plus a GPG signature (SHA256SUMS.sig) for authenticity. Download both files from the GitHub Release, then run: gpg --import game-servum-release-key.asc, gpg --verify SHA256SUMS.sig SHA256SUMS, and sha256sum -c SHA256SUMS. The GPG public key is available in the repository root.",
+  },
 ];
 
 export function FAQSection() {
