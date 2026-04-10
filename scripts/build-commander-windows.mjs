@@ -95,8 +95,7 @@ const electronPkg = {
       ...(signingEnabled && {
         signtoolOptions: {
           signingHashAlgorithms: ["sha256"],
-          timestampServer: "http://time.certum.pl",
-          timestampDigestAlgorithm: "sha256",
+          rfc3161TimeStampServer: "http://time.certum.pl",
         },
       }),
     },
