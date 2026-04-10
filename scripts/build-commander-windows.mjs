@@ -83,19 +83,17 @@ const electronPkg = {
       target: [{ target: "nsis", arch: ["x64"] }],
       icon: "build/icon.png",
       // Code signing: uses certificate from Windows Certificate Store (Certum SimplySign)
-      ...(signingEnabled &&
-        process.env.WIN_CSC_THUMBPRINT && {
-          certificateSha1: process.env.WIN_CSC_THUMBPRINT,
-        }),
-      ...(signingEnabled &&
-        process.env.WIN_CSC_NAME &&
-        !process.env.WIN_CSC_THUMBPRINT && {
-          certificateSubjectName: process.env.WIN_CSC_NAME,
-        }),
       ...(signingEnabled && {
         signtoolOptions: {
           signingHashAlgorithms: ["sha256"],
           rfc3161TimeStampServer: "http://time.certum.pl",
+          ...(process.env.WIN_CSC_THUMBPRINT && {
+            certificateSha1: process.env.WIN_CSC_THUMBPRINT,
+          }),
+          ...(process.env.WIN_CSC_NAME &&
+            !process.env.WIN_CSC_THUMBPRINT && {
+              certificateSubjectName: process.env.WIN_CSC_NAME,
+            }),
         },
       }),
     },
