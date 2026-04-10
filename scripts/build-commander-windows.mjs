@@ -82,18 +82,11 @@ const electronPkg = {
     win: {
       target: [{ target: "nsis", arch: ["x64"] }],
       icon: "build/icon.png",
-      // Code signing: uses certificate from Windows Certificate Store (Certum SimplySign)
+      // Code signing: custom sign function for reliable Certum SimplySign support
       ...(signingEnabled && {
         signtoolOptions: {
+          sign: "./electron-sign.cjs",
           signingHashAlgorithms: ["sha256"],
-          rfc3161TimeStampServer: "http://time.certum.pl",
-          ...(process.env.WIN_CSC_THUMBPRINT && {
-            certificateSha1: process.env.WIN_CSC_THUMBPRINT,
-          }),
-          ...(process.env.WIN_CSC_NAME &&
-            !process.env.WIN_CSC_THUMBPRINT && {
-              certificateSubjectName: process.env.WIN_CSC_NAME,
-            }),
         },
       }),
     },
@@ -110,6 +103,14 @@ writeFileSync(
   resolve(STAGING, "package.json"),
   JSON.stringify(electronPkg, null, 2),
 );
+
+// Copy custom signing script to staging (referenced by electron-builder config)
+if (signingEnabled) {
+  cpSync(
+    resolve(__dirname, "electron-sign.cjs"),
+    resolve(STAGING, "electron-sign.cjs"),
+  );
+}
 
 // 3b. Build resources (icon only, no NSIS customization needed)
 mkdirSync(resolve(STAGING, "build"), { recursive: true });
