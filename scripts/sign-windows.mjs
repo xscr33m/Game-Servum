@@ -66,6 +66,15 @@ function findSigntoolSync() {
 }
 
 /**
+ * Get the resolved path to signtool.exe.
+ * @returns {string | null} Path to signtool.exe or null if not found/not Windows.
+ */
+export function getSigntoolPath() {
+  if (process.platform !== "win32") return null;
+  return findSigntoolSync();
+}
+
+/**
  * Check if code signing is available and not skipped.
  * @returns {boolean}
  */

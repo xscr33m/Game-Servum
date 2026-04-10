@@ -51,6 +51,15 @@ BrandingText "${PRODUCT_NAME} v${PRODUCT_VERSION}"
 !include "WinMessages.nsh"
 
 ; ──────────────────────────────────────────────────────────
+;  Code signing (uninstaller)
+; ──────────────────────────────────────────────────────────
+; When ENABLE_SIGNING is defined, sign the uninstaller during compilation
+; using the sign.bat created by the build script in the staging directory
+!ifdef ENABLE_SIGNING
+  !uninstfinalize '"${STAGING_DIR}\sign.bat" "%1"'
+!endif
+
+; ──────────────────────────────────────────────────────────
 ;  Variables
 ; ──────────────────────────────────────────────────────────
 Var DataDir

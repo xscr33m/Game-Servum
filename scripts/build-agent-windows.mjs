@@ -38,10 +38,13 @@ import {
   signFile,
   isSigningAvailable,
   printSigningStatus,
+  getSigntoolPath,
 } from "./sign-windows.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
+
+const TIMESTAMP_SERVER = "http://time.certum.pl";
 
 // Read version from package.json
 const pkg = JSON.parse(readFileSync(resolve(ROOT, "package.json"), "utf-8"));
@@ -182,6 +185,25 @@ if (existsSync(resolve(ROOT, "LICENSE"))) {
 
 console.log("  ✓ Staged all service files");
 
+// 3f. Sign staged executables + prepare uninstaller signing
+const signingEnabled = isSigningAvailable();
+if (signingEnabled) {
+  console.log("\n  Signing staged executables...");
+  signFile(resolve(STAGING, "GameServumAgent.exe"));
+
+  // Create sign.bat for NSIS !uninstfinalize (signs uninstaller during compilation)
+  const signtoolPath = getSigntoolPath();
+  let certArgs = "/a";
+  if (process.env.WIN_CSC_THUMBPRINT) {
+    certArgs = `/sha1 ${process.env.WIN_CSC_THUMBPRINT}`;
+  } else if (process.env.WIN_CSC_NAME) {
+    certArgs = `/n "${process.env.WIN_CSC_NAME}"`;
+  }
+  const signBat = `@"${signtoolPath}" sign ${certArgs} /tr ${TIMESTAMP_SERVER} /td sha256 /fd sha256 %1\r\n`;
+  writeFileSync(resolve(STAGING, "sign.bat"), signBat, "utf-8");
+  console.log("  ✓ Created sign.bat for uninstaller signing");
+}
+
 // ─── 4. Build NSIS installer ────────────────────────────────────
 
 console.log("\n[4/6] Building NSIS installer...");
@@ -226,11 +248,17 @@ const nsisScript = resolve(ROOT, "scripts", "nsis", "agent-installer.nsi");
 const installerExe = `Game-Servum-Agent-Setup-v${APP_VERSION}.exe`;
 const installerPath = resolve(DIST_DIR, installerExe);
 
+// Build NSIS defines string — conditionally include signing flag
+let nsisDefines = `-DPRODUCT_VERSION="${APP_VERSION}" -DSTAGING_DIR="${STAGING}" -DOUTPUT_FILE="${installerPath}"`;
+if (signingEnabled) {
+  nsisDefines += ` -DENABLE_SIGNING`;
+}
+
 try {
-  execSync(
-    `${makensis} -DPRODUCT_VERSION="${APP_VERSION}" -DSTAGING_DIR="${STAGING}" -DOUTPUT_FILE="${installerPath}" "${nsisScript}"`,
-    { cwd: ROOT, stdio: "inherit" },
-  );
+  execSync(`${makensis} ${nsisDefines} "${nsisScript}"`, {
+    cwd: ROOT,
+    stdio: "inherit",
+  });
   console.log(`  ✓ Created installer: ${installerExe}`);
 } catch (err) {
   console.error("  ✗ NSIS build failed!");
