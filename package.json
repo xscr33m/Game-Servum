@@ -23,6 +23,7 @@
     "build:linux": "npm run audit:check && npm run build -w @game-servum/shared && npm run build --workspace=client && node scripts/build-commander-linux.mjs",
     "build:web": "npm run audit:check && npm run build -w @game-servum/shared && node scripts/build-commander-web.mjs",
     "version:bump": "node scripts/bump-version.mjs",
+    "sign:release": "node scripts/sign-release.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
   },

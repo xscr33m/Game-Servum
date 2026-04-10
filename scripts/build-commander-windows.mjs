@@ -26,6 +26,7 @@ import {
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { isSigningAvailable, printSigningStatus } from "./sign-windows.mjs";
+import { appendToChecksums } from "./checksum.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -250,6 +251,12 @@ if (existsSync(releaseDir)) {
 } else {
   console.error("  ✗ ERROR: NSIS output directory not found!");
   console.error(`    Expected: ${releaseDir}`);
+}
+
+// Generate checksum
+if (outputFile) {
+  console.log("\nGenerating checksum...");
+  await appendToChecksums(resolve(DIST_DIR, outputFile), DIST_DIR);
 }
 
 // Clean up staging
