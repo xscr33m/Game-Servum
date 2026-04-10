@@ -73,5 +73,29 @@ exports.default = async function sign(configuration) {
 
   const cmd = `"${signtool}" ${args.join(" ")}`;
 
-  execSync(cmd, { stdio: "inherit" });
+  // Retry with delay — cloud HSM can fail with NTE_FAIL (0x80090020)
+  // when signing multiple files in rapid succession
+  const maxRetries = 3;
+  const retryDelay = 3000; // 3 seconds between retries
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      execSync(cmd, { stdio: "inherit" });
+      return; // Success
+    } catch (err) {
+      if (attempt < maxRetries) {
+        const filename = path.basename(configuration.path);
+        console.log(
+          `  ⚠ Signing attempt ${attempt}/${maxRetries} failed for ${filename}, retrying in ${retryDelay / 1000}s...`,
+        );
+        await sleep(retryDelay * attempt); // Increasing delay: 3s, 6s, 9s
+      } else {
+        throw err; // Final attempt failed — propagate error
+      }
+    }
+  }
 };
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
