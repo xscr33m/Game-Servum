@@ -607,9 +607,25 @@ function commander_setupAutoUpdater() {
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = true;
 
-    // Disable code signature verification (no signing certificate)
+    // Code signature verification for updates:
+    // When the installer is code-signed (Certum certificate), electron-updater
+    // automatically verifies Authenticode signatures on downloaded updates.
+    // Only disable verification for unsigned/development builds.
+    // The build script writes a "codeSigned" flag into package.json at build time.
     if (process.platform === "win32") {
-      autoUpdater.verifyUpdateCodeSignature = false;
+      let isSigned = false;
+      try {
+        const appPkg = require(path.join(app.getAppPath(), "package.json"));
+        isSigned = appPkg.codeSigned === true;
+      } catch {
+        // Fallback: unsigned
+      }
+      autoUpdater.verifyUpdateCodeSignature = isSigned;
+      if (!isSigned) {
+        logger.info(
+          "[AutoUpdater] Code signature verification disabled (unsigned build)",
+        );
+      }
     }
 
     // Use channel-based update discovery on all platforms

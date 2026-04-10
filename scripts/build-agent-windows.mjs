@@ -34,6 +34,11 @@ import {
 import { resolve, dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { createReadStream, statSync } from "fs";
+import {
+  signFile,
+  isSigningAvailable,
+  printSigningStatus,
+} from "./sign-windows.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -53,6 +58,7 @@ console.log(`║  Game-Servum Agent Builder (Windows)       `);
 console.log(`║  Version: ${APP_VERSION.padEnd(32)}`);
 console.log(`║  Mode: Windows Service (WinSW + NSIS)      `);
 console.log("╚════════════════════════════════════════════");
+printSigningStatus();
 
 // ─── 1. Build shared types ─────────────────────────────────────
 
@@ -229,6 +235,18 @@ try {
 } catch (err) {
   console.error("  ✗ NSIS build failed!");
   process.exit(1);
+}
+
+// ─── 4b. Sign installer ─────────────────────────────────────────
+
+if (isSigningAvailable()) {
+  console.log("\nSigning installer...");
+  signFile(installerPath);
+} else if (
+  process.env.SKIP_CODE_SIGNING !== "true" &&
+  process.platform === "win32"
+) {
+  console.warn("\n  ⚠ Code signing skipped (signtool.exe not found)");
 }
 
 // ─── 5. Create update ZIP ────────────────────────────────────────

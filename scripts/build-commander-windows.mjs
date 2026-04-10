@@ -25,6 +25,7 @@ import {
 } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
+import { isSigningAvailable, printSigningStatus } from "./sign-windows.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -40,6 +41,7 @@ console.log("╔═════════════════════�
 console.log(`║  Game-Servum Commander Builder (Windows)   `);
 console.log(`║  Version: ${APP_VERSION.padEnd(32)}`);
 console.log("╚════════════════════════════════════════════");
+printSigningStatus();
 
 // ─── 1. Build shared types ─────────────────────────────────────
 
@@ -68,14 +70,35 @@ if (existsSync(STAGING)) {
 const electronBasePkg = JSON.parse(
   readFileSync(resolve(ROOT, "electron", "package.json"), "utf-8"),
 );
+const signingEnabled = isSigningAvailable();
+
 const electronPkg = {
   ...electronBasePkg,
   version: APP_VERSION,
+  // Flag for the Electron app to know if this build is code-signed
+  codeSigned: signingEnabled,
   build: {
     ...electronBasePkg.build,
     win: {
       target: [{ target: "nsis", arch: ["x64"] }],
       icon: "build/icon.png",
+      // Code signing: uses certificate from Windows Certificate Store (Certum SimplySign)
+      ...(signingEnabled &&
+        process.env.WIN_CSC_THUMBPRINT && {
+          certificateSha1: process.env.WIN_CSC_THUMBPRINT,
+        }),
+      ...(signingEnabled &&
+        process.env.WIN_CSC_NAME &&
+        !process.env.WIN_CSC_THUMBPRINT && {
+          certificateSubjectName: process.env.WIN_CSC_NAME,
+        }),
+      ...(signingEnabled && {
+        signtoolOptions: {
+          signingHashAlgorithms: ["sha256"],
+          timestampServer: "http://time.certum.pl",
+          timestampDigestAlgorithm: "sha256",
+        },
+      }),
     },
     nsis: {
       oneClick: false,
@@ -186,7 +209,10 @@ console.log("\n[5/6] Building NSIS installer...");
 execSync("npx electron-builder --win --publish never", {
   cwd: STAGING,
   stdio: "inherit",
-  env: { ...process.env, NODE_NO_WARNINGS: "1" },
+  env: {
+    ...process.env,
+    NODE_NO_WARNINGS: "1",
+  },
 });
 
 // ─── 6. Copy output to dist/ ────────────────────────────────────
