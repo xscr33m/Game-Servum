@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FaArrowLeft,
@@ -12,6 +12,9 @@ import {
   FaServer,
   FaDesktop,
   FaCircle,
+  FaPalette,
+  FaTextWidth,
+  FaTextSlash,
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,6 +49,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { AgentStatusBanner } from "@/components/agent/AgentStatusBanner";
 import { toastSuccess, toastError } from "@/lib/toast";
 import { logger } from "@/lib/logger";
+import { Tip } from "@/components/ui/tooltip";
 import { LogLevel } from "@game-servum/shared";
 import type { LoggerSettings } from "@game-servum/shared";
 
@@ -75,8 +79,8 @@ export function Logs() {
   const navigate = useNavigate();
   const { api, connections, activeConnection } = useBackend();
 
-  // Active agent/dashboard selection
-  const [activeTab, setActiveTab] = useState<string>("dashboard");
+  // Active agent/commander selection
+  const [activeTab, setActiveTab] = useState<string>("commander");
 
   // Per-agent log viewer state
   const [logStates, setLogStates] = useState<Record<string, LogViewerState>>(
@@ -89,6 +93,8 @@ export function Logs() {
   const [refreshing, setRefreshing] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [colorize, setColorize] = useState(false);
+  const [wordWrap, setWordWrap] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<{
     agentId: string;
     fileName: string;
@@ -110,11 +116,11 @@ export function Logs() {
     },
   };
 
-  // Load log files for an agent or dashboard
+  // Load log files for an agent or Commander
   const loadLogFiles = useCallback(
     async (agentId: string) => {
-      // For dashboard: use local IPC
-      if (agentId === "dashboard") {
+      // For Commander: use local IPC
+      if (agentId === "commander") {
         const electronLogs = window.electronAPI?.logs;
         if (!electronLogs) {
           logger.debug("[Logs] No Electron logs API available");
@@ -220,8 +226,8 @@ export function Logs() {
   // Load log file content
   const loadLogContent = useCallback(
     async (agentId: string, filename: string) => {
-      // For dashboard: use local IPC
-      if (agentId === "dashboard") {
+      // For Commander: use local IPC
+      if (agentId === "commander") {
         const electronLogs = window.electronAPI?.logs;
         if (!electronLogs) return;
 
@@ -278,11 +284,11 @@ export function Logs() {
     [api.logs],
   );
 
-  // Load log settings for an agent or dashboard
+  // Load log settings for an agent or Commander
   const loadLogSettings = useCallback(
     async (agentId: string) => {
-      // For dashboard: use local IPC
-      if (agentId === "dashboard") {
+      // For Commander: use local IPC
+      if (agentId === "commander") {
         const electronLogs = window.electronAPI?.logs;
         if (!electronLogs) return;
 
@@ -330,12 +336,12 @@ export function Logs() {
     [api.logs, connections],
   );
 
-  // Initialize log states for all agents/dashboard - only on mount
+  // Initialize log states for all agents/Commander - only on mount
   useEffect(() => {
     const initialStates: Record<string, LogViewerState> = {};
 
-    // Always include dashboard
-    initialStates["dashboard"] = {
+    // Always include Commander
+    initialStates["commander"] = {
       files: [],
       selectedFile: null,
       content: "",
@@ -385,8 +391,8 @@ export function Logs() {
     // Skip if already loaded this tab
     if (hasLoadedTab.has(activeTab)) return;
 
-    // For dashboard tab: Always load (local Electron IPC)
-    if (activeTab === "dashboard") {
+    // For Commander tab: Always load (local Electron IPC)
+    if (activeTab === "commander") {
       setHasLoadedTab((prev) => new Set(prev).add(activeTab));
       loadLogFiles(activeTab);
       loadLogSettings(activeTab);
@@ -415,8 +421,8 @@ export function Logs() {
   ) {
     setSavingSettings(true);
     try {
-      // For dashboard: use local IPC
-      if (agentId === "dashboard") {
+      // For Commander: use local IPC
+      if (agentId === "commander") {
         const electronLogs = window.electronAPI?.logs;
         if (electronLogs) {
           const response = await electronLogs.updateSettings(updates);
@@ -461,8 +467,8 @@ export function Logs() {
     if (!state) return;
 
     try {
-      // For dashboard: use local IPC
-      if (agentId === "dashboard") {
+      // For Commander: use local IPC
+      if (agentId === "commander") {
         const electronLogs = window.electronAPI?.logs;
         if (electronLogs) {
           const response = await electronLogs.cleanup(
@@ -514,8 +520,8 @@ export function Logs() {
     try {
       let content: string;
 
-      // For dashboard: use local IPC
-      if (agentId === "dashboard") {
+      // For Commander: use local IPC
+      if (agentId === "commander") {
         const electronLogs = window.electronAPI?.logs;
         if (!electronLogs) return;
         const response = await electronLogs.getFileContent(state.selectedFile);
@@ -554,8 +560,8 @@ export function Logs() {
 
   async function executeDelete(agentId: string, fileName: string) {
     try {
-      // For dashboard: use local IPC
-      if (agentId === "dashboard") {
+      // For Commander: use local IPC
+      if (agentId === "commander") {
         const electronLogs = window.electronAPI?.logs;
         if (electronLogs) {
           const response = await electronLogs.deleteFile(fileName);
@@ -622,6 +628,46 @@ export function Logs() {
     return lines.join("\n");
   }
 
+  // Get CSS class for a log level
+  function getLogLevelClass(line: string): string {
+    if (line.includes(" ERROR ")) return "text-red-400";
+    if (line.includes(" WARN ")) return "text-yellow-400";
+    if (line.includes(" DEBUG ")) return "text-zinc-500";
+    return "text-foreground";
+  }
+
+  // Render colorized log content
+  const colorizedContent = useMemo(() => {
+    let lines = currentLogs.content.split("\n");
+
+    if (levelFilter !== "all") {
+      const level = levelFilter.toUpperCase();
+      lines = lines.filter((line) => line.includes(` ${level} `));
+    }
+
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      lines = lines.filter((line) => line.toLowerCase().includes(query));
+    }
+
+    const filtered = lines.join("\n");
+    if (!filtered) return null;
+    return filtered.split("\n").map((line, i) => (
+      <div key={i} className={getLogLevelClass(line)}>
+        {line || "\n"}
+      </div>
+    ));
+  }, [currentLogs.content, levelFilter, searchQuery]);
+
+  // Match count for search
+  const searchMatchCount = useMemo(() => {
+    if (!searchQuery.trim() || !currentLogs.content) return 0;
+    const query = searchQuery.toLowerCase();
+    return currentLogs.content
+      .split("\n")
+      .filter((line) => line.toLowerCase().includes(query)).length;
+  }, [currentLogs.content, searchQuery]);
+
   // Format helpers
   function formatFileSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
@@ -636,15 +682,15 @@ export function Logs() {
 
   // Get agent name
   function getAgentName(agentId: string): string {
-    if (agentId === "dashboard") return "Dashboard";
+    if (agentId === "commander") return "Commander";
     const conn = connections.find((c) => c.id === agentId);
     return conn?.name || agentId;
   }
 
   // Check if current tab is connected/available
   function isTabConnected(): boolean {
-    if (activeTab === "dashboard") {
-      // Dashboard is always "connected" if Electron logs API is available
+    if (activeTab === "commander") {
+      // Commander is always "connected" if Electron logs API is available
       return !!window.electronAPI?.logs;
     }
     const connection = connections.find((c) => c.id === activeTab);
@@ -657,7 +703,7 @@ export function Logs() {
 
   // Helper to get connection status
   function getConnectionStatus(agentId: string): keyof typeof STATUS_COLORS {
-    if (agentId === "dashboard") return "connected";
+    if (agentId === "commander") return "connected";
     const connection = connections.find((c) => c.id === agentId);
     return (connection?.status as keyof typeof STATUS_COLORS) || "disconnected";
   }
@@ -671,7 +717,7 @@ export function Logs() {
             <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
               <FaArrowLeft className="h-4 w-4 mr-2" />
               <img
-                src={publicAsset("dashboard-icon.png")}
+                src={publicAsset("commander-icon.png")}
                 alt=""
                 className="h-7 w-auto mr-1"
               />
@@ -725,10 +771,10 @@ export function Logs() {
             <Select value={activeTab} onValueChange={setActiveTab}>
               <SelectTrigger className="w-auto h-9">
                 <div className="flex items-center gap-2 min-w-0 me-1">
-                  {activeTab === "dashboard" ? (
+                  {activeTab === "commander" ? (
                     <>
                       <FaDesktop className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className="truncate">Dashboard</span>
+                      <span className="truncate">Commander</span>
                       <FaCircle className="h-2 w-2 text-green-500 shrink-0 ml-auto" />
                     </>
                   ) : (
@@ -745,10 +791,10 @@ export function Logs() {
                 </div>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="dashboard">
+                <SelectItem value="commander">
                   <div className="flex items-center gap-2">
                     <FaDesktop className="h-4 w-4 text-muted-foreground" />
-                    <span>Dashboard</span>
+                    <span>Commander</span>
                     <FaCircle className="h-2 w-2 text-green-500 ml-auto" />
                   </div>
                 </SelectItem>
@@ -924,6 +970,97 @@ export function Logs() {
             </Sheet>
           </>
         }
+        mobileMenuTitle="Logs"
+        mobileMenu={
+          <div className="space-y-5">
+            {/* Source selector — flat list instead of Select (portaled dropdowns break inside Sheet) */}
+            <div className="space-y-2">
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">
+                Source
+              </div>
+              <div className="space-y-1">
+                <button
+                  data-keep-open
+                  className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg transition-colors text-left ${activeTab === "commander" ? "bg-muted/70 font-medium" : "hover:bg-muted/50"}`}
+                  onClick={() => setActiveTab("commander")}
+                >
+                  <FaDesktop className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="text-sm truncate">Commander</span>
+                  <FaCircle className="h-2 w-2 text-green-500 shrink-0 ml-auto" />
+                </button>
+                {connections.map((conn) => (
+                  <button
+                    key={conn.id}
+                    data-keep-open
+                    className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg transition-colors text-left ${activeTab === conn.id ? "bg-muted/70 font-medium" : "hover:bg-muted/50"}`}
+                    onClick={() => setActiveTab(conn.id)}
+                  >
+                    <FaServer className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="text-sm truncate">{conn.name}</span>
+                    <FaCircle
+                      className={`h-2 w-2 shrink-0 ml-auto ${STATUS_COLORS[(conn.status as keyof typeof STATUS_COLORS) || "disconnected"]}`}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* File selector — flat list */}
+            <div className="space-y-2">
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">
+                Log File
+              </div>
+              <div className="space-y-1 max-h-48 overflow-y-auto">
+                {currentLogs.files.length === 0 ? (
+                  <p className="text-sm text-muted-foreground px-3 py-2">
+                    No log files available
+                  </p>
+                ) : (
+                  currentLogs.files.map((file) => (
+                    <button
+                      key={file.name}
+                      data-mobile-nav
+                      className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg transition-colors text-left ${currentLogs.selectedFile === file.name ? "bg-muted/70 font-medium" : "hover:bg-muted/50"}`}
+                      onClick={() => {
+                        setLogStates((prev) => ({
+                          ...prev,
+                          [activeTab]: {
+                            ...prev[activeTab],
+                            selectedFile: file.name,
+                          },
+                        }));
+                        loadLogContent(activeTab, file.name);
+                      }}
+                      disabled={!isTabConnected()}
+                    >
+                      <span className="text-sm truncate">{file.name}</span>
+                      <span className="text-xs text-muted-foreground shrink-0 ml-auto">
+                        {formatFileSize(file.size)}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="border-t" />
+
+            {/* Settings */}
+            <div className="space-y-1">
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1 mb-2">
+                Options
+              </div>
+              <button
+                data-mobile-nav
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                onClick={() => setSettingsOpen(true)}
+              >
+                <FaGear className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">Log Settings</span>
+              </button>
+            </div>
+          </div>
+        }
       />
 
       <AgentStatusBanner />
@@ -979,8 +1116,49 @@ export function Logs() {
               {/* Spacer */}
               <div className="flex-1 hidden md:block" />
 
+              {/* Search match count */}
+              {searchQuery.trim() && (
+                <Badge variant="secondary" className="text-xs shrink-0">
+                  {searchMatchCount}{" "}
+                  {searchMatchCount === 1 ? "match" : "matches"}
+                </Badge>
+              )}
+
               {/* Actions */}
               <div className="flex items-center gap-2 shrink-0">
+                <Tip
+                  content={
+                    colorize
+                      ? "Disable log level colors"
+                      : "Enable log level colors"
+                  }
+                >
+                  <Button
+                    variant={colorize ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setColorize(!colorize)}
+                    className="h-9 gap-2"
+                  >
+                    <FaPalette className="h-4 w-4" />
+                    <span className="hidden sm:inline">Colors</span>
+                  </Button>
+                </Tip>
+                <Tip
+                  content={wordWrap ? "Disable word wrap" : "Enable word wrap"}
+                >
+                  <Button
+                    variant={wordWrap ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setWordWrap(!wordWrap)}
+                    className="h-9"
+                  >
+                    {wordWrap ? (
+                      <FaTextWidth className="h-4 w-4" />
+                    ) : (
+                      <FaTextSlash className="h-4 w-4" />
+                    )}
+                  </Button>
+                </Tip>
                 <Button
                   variant="outline"
                   size="sm"
@@ -1020,10 +1198,10 @@ export function Logs() {
           </div>
 
           {/* Log Content */}
-          <div className="flex-1 overflow-auto p-5 min-h-0 bg-muted/5">
+          <div className="flex-1 overflow-auto p-5 min-h-0 bg-terminal">
             {(() => {
               // Check if agent is disconnected
-              if (activeTab !== "dashboard") {
+              if (activeTab !== "commander") {
                 const connection = connections.find((c) => c.id === activeTab);
                 if (!connection || connection.status !== "connected") {
                   return (
@@ -1066,8 +1244,16 @@ export function Logs() {
 
               if (currentLogs.content) {
                 return (
-                  <pre className="text-[13px] font-mono leading-relaxed whitespace-pre-wrap break-all">
-                    {filterLogs(currentLogs.content)}
+                  <pre
+                    className={`text-[13px] font-mono leading-relaxed ${
+                      wordWrap
+                        ? "whitespace-pre-wrap break-words"
+                        : "whitespace-pre"
+                    } ${!colorize ? "text-green-400" : ""}`}
+                  >
+                    {colorize
+                      ? colorizedContent
+                      : filterLogs(currentLogs.content)}
                   </pre>
                 );
               }
@@ -1098,14 +1284,15 @@ export function Logs() {
               <FaTrash className="h-5 w-5 text-destructive" />
               Delete Log File
             </DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete{" "}
-              <span className="font-semibold text-foreground">
-                {deleteTarget?.fileName}
-              </span>
-              ? This action cannot be undone.
-            </DialogDescription>
+            <DialogDescription>This action cannot be undone.</DialogDescription>
           </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete{" "}
+            <span className="font-semibold text-foreground">
+              {deleteTarget?.fileName}
+            </span>
+            ?
+          </p>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
               variant="outline"

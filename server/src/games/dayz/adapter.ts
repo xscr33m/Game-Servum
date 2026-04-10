@@ -13,22 +13,28 @@
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { logger } from "../../index.js";
-import { updateCharacterIds } from "../../db/index.js";
+import { logger } from "../../core/logger.js";
+import { updateCharacterIds, updateSteam64Ids } from "../../db/index.js";
 import { recordPlayerConnect, recordPlayerDisconnect } from "../../db/index.js";
 import { BaseGameAdapter } from "../base.js";
 import type {
   GameDefinition,
   RconConfig,
   PlayerFileConfig,
+  PlayerListResult,
   EditableFileConfig,
   BrowsableRoot,
   ModCopyResult,
   LogPaths,
   StartupDetector,
+  BackupPathConfig,
+  ExportModListResult,
+  ParseModListResult,
 } from "../types.js";
 import type { GameServer } from "../../types/index.js";
 import type { ServerMod } from "../../types/index.js";
+import type { RconClient } from "../../core/rcon/types.js";
+import { parseBattlEyePlayersResponse } from "../../core/rcon/battleye.js";
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -125,6 +131,9 @@ export class DayZAdapter extends BaseGameAdapter {
       logParsing: true,
       playerListEditable: true,
       profilesPath: true,
+      directMessage: true,
+      priorityQueue: "file",
+      modListFiles: true,
     },
     broadcastCommand: "say -1 {MESSAGE}",
     playerListCommand: "players",
@@ -267,6 +276,21 @@ export class DayZAdapter extends BaseGameAdapter {
     return null;
   }
 
+  async sendDirectMessage(
+    rcon: RconClient,
+    playerId: string,
+    playerName: string,
+    message: string,
+  ): Promise<boolean> {
+    // Resolve the player's current index from the BattlEye players list by name
+    const response = await rcon.sendCommand("players");
+    const players = parseBattlEyePlayersResponse(response);
+    const player = players.find((p) => p.name === playerName);
+    if (!player) return false;
+    await rcon.sendCommand(`say ${player.index} ${message}`);
+    return true;
+  }
+
   // ── Mods ─────────────────────────────────────────────────────────
 
   async copyModToServer(
@@ -382,12 +406,21 @@ export class DayZAdapter extends BaseGameAdapter {
     };
   }
 
+  getPriorityConfig(server: GameServer): PlayerFileConfig | null {
+    return {
+      filePath: path.join(server.installPath, "priority.txt"),
+      idType: "steam-id",
+    };
+  }
+
   formatPlayerEntry(
-    type: "whitelist" | "ban",
+    type: "whitelist" | "ban" | "priority",
     playerId: string,
     playerName?: string,
   ): string {
     if (!playerName) return playerId;
+    // Priority queue stores only Steam IDs (no comments)
+    if (type === "priority") return playerId;
     // DayZ whitelist uses tab separator, ban uses space
     return type === "whitelist"
       ? `${playerId}\t//${playerName}`
@@ -400,6 +433,125 @@ export class DayZAdapter extends BaseGameAdapter {
     // Extract the ID (everything before tab or space+//)
     const id = trimmed.split(/\t|(\s+\/\/)/)[0].trim();
     return id || null;
+  }
+
+  /**
+   * Priority queue uses semicolon-separated Steam IDs on a single line.
+   * Override to add a Steam ID to the semicolon list.
+   */
+  addToPlayerList(
+    server: GameServer,
+    type: "whitelist" | "ban" | "priority",
+    playerId: string,
+    playerName?: string,
+  ): PlayerListResult {
+    if (type !== "priority") {
+      return super.addToPlayerList(server, type, playerId, playerName);
+    }
+
+    const config = this.getPriorityConfig(server);
+    if (!config) {
+      return {
+        success: false,
+        message: "This game does not support priority queue",
+      };
+    }
+
+    let content = "";
+    if (fs.existsSync(config.filePath)) {
+      content = fs.readFileSync(config.filePath, "utf-8").trim();
+    }
+
+    const ids = content
+      ? content
+          .split(";")
+          .map((id) => id.trim())
+          .filter(Boolean)
+      : [];
+
+    if (ids.includes(playerId)) {
+      return {
+        success: false,
+        message: "Player is already on the priority queue",
+      };
+    }
+
+    ids.push(playerId);
+    fs.writeFileSync(config.filePath, ids.join(";"), "utf-8");
+    return {
+      success: true,
+      message: `${playerName || "Player"} added to priority queue`,
+    };
+  }
+
+  /**
+   * Remove a Steam ID from the semicolon-separated priority queue.
+   */
+  removeFromPlayerList(
+    server: GameServer,
+    type: "whitelist" | "ban" | "priority",
+    playerId: string,
+  ): PlayerListResult {
+    if (type !== "priority") {
+      return super.removeFromPlayerList(server, type, playerId);
+    }
+
+    const config = this.getPriorityConfig(server);
+    if (!config) {
+      return {
+        success: false,
+        message: "This game does not support priority queue",
+      };
+    }
+
+    if (!fs.existsSync(config.filePath)) {
+      return { success: false, message: "Priority file not found" };
+    }
+
+    const content = fs.readFileSync(config.filePath, "utf-8").trim();
+    const ids = content
+      ? content
+          .split(";")
+          .map((id) => id.trim())
+          .filter(Boolean)
+      : [];
+    const filtered = ids.filter((id) => id !== playerId);
+
+    if (ids.length === filtered.length) {
+      return {
+        success: false,
+        message: "Player not found on the priority queue",
+      };
+    }
+
+    fs.writeFileSync(config.filePath, filtered.join(";"), "utf-8");
+    return { success: true, message: "Player removed from priority queue" };
+  }
+
+  /**
+   * Return priority queue content as one Steam ID per line (for frontend display).
+   * The file stores IDs as semicolon-separated on one line.
+   */
+  getPlayerListContent(
+    server: GameServer,
+    type: "whitelist" | "ban" | "priority",
+  ): string {
+    if (type !== "priority") {
+      return super.getPlayerListContent(server, type);
+    }
+
+    const config = this.getPriorityConfig(server);
+    if (!config || !fs.existsSync(config.filePath)) return "";
+
+    const content = fs.readFileSync(config.filePath, "utf-8").trim();
+    if (!content) return "";
+
+    // Convert semicolons to newlines for the frontend
+    return content
+      .split(";")
+      .map((id) => id.trim())
+      .filter(Boolean)
+      .join("\n");
   }
 
   // ── Logs ─────────────────────────────────────────────────────────
@@ -446,6 +598,10 @@ export class DayZAdapter extends BaseGameAdapter {
         path: path.join(server.installPath, "whitelist.txt"),
       },
       {
+        name: "priority.txt",
+        path: path.join(server.installPath, "priority.txt"),
+      },
+      {
         name: "BEServer_x64.cfg",
         path: path.join(resolvedProfiles, "BattlEye", "BEServer_x64.cfg"),
         readonly: true,
@@ -455,6 +611,7 @@ export class DayZAdapter extends BaseGameAdapter {
 
   getBrowsableRoots(server: GameServer): BrowsableRoot[] {
     return [
+      ...super.getBrowsableRoots(server),
       {
         key: "profiles",
         label: "Profiles",
@@ -527,14 +684,28 @@ export class DayZAdapter extends BaseGameAdapter {
   }
 
   syncPlayerDataFromLogs(serverId: number, installPath: string): void {
-    const mappings = this.extractPlayerMappingsFromLogs(installPath);
-    if (mappings.size === 0) return;
+    const profilesPath = path.join(installPath, "profiles");
 
-    const updated = updateCharacterIds(serverId, mappings);
-    if (updated > 0) {
-      logger.info(
-        `[DayZ] Synced ${updated} character IDs from ADM log for server ${serverId}`,
-      );
+    // Sync character IDs from ADM logs
+    const charMappings = this.extractPlayerMappingsFromLogs(installPath);
+    if (charMappings.size > 0) {
+      const updated = updateCharacterIds(serverId, charMappings);
+      if (updated > 0) {
+        logger.info(
+          `[DayZ] Synced ${updated} character IDs from ADM log for server ${serverId}`,
+        );
+      }
+    }
+
+    // Sync Steam64 IDs from RPT logs
+    const steam64Mappings = this.extractSteam64MappingsFromLogs(profilesPath);
+    if (steam64Mappings.size > 0) {
+      const updated = updateSteam64Ids(serverId, steam64Mappings);
+      if (updated > 0) {
+        logger.info(
+          `[DayZ] Synced ${updated} Steam64 IDs from RPT log for server ${serverId}`,
+        );
+      }
     }
   }
 
@@ -614,6 +785,131 @@ export class DayZAdapter extends BaseGameAdapter {
     }
   }
 
+  // ── Backup ──────────────────────────────────────────────────────
+
+  getBackupPaths(server: GameServer): BackupPathConfig {
+    const profilesRel = path.isAbsolute(server.profilesPath)
+      ? path.relative(server.installPath, server.profilesPath)
+      : server.profilesPath;
+    return {
+      savePaths: ["mpmissions"],
+      configPaths: [profilesRel, "serverDZ.cfg"],
+      excludePatterns: [
+        "**/*.ADM",
+        "**/*.RPT",
+        "**/*.log",
+        "**/log_archive/**",
+        "**/BattlEye/BEServer_x64_active_*",
+      ],
+    };
+  }
+
+  // ── Mod List Files ───────────────────────────────────────────────
+
+  exportModList(
+    mods: ServerMod[],
+    serverInstallPath: string,
+    backupDir: string,
+    includeDisabled = false,
+  ): ExportModListResult {
+    const result: ExportModListResult = {
+      modListWritten: false,
+      serverModListWritten: false,
+      backups: { modList: null, serverModList: null },
+    };
+
+    // Filter mods: must be installed/update_available, optionally enabled-only
+    const eligibleMods = mods.filter(
+      (m) =>
+        (m.status === "installed" || m.status === "update_available") &&
+        (includeDisabled || m.enabled),
+    );
+
+    const clientMods = eligibleMods
+      .filter((m) => !m.isServerMod)
+      .sort((a, b) => a.loadOrder - b.loadOrder);
+    const serverMods = eligibleMods
+      .filter((m) => m.isServerMod)
+      .sort((a, b) => a.loadOrder - b.loadOrder);
+
+    const timestamp = new Date().toISOString().replace(/:/g, "-");
+
+    // Ensure backup directory exists
+    if (
+      (clientMods.length > 0 || serverMods.length > 0) &&
+      !fs.existsSync(backupDir)
+    ) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+
+    // Export mod_list.txt (client mods)
+    if (clientMods.length > 0) {
+      const modListPath = path.join(serverInstallPath, "mod_list.txt");
+
+      // Backup existing file
+      if (fs.existsSync(modListPath)) {
+        const backupName = `mod_list_${timestamp}.txt`;
+        fs.copyFileSync(modListPath, path.join(backupDir, backupName));
+        result.backups.modList = backupName;
+      }
+
+      const content = clientMods
+        .map(
+          (m) =>
+            `#${m.name}\n#https://steamcommunity.com/sharedfiles/filedetails/?id=${m.workshopId}\n${m.workshopId}`,
+        )
+        .join("\n");
+      fs.writeFileSync(modListPath, content + "\n", "utf-8");
+      result.modListWritten = true;
+    }
+
+    // Export server_mod_list.txt (server-only mods)
+    if (serverMods.length > 0) {
+      const serverModListPath = path.join(
+        serverInstallPath,
+        "server_mod_list.txt",
+      );
+
+      // Backup existing file
+      if (fs.existsSync(serverModListPath)) {
+        const backupName = `server_mod_list_${timestamp}.txt`;
+        fs.copyFileSync(serverModListPath, path.join(backupDir, backupName));
+        result.backups.serverModList = backupName;
+      }
+
+      const content = serverMods
+        .map(
+          (m) =>
+            `#${m.name}\n#https://steamcommunity.com/sharedfiles/filedetails/?id=${m.workshopId}\n${m.workshopId}`,
+        )
+        .join("\n");
+      fs.writeFileSync(serverModListPath, content + "\n", "utf-8");
+      result.serverModListWritten = true;
+    }
+
+    return result;
+  }
+
+  parseModList(serverInstallPath: string): ParseModListResult {
+    const result: ParseModListResult = { clientMods: [], serverMods: [] };
+
+    const parseFile = (filePath: string): string[] => {
+      if (!fs.existsSync(filePath)) return [];
+      const content = fs.readFileSync(filePath, "utf-8");
+      return content
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line && !line.startsWith("#") && /^\d+$/.test(line));
+    };
+
+    result.clientMods = parseFile(path.join(serverInstallPath, "mod_list.txt"));
+    result.serverMods = parseFile(
+      path.join(serverInstallPath, "server_mod_list.txt"),
+    );
+
+    return result;
+  }
+
   // ── Private Helpers ──────────────────────────────────────────────
 
   private findLatestAdmFile(profilesPath: string): string | null {
@@ -627,5 +923,50 @@ export class DayZAdapter extends BaseGameAdapter {
     } catch {
       return null;
     }
+  }
+
+  private findLatestRptFile(profilesPath: string): string | null {
+    try {
+      const files = fs
+        .readdirSync(profilesPath)
+        .filter((f) => f.toLowerCase().endsWith(".rpt"));
+      if (files.length === 0) return null;
+      files.sort();
+      return path.join(profilesPath, files[files.length - 1]);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Extract player name → Steam64 ID mappings from RPT log files.
+   * RPT lines contain: Player "Name"(steamID=76561198012345678) is connected
+   */
+  private extractSteam64MappingsFromLogs(
+    profilesPath: string,
+  ): Map<string, string> {
+    const mappings = new Map<string, string>();
+    if (!fs.existsSync(profilesPath)) return mappings;
+
+    const rptFile = this.findLatestRptFile(profilesPath);
+    if (!rptFile) return mappings;
+
+    try {
+      const content = fs.readFileSync(rptFile, "utf-8");
+      const lines = content.split("\n");
+
+      for (const line of lines) {
+        const match = line.match(
+          /Player "(.+?)"\(steamID=(\d+)\) is connected/,
+        );
+        if (match) {
+          mappings.set(match[1], match[2]);
+        }
+      }
+    } catch {
+      // File may be locked — expected during server runtime
+    }
+
+    return mappings;
   }
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   FaArrowsRotate,
   FaCircleExclamation,
+  FaLockOpen,
   FaPlugCircleXmark,
   FaTrash,
   FaTriangleExclamation,
@@ -9,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useBackend } from "@/hooks/useBackend";
 import { RemoveAgentDialog } from "@/components/agent/RemoveAgentDialog";
-import type { BackendConnection } from "@/lib/config";
+import type { BackendConnection } from "@/types";
 
 const SHOW_DELAY_MS = 2000;
 
@@ -42,7 +43,7 @@ function useDelayedVisibility(shouldShow: boolean): boolean {
  * Non-blocking banner shown below the header on every page when the active
  * agent is in any non-connected state.  Replaces the old full-screen
  * AgentReconnectionScreen with an inline indicator that keeps the entire
- * Dashboard usable.
+ * Commander usable.
  *
  * A short delay prevents the banner from flashing briefly during fast
  * reconnect cycles (e.g. clicking "Reconnect" in the AgentControlPanel).
@@ -61,6 +62,22 @@ export function AgentStatusBanner() {
 
   const compatWarning = activeConnection?.agentInfo?.compatibilityWarning;
 
+  // Check if the agent connection is using plain HTTP (not localhost)
+  const isInsecureConnection = (() => {
+    if (!activeConnection?.url) return false;
+    try {
+      const url = new URL(activeConnection.url);
+      if (url.protocol === "https:") return false;
+      // localhost is safe (loopback, no network exposure)
+      const host = url.hostname;
+      if (host === "localhost" || host === "127.0.0.1" || host === "::1")
+        return false;
+      return true; // http:// to a non-localhost address
+    } catch {
+      return false;
+    }
+  })();
+
   const shouldShowStatus =
     !!activeConnection && activeConnection.status !== "connected";
 
@@ -71,25 +88,39 @@ export function AgentStatusBanner() {
   );
   const statusVisible = isIntentional ? shouldShowStatus : delayedVisible;
 
-  // Show compatibility warning even when connected
+  // Show compatibility warning or insecure connection warning even when connected
   if (!activeConnection) return null;
-  if (!statusVisible && !compatWarning) return null;
+  if (!statusVisible && !compatWarning && !isInsecureConnection) return null;
 
   const name = activeConnection.name;
   const status = activeConnection.status;
   const attempts = activeConnection.reconnectAttempts ?? 0;
 
-  // ── Compatibility warning (shown even when connected) ─────────────────
-  if (status === "connected" && compatWarning) {
+  // ── Connected-state warnings (compat + insecure) ───────────────────
+  if (status === "connected" && (compatWarning || isInsecureConnection)) {
     return (
-      <Banner color="amber">
-        <FaTriangleExclamation className="h-3.5 w-3.5 shrink-0" />
-        <span>
-          Agent <strong>{name}</strong> is outdated (v
-          {activeConnection.agentInfo?.version}). Update recommended for full
-          compatibility. You may experience issues or missing features.
-        </span>
-      </Banner>
+      <>
+        {isInsecureConnection && (
+          <Banner color="amber">
+            <FaLockOpen className="h-3.5 w-3.5 shrink-0" />
+            <span>
+              Connection to agent <strong>{name}</strong> is not encrypted.
+              Credentials are transmitted in plain text. Enable HTTPS on the
+              agent or use a VPN for secure access.
+            </span>
+          </Banner>
+        )}
+        {compatWarning && (
+          <Banner color="amber">
+            <FaTriangleExclamation className="h-3.5 w-3.5 shrink-0" />
+            <span>
+              Agent <strong>{name}</strong> is outdated (v
+              {activeConnection.agentInfo?.version}). Update recommended for
+              full compatibility. You may experience issues or missing features.
+            </span>
+          </Banner>
+        )}
+      </>
     );
   }
 

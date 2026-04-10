@@ -1,4 +1,5 @@
 import { createServer } from "http";
+import { createServer as createHttpsServer } from "https";
 import { WebSocketServer, type WebSocket } from "ws";
 import type { IncomingMessage } from "http";
 import { app } from "./app.js";
@@ -8,6 +9,7 @@ import {
   ensureInitialCredentials,
   verifySessionToken,
 } from "./services/auth.js";
+import { initializeTls, loadTlsCredentials } from "./services/tlsManager.js";
 import { spawn } from "child_process";
 import {
   restoreServerStates,
@@ -20,35 +22,29 @@ import {
   startAutoUpdateCheck,
   stopAutoUpdateCheck,
 } from "./services/agentUpdater.js";
+import { initializeUpdateCheckers } from "./services/updateChecker.js";
+import {
+  initStatsReporter,
+  stopStatsReporter,
+} from "./services/statsReporter.js";
 import {
   startMetricsCollection,
   stopMetricsCollection,
 } from "./services/systemMonitor.js";
-import { SimpleLogger } from "./services/logger.js";
-import { DEFAULT_LOG_SETTINGS } from "@game-servum/shared";
 import { setAppSetting } from "./db/index.js";
+import { logger } from "./core/logger.js";
+import { isRestartRequested } from "./core/shutdown.js";
+import {
+  broadcast,
+  addClient,
+  removeClient,
+  getAllClients,
+  getClientCount,
+} from "./core/broadcast.js";
+
+export { logger, broadcast };
 
 const config = getConfig();
-
-// Initialize logger
-export const logger = new SimpleLogger("agent", config.logsPath, {
-  ...DEFAULT_LOG_SETTINGS,
-  writeToConsole: process.env.NODE_ENV === "development",
-});
-
-// Store connected clients
-const clients = new Set<WebSocket>();
-
-// Broadcast to all connected clients
-export function broadcast(type: string, payload: unknown) {
-  const message = JSON.stringify({ type, payload });
-  clients.forEach((client) => {
-    if (client.readyState === 1) {
-      // WebSocket.OPEN = 1
-      client.send(message);
-    }
-  });
-}
 
 async function main() {
   logger.info("[Server] Starting server...", {
@@ -64,6 +60,9 @@ async function main() {
   // Generate initial credentials on first start (if auth enabled)
   ensureInitialCredentials();
 
+  // Initialize TLS (auto-generates self-signed cert on first start)
+  await initializeTls();
+
   // Restore server states (check if any servers were running before restart)
   restoreServerStates();
 
@@ -73,11 +72,25 @@ async function main() {
   // Initialize scheduled RCON message broadcasters
   initializeMessageBroadcasters();
 
+  // Initialize update checkers for servers that were already running
+  const runningServerIds = getRunningServerIds();
+  initializeUpdateCheckers(runningServerIds);
+
   // Start periodic agent update checks (every 4 hours)
   startAutoUpdateCheck(4);
 
-  // Create HTTP server
-  const server = createServer(app);
+  // Initialize anonymous stats reporter (if enabled)
+  initStatsReporter();
+
+  // Create HTTP or HTTPS server based on TLS configuration
+  const tlsCreds = loadTlsCredentials();
+  const isHttps = tlsCreds !== null;
+  const server = isHttps
+    ? createHttpsServer({ cert: tlsCreds.cert, key: tlsCreds.key }, app)
+    : createServer(app);
+
+  const protocol = isHttps ? "https" : "http";
+  const wsProtocol = isHttps ? "wss" : "ws";
 
   // Create WebSocket server with auth verification
   const wss = new WebSocketServer({
@@ -108,36 +121,36 @@ async function main() {
       }
 
       // Attach session to request for later use
-      (info.req as any).agentSession = payload;
+      info.req.agentSession = payload;
       callback(true);
     },
   });
 
   wss.on("connection", (ws: WebSocket) => {
     logger.debug("[WebSocket] Client connected");
-    clients.add(ws);
+    addClient(ws);
 
     // Start metrics collection when first client connects
-    if (clients.size === 1) {
+    if (getClientCount() === 1) {
       startMetricsCollection();
     }
 
     ws.on("close", () => {
       logger.debug("[WebSocket] Client disconnected");
-      clients.delete(ws);
+      removeClient(ws);
 
       // Stop metrics collection when last client disconnects
-      if (clients.size === 0) {
+      if (getClientCount() === 0) {
         stopMetricsCollection();
       }
     });
 
     ws.on("error", (error: Error) => {
       logger.error("[WebSocket] Client error", error);
-      clients.delete(ws);
+      removeClient(ws);
 
       // Stop metrics collection when last client disconnects
-      if (clients.size === 0) {
+      if (getClientCount() === 0) {
         stopMetricsCollection();
       }
     });
@@ -145,10 +158,12 @@ async function main() {
 
   // Start server
   server.listen(config.port, config.host, () => {
-    logger.info("[Server] HTTP and WebSocket server listening", {
-      http: `http://${config.host}:${config.port}`,
-      websocket: `ws://${config.host}:${config.port}/ws`,
+    logger.info("[Server] Server listening", {
+      protocol,
+      url: `${protocol}://${config.host}:${config.port}`,
+      websocket: `${wsProtocol}://${config.host}:${config.port}/ws`,
       auth: config.authEnabled ? "enabled" : "disabled",
+      tls: isHttps ? "enabled" : "disabled",
     });
 
     // Also print to console for visibility
@@ -156,9 +171,10 @@ async function main() {
 ╔════════════════════════════════════════
 ║         Game-Servum Agent              
 ╠════════════════════════════════════════
-║  HTTP:      http://${config.host}:${config.port}      
-║  WebSocket: ws://${config.host}:${config.port}/ws     
+║  ${protocol.toUpperCase().padEnd(6)}    ${protocol}://${config.host}:${config.port}      
+║  WebSocket: ${wsProtocol}://${config.host}:${config.port}/ws     
 ║  Auth:      ${config.authEnabled ? "enabled " : "disabled"}
+║  TLS:       ${isHttps ? "enabled " : "disabled"}
 ╚════════════════════════════════════════
     `);
   });
@@ -167,7 +183,7 @@ async function main() {
   async function gracefulShutdown(signal: string) {
     logger.info(`[Shutdown] Received ${signal}, shutting down gracefully...`);
 
-    const isRestart = (process as any).__gameServumRestart === true;
+    const isRestart = isRestartRequested();
     if (isRestart) {
       logger.info(
         "[Shutdown] This is a restart — will trigger service restart",
@@ -176,6 +192,9 @@ async function main() {
 
     // Stop periodic update checks
     stopAutoUpdateCheck();
+
+    // Stop stats reporter
+    stopStatsReporter();
 
     // Before stopping servers: if this is a restart, remember which servers
     // were running so they can be auto-started after the agent comes back.
@@ -193,10 +212,9 @@ async function main() {
     await shutdownAllServers();
 
     // Close WebSocket connections
-    clients.forEach((client) => {
+    for (const client of getAllClients()) {
       client.close();
-    });
-    clients.clear();
+    }
 
     // Close WebSocket server first — it shares the HTTP server and
     // prevents server.close() from completing while it's still attached
@@ -210,7 +228,7 @@ async function main() {
     // Close HTTP server (releases the port)
     await new Promise<void>((resolve) => {
       server.close(() => {
-        logger.info("[Shutdown] HTTP server closed");
+        logger.info("[Shutdown] Server closed");
         resolve();
       });
     });
@@ -253,5 +271,3 @@ async function main() {
 }
 
 main().catch((err) => logger.error("[Server] Fatal error:", err));
-
-export { clients };

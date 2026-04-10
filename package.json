@@ -1,29 +1,40 @@
 {
   "name": "game-servum",
-  "version": "0.9.8",
+  "version": "0.9.9",
   "description": "Web-based GameServer management with SteamCMD",
   "private": true,
+  "type": "module",
   "license": "GPL-3.0-only",
   "workspaces": [
     "packages/shared",
     "client",
-    "server"
+    "server",
+    "commander-server"
   ],
   "scripts": {
-    "clean": "npm cache clean --force && node -e \"const fs = require('fs'); const path = require('path'); const dirs = ['packages/shared/dist', 'server/dist', 'client/dist', 'dist']; dirs.forEach(d => { const p = path.join(process.cwd(), d); if (fs.existsSync(p)) fs.rmSync(p, {recursive: true}); });\"",
+    "clean": "npm cache clean --force && node -e \"const fs = require('fs'); const path = require('path'); const dirs = ['packages/shared/dist', 'server/dist', 'client/dist', 'commander-server/dist', 'dist']; dirs.forEach(d => { const p = path.join(process.cwd(), d); if (fs.existsSync(p)) fs.rmSync(p, {recursive: true}); });\"",
     "dev": "concurrently \"npm run dev -w @game-servum/shared\" \"npm run dev:server\" \"npm run dev:client\"",
-    "update:check": "node scripts/update-packages.mjs --verbose --dry-run",
-    "update:install": "node scripts/update-packages.mjs --verbose --install",
     "dev:server": "npm run dev --workspace=server",
     "dev:client": "npm run dev --workspace=client",
-    "build": "npm run build -w @game-servum/shared && npm run build --workspace=server && npm run build --workspace=client",
-    "build:agent": "npm run build -w @game-servum/shared && npm run build --workspace=server && node scripts/build-agent-windows.mjs",
-    "build:dashboard": "npm run build -w @game-servum/shared && npm run build --workspace=client && node scripts/build-dashboard-windows.mjs",
-    "build:linux": "npm run build -w @game-servum/shared && npm run build --workspace=client && node scripts/build-dashboard-linux.mjs",
-    "version:bump": "node scripts/bump-version.mjs"
+    "audit:check": "npm audit --audit-level=high",
+    "build": "npm run audit:check && npm run build -w @game-servum/shared && npm run build --workspace=server && npm run build --workspace=client",
+    "build:agent": "npm run audit:check && npm run build -w @game-servum/shared && npm run build --workspace=server && node scripts/build-agent-windows.mjs",
+    "build:commander": "npm run audit:check && npm run build -w @game-servum/shared && npm run build --workspace=client && node scripts/build-commander-windows.mjs",
+    "build:linux": "npm run audit:check && npm run build -w @game-servum/shared && npm run build --workspace=client && node scripts/build-commander-linux.mjs",
+    "build:web": "npm run audit:check && npm run build -w @game-servum/shared && node scripts/build-commander-web.mjs",
+    "version:bump": "node scripts/bump-version.mjs",
+    "sign:release": "node scripts/sign-release.mjs",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "devDependencies": {
-    "concurrently": "^9.1.0"
+    "@eslint/js": "^9.28.0",
+    "concurrently": "^9.1.0",
+    "eslint": "^9.28.0",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^16.5.0",
+    "typescript-eslint": "^8.55.0"
   },
   "engines": {
     "node": ">=20.0.0"

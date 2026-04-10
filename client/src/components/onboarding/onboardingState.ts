@@ -1,6 +1,6 @@
 import { getElectronSettings } from "@/lib/electronSettings";
 
-const ONBOARDING_KEY = "onboarding-completed";
+const WELCOME_KEY = "has-seen-welcome";
 
 // Use Electron settings store (which persists in Documents/) or fallback to localStorage
 function getStorage() {
@@ -8,22 +8,16 @@ function getStorage() {
 }
 
 /**
- * Returns true if onboarding has been completed before.
+ * Returns true if the user has seen the welcome step before.
+ * When true, subsequent wizard opens skip straight to the connect step.
  */
-export function isOnboardingComplete(): boolean {
-  return getStorage().getItem(ONBOARDING_KEY) === "true";
+export function hasSeenWelcome(): boolean {
+  return getStorage().getItem(WELCOME_KEY) === "true";
 }
 
 /**
- * Marks onboarding as complete.
+ * Marks the welcome step as seen (called when user clicks "Get Started").
  */
-export function markOnboardingComplete(): void {
-  getStorage().setItem(ONBOARDING_KEY, "true");
-}
-
-/**
- * Resets onboarding state (for re-running the wizard).
- */
-export function resetOnboarding(): void {
-  getStorage().removeItem(ONBOARDING_KEY);
+export function markWelcomeSeen(): void {
+  getStorage().setItem(WELCOME_KEY, "true");
 }

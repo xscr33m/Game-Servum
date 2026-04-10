@@ -8,6 +8,7 @@ import {
   FaChevronRight,
   FaDownload,
   FaUpload,
+  FaTriangleExclamation,
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Tip } from "@/components/ui/tooltip";
 
 interface FileExplorerToolbarProps {
   /** Currently selected path in the tree (file or directory), or null */
@@ -32,6 +34,7 @@ interface FileExplorerToolbarProps {
   onDownload: (path: string) => void;
   onUpload: (files: FileList, targetDir: string) => void;
   uploading?: boolean;
+  isLargeFile?: boolean;
 }
 
 function BreadcrumbPath({ path }: { path: string | null }) {
@@ -72,6 +75,7 @@ export function FileExplorerToolbar({
   onDownload,
   onUpload,
   uploading,
+  isLargeFile,
 }: FileExplorerToolbarProps) {
   const [newFileOpen, setNewFileOpen] = useState(false);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
@@ -140,68 +144,84 @@ export function FileExplorerToolbar({
 
   return (
     <>
-      <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/30">
-        <BreadcrumbPath path={selectedPath} />
-        <div className="flex items-center gap-1 shrink-0">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => setNewFileOpen(true)}
-            title="New File"
-          >
-            <FaFileCirclePlus className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => setNewFolderOpen(true)}
-            title="New Folder"
-          >
-            <FaFolderPlus className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={openRenameDialog}
-            disabled={!selectedPath}
-            title="Rename"
-          >
-            <FaPen className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => setDeleteOpen(true)}
-            disabled={!selectedPath}
-            title="Delete"
-          >
-            <FaTrash className="h-3.5 w-3.5" />
-          </Button>
-          <div className="w-px h-5 bg-border mx-0.5" />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => selectedPath && onDownload(selectedPath)}
-            disabled={!selectedPath}
-            title="Download"
-          >
-            <FaDownload className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            title="Upload Files"
-          >
-            <FaUpload className="h-3.5 w-3.5" />
-          </Button>
+      <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/30 gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="hidden lg:block min-w-0">
+            <BreadcrumbPath path={selectedPath} />
+          </div>
+          {isLargeFile && (
+            <span className="flex items-center gap-1 text-yellow-500 text-xs font-medium whitespace-nowrap">
+              <FaTriangleExclamation className="h-3.5 w-3.5 shrink-0" />
+              Large file
+            </span>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-1 shrink-0">
+          <Tip content="New File">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 lg:h-7 lg:w-7"
+              onClick={() => setNewFileOpen(true)}
+            >
+              <FaFileCirclePlus className="h-3.5 w-3.5" />
+            </Button>
+          </Tip>
+          <Tip content="New Folder">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 lg:h-7 lg:w-7"
+              onClick={() => setNewFolderOpen(true)}
+            >
+              <FaFolderPlus className="h-3.5 w-3.5" />
+            </Button>
+          </Tip>
+          <Tip content="Rename">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 lg:h-7 lg:w-7"
+              onClick={openRenameDialog}
+              disabled={!selectedPath}
+            >
+              <FaPen className="h-3.5 w-3.5" />
+            </Button>
+          </Tip>
+          <Tip content="Delete">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 lg:h-7 lg:w-7"
+              onClick={() => setDeleteOpen(true)}
+              disabled={!selectedPath}
+            >
+              <FaTrash className="h-3.5 w-3.5" />
+            </Button>
+          </Tip>
+          <div className="w-px h-5 bg-border mx-0.5 hidden lg:block" />
+          <Tip content="Download">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 lg:h-7 lg:w-7"
+              onClick={() => selectedPath && onDownload(selectedPath)}
+              disabled={!selectedPath}
+            >
+              <FaDownload className="h-3.5 w-3.5" />
+            </Button>
+          </Tip>
+          <Tip content="Upload Files">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 lg:h-7 lg:w-7"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+            >
+              <FaUpload className="h-3.5 w-3.5" />
+            </Button>
+          </Tip>
           <input
             ref={fileInputRef}
             type="file"
@@ -214,16 +234,17 @@ export function FileExplorerToolbar({
               }
             }}
           />
-          <div className="w-px h-5 bg-border mx-0.5" />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={onRefresh}
-            title="Refresh"
-          >
-            <FaArrowsRotate className="h-3.5 w-3.5" />
-          </Button>
+          <div className="w-px h-5 bg-border mx-0.5 hidden lg:block" />
+          <Tip content="Refresh">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 lg:h-7 lg:w-7"
+              onClick={onRefresh}
+            >
+              <FaArrowsRotate className="h-3.5 w-3.5" />
+            </Button>
+          </Tip>
         </div>
       </div>
 
@@ -248,11 +269,19 @@ export function FileExplorerToolbar({
               autoFocus
             />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setNewFileOpen(false)}>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setNewFileOpen(false)}
+              className="w-full sm:w-auto"
+            >
               Cancel
             </Button>
-            <Button onClick={handleNewFile} disabled={!newFileName.trim()}>
+            <Button
+              onClick={handleNewFile}
+              disabled={!newFileName.trim()}
+              className="w-full sm:w-auto"
+            >
               Create
             </Button>
           </DialogFooter>
@@ -281,11 +310,19 @@ export function FileExplorerToolbar({
               autoFocus
             />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setNewFolderOpen(false)}>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setNewFolderOpen(false)}
+              className="w-full sm:w-auto"
+            >
               Cancel
             </Button>
-            <Button onClick={handleNewFolder} disabled={!newFolderName.trim()}>
+            <Button
+              onClick={handleNewFolder}
+              disabled={!newFolderName.trim()}
+              className="w-full sm:w-auto"
+            >
               Create
             </Button>
           </DialogFooter>
@@ -312,11 +349,19 @@ export function FileExplorerToolbar({
               autoFocus
             />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRenameOpen(false)}>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setRenameOpen(false)}
+              className="w-full sm:w-auto"
+            >
               Cancel
             </Button>
-            <Button onClick={handleRename} disabled={!renameTo.trim()}>
+            <Button
+              onClick={handleRename}
+              disabled={!renameTo.trim()}
+              className="w-full sm:w-auto"
+            >
               Rename
             </Button>
           </DialogFooter>
@@ -336,11 +381,19 @@ export function FileExplorerToolbar({
             {selectedIsDirectory && " Only empty folders can be deleted."} This
             action cannot be undone.
           </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteOpen(false)}>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteOpen(false)}
+              className="w-full sm:w-auto"
+            >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDelete}>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              className="w-full sm:w-auto"
+            >
               Delete
             </Button>
           </DialogFooter>

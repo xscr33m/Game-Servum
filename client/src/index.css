@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
 @theme {
+  /* ── Breakpoints ── */
+  --breakpoint-xs: 480px;
+
   /* ── Typography ── */
   --font-sans:
     "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
@@ -98,6 +101,11 @@
 
 /* ── Base layer ── */
 @layer base {
+  ::selection {
+    background-color: hsl(142 71% 45% / 0.3);
+    color: inherit;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-sans);

@@ -11,7 +11,7 @@
 
 import { execFile } from "child_process";
 import path from "path";
-import { logger } from "../index.js";
+import { logger } from "../core/logger.js";
 import { getGameDefinition } from "../games/index.js";
 import type {
   FirewallRuleDefinition,
@@ -269,7 +269,7 @@ export async function addFirewallRules(
 export async function removeFirewallRules(
   serverName: string,
   gameId: string,
-  port: number,
+  _port: number,
 ): Promise<FirewallResult> {
   if (process.platform !== "win32") {
     logger.info(

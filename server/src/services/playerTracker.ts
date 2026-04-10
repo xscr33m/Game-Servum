@@ -14,13 +14,14 @@
  * via WebSocket.
  */
 
-import { broadcast, logger } from "../index.js";
+import { broadcast } from "../core/broadcast.js";
+import { logger } from "../core/logger.js";
 import {
   recordPlayerConnect,
   recordPlayerDisconnect,
   disconnectAllPlayers,
-  getOnlinePlayers,
   lookupCharacterId,
+  lookupSteam64Id,
 } from "../db/index.js";
 import { createRconClient, type RconClient } from "../core/rcon/index.js";
 import { getGameAdapter } from "../games/index.js";
@@ -66,13 +67,6 @@ const CHARACTER_ID_SYNC_INTERVAL = 5; // Sync character IDs every N polls
 
 // Servers waiting for a startup-complete signal before connecting RCON
 const pendingReadyServers = new Set<number>();
-
-/**
- * Get cached count of online players for a server
- */
-export function getOnlinePlayerCount(serverId: number): number {
-  return getOnlinePlayers(serverId).length;
-}
 
 /**
  * Notify that a server has finished starting (detected via stdout log pattern).
@@ -338,10 +332,11 @@ async function pollPlayers(serverId: number, rcon: RconClient): Promise<void> {
     // Detect new connections (in current but not in previous)
     for (const [playerId, name] of currentMap) {
       if (!previousMap.has(playerId)) {
-        // Try to find the character ID from previous sessions or ADM logs
+        // Try to find the character ID and Steam64 ID from previous sessions or logs
         const characterId = lookupCharacterId(serverId, name);
+        const steam64Id = lookupSteam64Id(serverId, name);
         logger.info(
-          `[PlayerTracker] Player connected: ${name} (${playerId}${characterId ? `, charId=${characterId}` : ""}) on server ${serverId}`,
+          `[PlayerTracker] Player connected: ${name} (${playerId}${characterId ? `, charId=${characterId}` : ""}${steam64Id ? `, steam64=${steam64Id}` : ""}) on server ${serverId}`,
         );
         recordPlayerConnect(
           serverId,
@@ -349,6 +344,7 @@ async function pollPlayers(serverId: number, rcon: RconClient): Promise<void> {
           name,
           undefined,
           characterId || undefined,
+          steam64Id || undefined,
         );
         broadcast("player:connected", {
           serverId,

@@ -1,11 +1,4 @@
 import { useState } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -1400,15 +1393,15 @@ function ArkInitialSettings({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Initial Server Settings</CardTitle>
-        <CardDescription>
+    <div className="space-y-3 rounded-lg border p-4">
+      <div className="border-b pb-2">
+        <h3 className="text-sm font-medium">Initial Server Settings</h3>
+        <p className="text-xs text-muted-foreground mt-0.5">
           Configure the basic server settings before the first start. ARK will
           generate its full configuration files during the first launch.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-4 md:grid-cols-2">
+        </p>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="map">Map</Label>
           <Select
@@ -1511,8 +1504,8 @@ function ArkInitialSettings({
             {saving ? "Saving..." : "Save Initial Settings"}
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -1553,14 +1546,14 @@ function ArkMapSelector({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Server Map</CardTitle>
-        <CardDescription>
+    <div className="space-y-3 rounded-lg border p-4">
+      <div className="border-b pb-2">
+        <h3 className="text-sm font-medium">Server Map</h3>
+        <p className="text-xs text-muted-foreground mt-0.5">
           Select the map for this server. Changes require a server restart.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-4 md:grid-cols-2">
+        </p>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="mapSelect">Map</Label>
           <Select
@@ -1604,8 +1597,8 @@ function ArkMapSelector({
             {saving ? "Saving..." : "Save Map"}
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -1655,7 +1648,7 @@ export function ArkConfigEditor({
       );
 
   return (
-    <>
+    <div className="space-y-6">
       {/* Map selector — only shown on GameUserSettings.ini tab */}
       {isGus && serverId && launchParams && (
         <ArkMapSelector
@@ -1665,12 +1658,10 @@ export function ArkConfigEditor({
         />
       )}
       {visibleSections.length === 0 && (
-        <Card>
-          <CardContent className="py-6 text-center text-muted-foreground">
-            No configuration fields found. Use the Raw Editor tab to view and
-            edit the file directly.
-          </CardContent>
-        </Card>
+        <div className="text-center text-muted-foreground rounded-lg border p-6">
+          No configuration fields found. Use the Raw Editor tab to view and edit
+          the file directly.
+        </div>
       )}
       {visibleSections.map((section) => {
         const renderedFields = section.fields
@@ -1680,17 +1671,17 @@ export function ArkConfigEditor({
         if (renderedFields.length === 0) return null;
 
         return (
-          <Card key={section.title}>
-            <CardHeader>
-              <CardTitle>{section.title}</CardTitle>
-              <CardDescription>{section.description}</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
-              {renderedFields}
-            </CardContent>
-          </Card>
+          <div key={section.title} className="space-y-3 rounded-lg border p-4">
+            <div className="border-b pb-2">
+              <h3 className="text-sm font-medium">{section.title}</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {section.description}
+              </p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">{renderedFields}</div>
+          </div>
         );
       })}
-    </>
+    </div>
   );
 }

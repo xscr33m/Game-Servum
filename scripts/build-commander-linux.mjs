@@ -1,17 +1,17 @@
 /**
- * Game-Servum Dashboard — Linux AppImage Builder
+ * Game-Servum Commander — Linux AppImage Builder
  *
- * Builds a standalone Dashboard for Linux (no Agent - connects to remote Windows Agents).
+ * Builds a standalone Commander for Linux (no Agent - connects to remote Windows Agents).
  *
  * Steps:
  *  1. Build shared types
  *  2. Build client (Vite) with base='./' for file:// compatibility
- *  3. Stage Electron project (Dashboard only - no Agent/node.exe)
+ *  3. Stage Electron project (Commander only - no Agent/node.exe)
  *  4. Install Electron dependencies
  *  5. Run electron-builder → .AppImage
  *  6. Copy output to dist/
  *
- * Output: dist/Game-Servum-Dashboard-{version}.AppImage
+ * Output: dist/Game-Servum-Commander-{version}.AppImage
  */
 import { execSync } from "child_process";
 import {
@@ -25,7 +25,6 @@ import {
 } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
-
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
 
@@ -33,11 +32,11 @@ const ROOT = resolve(__dirname, "..");
 const pkg = JSON.parse(readFileSync(resolve(ROOT, "package.json"), "utf-8"));
 const APP_VERSION = pkg.version || "1.0.0";
 
-const STAGING = resolve(ROOT, "dist", "staging-linux-dashboard");
+const STAGING = resolve(ROOT, "dist", "staging-linux-commander");
 const DIST_DIR = resolve(ROOT, "dist", `v${APP_VERSION}`);
 
 console.log("╔════════════════════════════════════════════");
-console.log(`║  Game-Servum Dashboard Builder (Linux)     `);
+console.log(`║  Game-Servum Commander Builder (Linux)     `);
 console.log(`║  Version: ${APP_VERSION.padEnd(32)}`);
 console.log("╚════════════════════════════════════════════");
 
@@ -64,47 +63,27 @@ if (existsSync(STAGING)) {
   rmSync(STAGING, { recursive: true });
 }
 
-// 3a. Electron project package.json (Dashboard only)
+// 3a. Read base Electron config and merge platform-specific build settings
+const electronBasePkg = JSON.parse(
+  readFileSync(resolve(ROOT, "electron", "package.json"), "utf-8"),
+);
 const electronPkg = {
-  name: "game-servum-dashboard",
+  ...electronBasePkg,
   version: APP_VERSION,
-  description: "Game-Servum Dashboard — Remote Agent Management",
-  author: "xscr33mLabs",
-  license: "GPL-3.0-only",
-  main: "main/main-unified.js",
-  dependencies: {
-    "electron-updater": "^6.8.3",
-  },
-  devDependencies: {
-    electron: "^40.4.1",
-    "electron-builder": "^26.8.0",
-  },
-  overrides: {
-    "global-agent": "^4.0.0",
-    "balanced-match": "^4.0.2",
-  },
   build: {
-    appId: "com.gameservum.dashboard",
-    productName: "Game-Servum Dashboard",
-    copyright: "Copyright © 2026 xscr33mLabs",
-    directories: { output: "release", buildResources: "build" },
-    files: ["main/**/*", "assets/**/*"],
-    extraResources: [{ from: "runtime", to: "runtime", filter: ["**/*"] }],
+    ...electronBasePkg.build,
     linux: {
       target: [{ target: "AppImage", arch: ["x64"] }],
       category: "Utility",
       icon: "build/icon.png",
-      artifactName: "Game-Servum-Dashboard-${version}.${ext}",
+      artifactName: "Game-Servum-Commander-${version}.${ext}",
     },
     appImage: {
       license: "LICENSE",
     },
     publish: {
-      provider: "github",
-      owner: "xscr33m",
-      repo: "Game-Servum",
+      ...electronBasePkg.build.publish,
       publisherName: ["xscr33mLabs"],
-      channel: "dashboard",
     },
   },
 };
@@ -118,7 +97,7 @@ writeFileSync(
 // 3b. Build resources (icon)
 mkdirSync(resolve(STAGING, "build"), { recursive: true });
 cpSync(
-  resolve(ROOT, "client", "public", "dashboard-icon.png"),
+  resolve(ROOT, "client", "public", "commander-icon.png"),
   resolve(STAGING, "build", "icon.png"),
 );
 
@@ -151,8 +130,8 @@ cpSync(
 // 3d. Assets (packed into app.asar)
 mkdirSync(resolve(STAGING, "assets"), { recursive: true });
 cpSync(
-  resolve(ROOT, "client", "public", "dashboard-icon.png"),
-  resolve(STAGING, "assets", "dashboard-icon.png"),
+  resolve(ROOT, "client", "public", "commander-icon.png"),
+  resolve(STAGING, "assets", "commander-icon.png"),
 );
 
 // 3e. Runtime files (Client only - no Agent for Linux)
@@ -163,15 +142,56 @@ const clientDir = resolve(runtimeDir, "client");
 mkdirSync(clientDir, { recursive: true });
 cpSync(resolve(ROOT, "client", "dist"), clientDir, { recursive: true });
 
-console.log("  ✓ Staged Electron project for Linux Dashboard-only");
+console.log("  ✓ Staged Electron project for Linux Commander-only");
 
 // ─── 4. Install Electron dependencies ───────────────────────────
 
 console.log("\n[4/6] Installing Electron dependencies...");
-execSync("npm install --no-package-lock --loglevel=warn", {
+
+// 4a. Generate lock file without installing packages
+console.log("  Resolving dependency tree...");
+execSync("npm install --package-lock-only --loglevel=warn", {
   cwd: STAGING,
   stdio: "inherit",
 });
+
+// 4b. Audit dependencies before installing
+try {
+  execSync("npm audit", { cwd: STAGING, stdio: "pipe" });
+  console.log("  ✓ No vulnerabilities found");
+} catch {
+  // Vulnerabilities found — attempt to fix in lock file only
+  console.warn("  ⚠ Vulnerabilities detected, attempting auto-fix...");
+  try {
+    execSync("npm audit fix --package-lock-only", {
+      cwd: STAGING,
+      stdio: "inherit",
+    });
+  } catch {
+    // audit fix can exit non-zero even when it partially fixes
+  }
+
+  // Re-audit — abort if vulnerabilities remain
+  try {
+    execSync("npm audit", { cwd: STAGING, stdio: "pipe" });
+    console.log("  ✓ All vulnerabilities fixed");
+  } catch (auditErr) {
+    console.error("\n  ✗ Unfixable vulnerabilities remain:\n");
+    // Show the audit report
+    if (auditErr.stdout) process.stderr.write(auditErr.stdout);
+    if (auditErr.stderr) process.stderr.write(auditErr.stderr);
+    console.error("\n  Build aborted — resolve vulnerabilities manually.");
+    process.exit(1);
+  }
+}
+
+// 4c. Install packages (now verified clean)
+console.log("  Installing packages...");
+execSync("npm install --loglevel=warn", {
+  cwd: STAGING,
+  stdio: "inherit",
+});
+console.log("  ✓ Dependencies installed (audit clean)");
 
 // ─── 5. Build AppImage ──────────────────────────────────────────
 
@@ -202,20 +222,20 @@ if (existsSync(releaseDir)) {
     console.log(`  ✓ ${file}`);
   }
 
-  // Copy dashboard-linux.yml (electron-updater metadata for GitHub provider + channel)
-  if (existsSync(resolve(releaseDir, "dashboard-linux.yml"))) {
+  // Copy commander-linux.yml (electron-updater metadata for GitHub provider + channel)
+  if (existsSync(resolve(releaseDir, "commander-linux.yml"))) {
     cpSync(
-      resolve(releaseDir, "dashboard-linux.yml"),
-      resolve(DIST_DIR, "dashboard-linux.yml"),
+      resolve(releaseDir, "commander-linux.yml"),
+      resolve(DIST_DIR, "commander-linux.yml"),
     );
-    console.log(`  ✓ dashboard-linux.yml`);
+    console.log(`  ✓ commander-linux.yml`);
   } else if (existsSync(resolve(releaseDir, "latest-linux.yml"))) {
     // Fallback: electron-builder might create latest-linux.yml
     cpSync(
       resolve(releaseDir, "latest-linux.yml"),
-      resolve(DIST_DIR, "dashboard-linux.yml"),
+      resolve(DIST_DIR, "commander-linux.yml"),
     );
-    console.log(`  ✓ dashboard-linux.yml (renamed from latest-linux.yml)`);
+    console.log(`  ✓ commander-linux.yml (renamed from latest-linux.yml)`);
   }
 
   if (appImages.length === 0) {
@@ -241,11 +261,11 @@ if (outputFile) {
   );
 }
 console.log("║                                                              ");
-console.log("║  Mode: Dashboard only (connects to remote Windows Agents)    ");
-console.log("║  Data stored in: ~/.config/game-servum-dashboard/            ");
+console.log("║  Mode: Commander only (connects to remote Windows Agents)    ");
+console.log("║  Data stored in: ~/.config/game-servum-commander/            ");
 console.log("║  No Agent runtime — Windows Agents required for servers      ");
 console.log("║                                                              ");
 console.log("║  GitHub Release Assets (flat):                               ");
-console.log("║    ├── Game-Servum-Dashboard-{version}.AppImage              ");
-console.log("║    └── dashboard-linux.yml                                   ");
+console.log("║    ├── Game-Servum-Commander-{version}.AppImage              ");
+console.log("║    └── commander-linux.yml                                   ");
 console.log("╚══════════════════════════════════════════════════════════════");

@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import jwt from "jsonwebtoken";
 import { getConfig } from "./config.js";
-import { logger } from "../index.js";
+import { logger } from "../core/logger.js";
 import type { AppConfig } from "../types/index.js";
 import {
   findApiKeyByHash,
@@ -14,7 +14,7 @@ import {
 
 // ── Hashing ──
 
-export function sha256(data: string): string {
+function sha256(data: string): string {
   return crypto.createHash("sha256").update(data).digest("hex");
 }
 
@@ -41,7 +41,7 @@ export function verifyPassword(password: string, storedHash: string): boolean {
 
 // ── JWT ──
 
-export interface SessionPayload {
+interface SessionPayload {
   keyId: number;
   name: string;
 }
@@ -63,7 +63,7 @@ export function verifySessionToken(token: string): SessionPayload | null {
 
 // ── Key Generation ──
 
-export interface GeneratedCredentials {
+interface GeneratedCredentials {
   apiKey: string;
   password: string;
 }
@@ -125,7 +125,7 @@ export function ensureInitialCredentials(): void {
 
 /**
  * Write credentials to a CREDENTIALS.txt file in the data directory.
- * This file is created on first start so the user can connect a Dashboard.
+ * This file is created on first start so the user can connect a Commander.
  */
 function writeCredentialsFile(
   apiKey: string,
@@ -139,7 +139,7 @@ function writeCredentialsFile(
 
 Generated: ${new Date().toLocaleString()}
 
-Use these credentials to connect a Game-Servum Dashboard
+Use these credentials to connect a Game-Servum Commander
 to this Agent.
 
   API-Key:    ${apiKey}

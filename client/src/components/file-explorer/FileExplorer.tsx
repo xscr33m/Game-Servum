@@ -1,9 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
-import { FaFolderOpen, FaTriangleExclamation } from "react-icons/fa6";
+import {
+  FaFolderOpen,
+  FaTriangleExclamation,
+  FaChevronDown,
+  FaChevronRight,
+  FaFolder,
+} from "react-icons/fa6";
 import { useBackend } from "@/hooks/useBackend";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { toastSuccess, toastError } from "@/lib/toast";
-import type { BrowseTreeEntry } from "@/lib/api";
+import type { BrowseListEntry } from "@/lib/api";
 import { FileTree } from "./FileTree";
 import { FileEditor } from "./FileEditor";
 import { FileExplorerToolbar } from "./FileExplorerToolbar";
@@ -30,14 +37,37 @@ interface OpenFile {
 
 export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
   const { api } = useBackend();
-  const [tree, setTree] = useState<BrowseTreeEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Map of dirPath → entries for that directory (lazy-loaded cache)
+  const [dirCache, setDirCache] = useState<Map<string, BrowseListEntry[]>>(
+    () => new Map(),
+  );
+  const [loadingDirs, setLoadingDirs] = useState<Set<string>>(
+    () => new Set(["."]),
+  );
+  const [initialLoading, setInitialLoading] = useState(true);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [selectedIsDirectory, setSelectedIsDirectory] = useState(false);
   const [openFile, setOpenFile] = useState<OpenFile | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+
+  // ─── Unsaved changes guard ───
+  const hasUnsavedChanges =
+    openFile !== null &&
+    openFile.content.replace(/\r\n/g, "\n") !==
+      openFile.originalContent.replace(/\r\n/g, "\n");
+
+  const { requestNavigation } = useUnsavedChanges(
+    `file-editor-${serverId}-${rootKey}`,
+    hasUnsavedChanges,
+    {
+      onSave: async () => {
+        if (openFile) await handleSave(openFile.content);
+      },
+      onDiscard: () => handleReset(),
+    },
+  );
 
   // Overwrite confirmation dialog state
   const [overwriteDialog, setOverwriteDialog] = useState<{
@@ -52,6 +82,9 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
   const SIDEBAR_DEFAULT = 256;
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
   const isResizing = useRef(false);
+
+  // Mobile collapsible sidebar
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   useEffect(() => {
     function handleMouseMove(e: MouseEvent) {
@@ -83,25 +116,41 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
     document.body.style.userSelect = "none";
   }
 
-  const loadTree = useCallback(async () => {
-    try {
-      setLoading(true);
-      const result = await api.servers.browseTree(serverId, rootKey);
-      setTree(result.tree);
-    } catch (err) {
-      toastError(
-        err instanceof Error ? err.message : "Failed to load file tree",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [api.servers, serverId, rootKey]);
+  const loadDirectory = useCallback(
+    async (dirPath: string) => {
+      setLoadingDirs((prev) => {
+        const next = new Set(prev);
+        next.add(dirPath);
+        return next;
+      });
+      try {
+        const result = await api.servers.browseList(serverId, rootKey, dirPath);
+        setDirCache((prev) => {
+          const next = new Map(prev);
+          next.set(dirPath, result.entries);
+          return next;
+        });
+      } catch (err) {
+        toastError(
+          err instanceof Error ? err.message : "Failed to load directory",
+        );
+      } finally {
+        setLoadingDirs((prev) => {
+          const next = new Set(prev);
+          next.delete(dirPath);
+          return next;
+        });
+        setInitialLoading(false);
+      }
+    },
+    [api.servers, serverId, rootKey],
+  );
 
   useEffect(() => {
-    loadTree();
-  }, [loadTree]);
+    loadDirectory(".");
+  }, [loadDirectory]);
 
-  async function handleFileSelect(relativePath: string) {
+  async function doFileSelect(relativePath: string) {
     setSelectedPath(relativePath);
     setSelectedIsDirectory(false);
     try {
@@ -124,9 +173,40 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
     }
   }
 
+  function handleFileSelect(relativePath: string) {
+    requestNavigation(() => doFileSelect(relativePath));
+  }
+
   function handleDirectorySelect(relativePath: string) {
     setSelectedPath(relativePath);
     setSelectedIsDirectory(true);
+  }
+
+  /** Reload the parent directory of a given path (or root if at top level) */
+  function reloadParentDir(filePath: string) {
+    const lastSlash = filePath.lastIndexOf("/");
+    const parentDir = lastSlash > 0 ? filePath.substring(0, lastSlash) : ".";
+    loadDirectory(parentDir);
+  }
+
+  /** Expand a directory: load its contents if not already cached */
+  function handleExpandDir(dirPath: string) {
+    if (!dirCache.has(dirPath)) {
+      loadDirectory(dirPath);
+    }
+  }
+
+  /** Refresh: reload only the currently selected directory (or root) */
+  function handleRefresh() {
+    if (selectedPath && selectedIsDirectory) {
+      // Reload the selected directory + its parent
+      loadDirectory(selectedPath);
+      reloadParentDir(selectedPath);
+    } else if (selectedPath) {
+      reloadParentDir(selectedPath);
+    } else {
+      loadDirectory(".");
+    }
   }
 
   async function handleSave(content: string) {
@@ -165,7 +245,7 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
     try {
       await api.servers.browseCreateFile(serverId, rootKey, relativePath);
       toastSuccess("File created");
-      await loadTree();
+      reloadParentDir(relativePath);
       // Auto-open the new file
       await handleFileSelect(relativePath);
     } catch (err) {
@@ -177,7 +257,7 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
     try {
       await api.servers.browseCreateDirectory(serverId, rootKey, relativePath);
       toastSuccess("Folder created");
-      await loadTree();
+      reloadParentDir(relativePath);
     } catch (err) {
       toastError(
         err instanceof Error ? err.message : "Failed to create folder",
@@ -194,26 +274,32 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
         setOpenFile((prev) => (prev ? { ...prev, path: to } : null));
       }
       setSelectedPath(to);
-      await loadTree();
+      reloadParentDir(from);
     } catch (err) {
       toastError(err instanceof Error ? err.message : "Failed to rename");
     }
   }
 
-  async function handleDelete(path: string) {
+  async function handleDelete(deletePath: string) {
     try {
       if (selectedIsDirectory) {
-        await api.servers.browseDeleteDirectory(serverId, rootKey, path);
+        await api.servers.browseDeleteDirectory(serverId, rootKey, deletePath);
+        // Remove from cache
+        setDirCache((prev) => {
+          const next = new Map(prev);
+          next.delete(deletePath);
+          return next;
+        });
       } else {
-        await api.servers.browseDeleteFile(serverId, rootKey, path);
+        await api.servers.browseDeleteFile(serverId, rootKey, deletePath);
       }
       toastSuccess("Deleted successfully");
       // If we deleted the open file, close it
-      if (openFile && openFile.path === path) {
+      if (openFile && openFile.path === deletePath) {
         setOpenFile(null);
       }
       setSelectedPath(null);
-      await loadTree();
+      reloadParentDir(deletePath);
     } catch (err) {
       toastError(err instanceof Error ? err.message : "Failed to delete");
     }
@@ -231,34 +317,19 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
     }
   }
 
-  // Find files in the tree that exist at the given directory path
-  function getExistingFileNames(
-    entries: BrowseTreeEntry[],
-    dirPath: string,
-  ): Set<string> {
-    if (!dirPath) {
-      // Root level — return file names at top level
-      return new Set(
-        entries.filter((e) => e.type === "file").map((e) => e.name),
-      );
-    }
-    const parts = dirPath.split("/");
-    let current = entries;
-    for (const part of parts) {
-      const dir = current.find(
-        (e) => e.type === "directory" && e.name === part,
-      );
-      if (!dir?.children) return new Set();
-      current = dir.children;
-    }
-    return new Set(current.filter((e) => e.type === "file").map((e) => e.name));
+  // Find files in the cache that exist at the given directory path
+  function getExistingFileNames(dirPath: string): Set<string> {
+    const cacheKey = dirPath || ".";
+    const entries = dirCache.get(cacheKey);
+    if (!entries) return new Set();
+    return new Set(entries.filter((e) => e.type === "file").map((e) => e.name));
   }
 
   async function handleUpload(files: FileList, targetDir: string) {
     const fileArray = Array.from(files);
 
-    // Check for conflicts using the already-loaded tree data
-    const existing = getExistingFileNames(tree, targetDir);
+    // Check for conflicts using the cached directory data
+    const existing = getExistingFileNames(targetDir);
     const conflicts = fileArray
       .map((f) => f.name)
       .filter((name) => existing.has(name));
@@ -282,7 +353,8 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
         files,
       );
       toastSuccess(result.message);
-      await loadTree();
+      // Reload the target directory
+      loadDirectory(targetDir || ".");
     } catch (err) {
       toastError(err instanceof Error ? err.message : "Failed to upload");
     } finally {
@@ -305,7 +377,7 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
       <FileExplorerToolbar
         selectedPath={selectedPath}
         selectedIsDirectory={selectedIsDirectory}
-        onRefresh={loadTree}
+        onRefresh={handleRefresh}
         onNewFile={handleNewFile}
         onNewFolder={handleNewFolder}
         onRename={handleRename}
@@ -313,38 +385,63 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
         onDownload={handleDownload}
         onUpload={handleUpload}
         uploading={uploading}
+        isLargeFile={openFile != null && openFile.size > 512 * 1024}
       />
 
+      {/* Mobile toggle for file tree */}
+      <button
+        type="button"
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        className="lg:hidden flex items-center gap-2 px-3 py-2 border-b bg-muted/30 text-sm font-medium hover:bg-muted/50 transition-colors w-full text-left"
+      >
+        {sidebarOpen ? (
+          <FaChevronDown className="h-3 w-3 text-muted-foreground" />
+        ) : (
+          <FaChevronRight className="h-3 w-3 text-muted-foreground" />
+        )}
+        <FaFolder className="h-3.5 w-3.5 text-ring/70" />
+        Files
+      </button>
+
       {/* Main content area */}
-      <div ref={containerRef} className="flex flex-1 min-h-0">
+      <div
+        ref={containerRef}
+        className="flex flex-col lg:flex-row flex-1 min-h-0"
+      >
         {/* Sidebar */}
         <div
-          className="border-r shrink-0 overflow-hidden flex flex-col"
-          style={{ width: `${sidebarWidth}px` }}
+          className={`border-b lg:border-b-0 lg:border-r shrink-0 overflow-hidden flex flex-col lg:w-[var(--sidebar-w)] ${
+            sidebarOpen
+              ? "max-h-64 lg:max-h-none overflow-y-auto"
+              : "hidden lg:flex"
+          }`}
+          style={{ "--sidebar-w": `${sidebarWidth}px` } as React.CSSProperties}
         >
-          {loading ? (
+          {initialLoading ? (
             <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
               Loading...
             </div>
           ) : (
             <FileTree
-              tree={tree}
+              dirCache={dirCache}
+              loadingDirs={loadingDirs}
               selectedPath={selectedPath}
               onFileSelect={handleFileSelect}
               onDirectorySelect={handleDirectorySelect}
+              onExpandDir={handleExpandDir}
               onUpload={handleUpload}
             />
           )}
         </div>
 
-        {/* Resize handle */}
+        {/* Resize handle — desktop only */}
         <div
-          className="w-1 shrink-0 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
+          className="hidden lg:block w-1 shrink-0 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
           onMouseDown={handleResizeStart}
         />
 
         {/* Editor area */}
-        <div className="flex-1 min-w-0 flex flex-col">
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col">
           {fileLoading ? (
             <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
               Loading file...
@@ -402,11 +499,19 @@ export function FileExplorer({ serverId, rootKey }: FileExplorerProps) {
               ))}
             </ul>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOverwriteDialog(null)}>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setOverwriteDialog(null)}
+              className="w-full sm:w-auto"
+            >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleOverwriteConfirm}>
+            <Button
+              variant="destructive"
+              onClick={handleOverwriteConfirm}
+              className="w-full sm:w-auto"
+            >
               Replace{" "}
               {overwriteDialog?.conflicts.length === 1 ? "file" : "files"}
             </Button>

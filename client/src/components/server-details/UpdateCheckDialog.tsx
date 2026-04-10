@@ -16,21 +16,25 @@ import {
   FaTriangleExclamation,
   FaCheck,
   FaRightToBracket,
+  FaDownload,
 } from "react-icons/fa6";
 import { useBackend } from "@/hooks/useBackend";
+import type { ServerStatus } from "@game-servum/shared";
 
 interface UpdateCheckDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   serverId: number;
+  serverStatus?: ServerStatus;
 }
 
-type CheckState = "idle" | "checking" | "complete" | "error";
+type CheckState = "idle" | "checking" | "complete" | "error" | "updating";
 
 export function UpdateCheckDialog({
   open,
   onOpenChange,
   serverId,
+  serverStatus,
 }: UpdateCheckDialogProps) {
   const [state, setState] = useState<CheckState>("idle");
   const [terminalOutput, setTerminalOutput] = useState<string[]>([]);
@@ -49,7 +53,7 @@ export function UpdateCheckDialog({
     }
   }, [terminalOutput]);
 
-  // Subscribe to WebSocket messages for update check output
+  // Subscribe to WebSocket messages for update check and install output
   useEffect(() => {
     if (!open) return;
 
@@ -60,11 +64,15 @@ export function UpdateCheckDialog({
           serverId?: number;
           context?: string;
         };
-        // Only capture output from our update-check context and server
-        if (
+        // During check: capture output from the "update-check" context
+        // During update install: capture all SteamCMD output for this server
+        const isCheckOutput =
           payload.context === "update-check" &&
-          (payload.serverId === serverId || payload.serverId === undefined)
-        ) {
+          (payload.serverId === serverId || payload.serverId === undefined);
+        const isInstallOutput =
+          !payload.context && payload.serverId === serverId;
+
+        if (isCheckOutput || isInstallOutput) {
           setTerminalOutput((prev) => [...prev.slice(-200), payload.message]);
 
           // Detect "cached credentials not found" in real-time
@@ -147,13 +155,48 @@ export function UpdateCheckDialog({
     navigate("/?setup=login");
   };
 
+  const handleApplyUpdates = useCallback(async () => {
+    setState("updating");
+    setTerminalOutput([]);
+    setResultMessage(null);
+    try {
+      await api.servers.applyUpdates(serverId);
+    } catch (err) {
+      setState("error");
+      setResultMessage((err as Error).message);
+    }
+  }, [serverId, api.servers]);
+
+  // Listen for server status changes to detect when update completes
+  useEffect(() => {
+    if (state !== "updating") return;
+    const unsubscribe = subscribe((message) => {
+      if (message.type === "server:status") {
+        const payload = message.payload as {
+          serverId: number;
+          status: string;
+        };
+        if (payload.serverId === serverId && payload.status === "stopped") {
+          setState("complete");
+          setResultMessage("Updates installed successfully");
+          setHasUpdates(false);
+        }
+      }
+    });
+    return unsubscribe;
+  }, [state, subscribe, serverId]);
+
+  const isStopped = serverStatus === "stopped";
+  const canApplyUpdates =
+    hasUpdates && isStopped && !loginRequired && state === "complete";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FaArrowsRotate
-              className={`h-4 w-4 ${state === "checking" ? "animate-spin" : ""}`}
+              className={`h-4 w-4 ${state === "checking" || state === "updating" ? "animate-spin" : ""}`}
             />
             Update Check
           </DialogTitle>
@@ -171,6 +214,11 @@ export function UpdateCheckDialog({
             {state === "checking" && (
               <Badge variant="outline" className="ml-auto text-xs">
                 Running...
+              </Badge>
+            )}
+            {state === "updating" && (
+              <Badge variant="outline" className="ml-auto text-xs">
+                Updating...
               </Badge>
             )}
             {state === "complete" && !loginRequired && (
@@ -191,7 +239,7 @@ export function UpdateCheckDialog({
           >
             {terminalOutput.length === 0 ? (
               <span className="text-muted-foreground">
-                {state === "checking"
+                {state === "checking" || state === "updating"
                   ? "Waiting for output..."
                   : "No output yet"}
               </span>
@@ -214,8 +262,8 @@ export function UpdateCheckDialog({
                 </p>
                 <p className="text-xs text-muted-foreground">
                   This game server requires a logged-in Steam account to check
-                  for updates. Please log in via the SteamCMD Setup on the
-                  Dashboard and try again.
+                  for updates. Please log in via the SteamCMD Setup on the home
+                  page and try again.
                 </p>
                 <Button
                   size="sm"
@@ -224,7 +272,7 @@ export function UpdateCheckDialog({
                   className="mt-1"
                 >
                   <FaRightToBracket className="h-3 w-3 mr-1.5" />
-                  Go to Dashboard
+                  Go to Home
                 </Button>
               </div>
             </div>
@@ -252,9 +300,24 @@ export function UpdateCheckDialog({
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
+          {canApplyUpdates && (
+            <Button onClick={handleApplyUpdates} className="w-full sm:w-auto">
+              <FaDownload className="h-3.5 w-3.5 mr-1.5" />
+              Update Now
+            </Button>
+          )}
+          {hasUpdates &&
+            !isStopped &&
+            !loginRequired &&
+            state === "complete" && (
+              <p className="text-xs text-muted-foreground mr-auto self-center">
+                Stop the server to install updates manually
+              </p>
+            )}
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
+            disabled={state === "updating"}
             className="w-full sm:w-auto"
           >
             Close

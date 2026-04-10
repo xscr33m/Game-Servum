@@ -37,6 +37,12 @@ export interface GameCapabilities {
   playerListEditable: boolean;
   /** Whether this game uses a configurable profiles path (e.g., DayZ -profiles= parameter) */
   profilesPath: boolean;
+  /** Whether direct messages to individual players are supported via RCON */
+  directMessage: boolean;
+  /** How priority queue management works: 'file' = text file, false = not supported */
+  priorityQueue: "file" | false;
+  /** Whether the game supports mod list file export/import (e.g. DayZ mod_list.txt) */
+  modListFiles?: boolean;
 }
 
 // Database models
@@ -64,4 +70,5 @@ export interface GameServer {
   createdAt: string;
   startedAt: string | null;
   installing?: boolean; // Set by API when install is in progress
+  hasPendingUpdateRestart?: boolean; // Set by API when auto-update restart is pending
 }

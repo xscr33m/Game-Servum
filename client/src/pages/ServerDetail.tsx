@@ -1,16 +1,17 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import {
+  useEffect,
+  useState,
+  useCallback,
+  useRef,
+  useMemo,
+  useContext,
+} from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   FaArrowLeft,
   FaPlay,
   FaStop,
   FaArrowsRotate,
-  FaGear,
-  FaCubes,
-  FaUsers,
-  FaFileLines,
-  FaGauge,
-  FaWrench,
   FaSpinner,
   FaTerminal,
   FaTrashCan,
@@ -18,7 +19,7 @@ import {
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useContentWidth } from "@/hooks/useContentWidth";
 import { OverviewTab } from "@/components/server-details/OverviewTab";
 import { ConfigTab } from "@/components/server-details/ConfigTab";
 import { ModsTab } from "@/components/server-details/ModsTab";
@@ -26,13 +27,21 @@ import { publicAsset } from "@/lib/assets";
 import { PlayersTab } from "@/components/server-details/PlayersTab";
 import { LogsTab } from "@/components/server-details/LogsTab";
 import { SettingsTab } from "@/components/server-details/SettingsTab";
+import { BackupsTab } from "@/components/server-details/BackupsTab";
+import { FilesTab } from "@/components/server-details/FilesTab";
+import { ServerDetailSidebar } from "@/components/server-details/ServerDetailSidebar";
+import type { ServerSection } from "@/components/server-details/ServerDetailSidebar";
 import { useBackend } from "@/hooks/useBackend";
 import { useGameCapabilities } from "@/hooks/useGameCapabilities";
+import { UnsavedChangesContext } from "@/contexts/UnsavedChangesContextDef";
 import { AgentControlPanel } from "@/components/agent/AgentControlPanel";
+import { MobileAgentSection } from "@/components/agent/MobileAgentSection";
 import { AppHeader } from "@/components/AppHeader";
 import { AgentStatusBanner } from "@/components/agent/AgentStatusBanner";
 import { DeleteServerDialog } from "@/components/server-details/dialogs/DeleteServerDialog";
 import { CancelInstallDialog } from "@/components/server-details/dialogs/CancelInstallDialog";
+import { cn } from "@/lib/utils";
+import { Tip } from "@/components/ui/tooltip";
 import {
   toastSuccess,
   toastError,
@@ -53,11 +62,21 @@ const statusConfig = {
   error: { label: "Error", variant: "destructive" as const },
 };
 
-const validTabs = ["overview", "config", "mods", "players", "logs", "settings"];
+const validSections: ServerSection[] = [
+  "overview",
+  "config",
+  "files",
+  "mods",
+  "players",
+  "logs",
+  "backups",
+  "settings",
+];
 
 export function ServerDetail() {
   const { id, tab } = useParams<{ id: string; tab?: string }>();
   const navigate = useNavigate();
+  const { contentClass } = useContentWidth();
   const [server, setServer] = useState<GameServer | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,10 +87,45 @@ export function ServerDetail() {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const { capabilities } = useGameCapabilities(server?.gameId ?? "");
   const hasPlayers = capabilities?.playerTracking !== false;
+  // Track whether files tab has ever been visited to keep it mounted
+  const filesTabVisited = useRef(false);
+
+  // Sidebar navigation
+  const activeSection: ServerSection = validSections.includes(
+    tab as ServerSection,
+  )
+    ? (tab as ServerSection)
+    : "overview";
+  const hiddenSections = useMemo(
+    () => (hasPlayers ? undefined : new Set(["players"])),
+    [hasPlayers],
+  );
+
+  // Keep FilesTab mounted once it has been visited to preserve its state
+  if (activeSection === "files") {
+    filesTabVisited.current = true;
+  }
+  const showFilesTab = filesTabVisited.current;
+
   const terminalRef = useRef<HTMLDivElement>(null);
   const hasFetchedInstallOutput = useRef(false);
 
-  const { api, subscribe, isConnected, activeConnection } = useBackend();
+  const unsavedCtx = useContext(UnsavedChangesContext);
+  const { api, subscribe, isConnected, activeConnection, connections } =
+    useBackend();
+
+  function handleSectionChange(section: ServerSection) {
+    unsavedCtx?.requestNavigation(() =>
+      navigate(`/server/${id}/${section}`, { replace: true }),
+    );
+  }
+
+  // Redirect to home when no agents are configured
+  useEffect(() => {
+    if (connections.length === 0) {
+      navigate("/", { replace: true });
+    }
+  }, [connections.length, navigate]);
 
   const loadServer = useCallback(
     async (showToast = false) => {
@@ -111,7 +165,7 @@ export function ServerDetail() {
     prevConnected.current = isConnected;
   }, [isConnected, id, loadServer]);
 
-  // Redirect to dashboard when agent is switched on server detail page
+  // Redirect to home when agent is switched on server detail page
   const initialAgentId = useRef(activeConnection?.id);
 
   // Fetch buffered installation output when opening page during an active install
@@ -154,21 +208,21 @@ export function ServerDetail() {
       return;
     }
 
-    // Redirect to dashboard if active agent changed
+    // Redirect to home if active agent changed
     if (
       activeConnection?.id &&
       initialAgentId.current !== activeConnection.id
     ) {
-      console.log("[ServerDetail] Agent switched, redirecting to dashboard...");
-      toastInfo("Agent switched - returning to dashboard");
+      console.log("[ServerDetail] Agent switched, redirecting to home...");
+      toastInfo("Agent switched - returning to home");
       navigate("/");
     }
   }, [activeConnection?.id, navigate]);
 
-  // Redirect to Dashboard when agent is not connected.
+  // Redirect to home when agent is not connected.
   // ServerDetail requires a live agent connection — all data and actions
   // depend on it.  When the agent restarts, updates, or drops, we redirect
-  // so the Dashboard (with AgentStatusBanner) handles the reconnect UX.
+  // so the home page (with AgentStatusBanner) handles the reconnect UX.
   // Skip undefined status (initial state before BackendContext authenticates)
   // and "authenticating" (connection handshake in progress).
   useEffect(() => {
@@ -284,9 +338,16 @@ export function ServerDetail() {
     }
   }
 
-  async function confirmDeleteServer(serverToDelete: GameServer) {
+  async function confirmDeleteServer(
+    serverToDelete: GameServer,
+    deleteBackups: boolean,
+  ) {
     try {
-      await api.servers.delete(serverToDelete.id, serverToDelete.name);
+      await api.servers.delete(
+        serverToDelete.id,
+        serverToDelete.name,
+        deleteBackups,
+      );
       toastSuccess(`${serverToDelete.name} is being deleted...`);
       await loadServer();
     } catch (err) {
@@ -300,7 +361,7 @@ export function ServerDetail() {
       await api.servers.cancelInstall(serverToCancel.id);
       toastSuccess(`Cancelling installation of ${serverToCancel.name}...`);
       // server:status WS event updates to "deleting",
-      // server:deleted WS event will navigate to dashboard
+      // server:deleted WS event will navigate to home
       await loadServer();
     } catch (err) {
       toastError((err as Error).message);
@@ -331,13 +392,18 @@ export function ServerDetail() {
             <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
               <FaArrowLeft className="h-4 w-4 mr-2" />
               <img
-                src={publicAsset("dashboard-icon.png")}
+                src={publicAsset("commander-icon.png")}
                 alt=""
                 className="h-7 w-auto mr-1"
               />
             </Button>
           }
           right={<AgentControlPanel />}
+          mobileMenu={
+            <div className="space-y-5">
+              <MobileAgentSection />
+            </div>
+          }
         />
         <AgentStatusBanner />
         <main className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
@@ -370,13 +436,25 @@ export function ServerDetail() {
             <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
               <FaArrowLeft className="h-4 w-4 mr-2" />
               <img
-                src={publicAsset("dashboard-icon.png")}
+                src={publicAsset("commander-icon.png")}
                 alt=""
                 className="h-7 w-auto mr-1"
               />
             </Button>
-            <div className="h-7 w-px bg-ring/30" />
-            <AgentControlPanel />
+            <div className="h-7 w-px bg-ring/30 hidden md:block" />
+            <div className="hidden md:flex">
+              <AgentControlPanel />
+            </div>
+            {/* Mobile: show server name + status inline */}
+            <div className="flex items-center gap-2 md:hidden min-w-0">
+              <h1 className="text-sm font-bold truncate">{server.name}</h1>
+              <Badge
+                variant={status.variant}
+                className="text-[10px] px-1.5 shrink-0"
+              >
+                {status.label}
+              </Badge>
+            </div>
           </>
         }
         right={
@@ -415,168 +493,241 @@ export function ServerDetail() {
               <FaArrowsRotate className="h-4 w-4" />
             </Button>
             {server.status === "installing" || server.status === "queued" ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                onClick={() => setShowCancelDialog(true)}
-                disabled={!isConnected}
-                title="Cancel Installation"
-              >
-                <FaXmark className="h-4 w-4" />
-              </Button>
+              <Tip content="Cancel Installation">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  onClick={() => setShowCancelDialog(true)}
+                  disabled={!isConnected}
+                >
+                  <FaXmark className="h-4 w-4" />
+                </Button>
+              </Tip>
             ) : (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                onClick={() => setShowDeleteDialog(true)}
-                disabled={isRunning || isBusy || !isConnected}
-                title="Delete Server"
-              >
-                <FaTrashCan className="h-4 w-4" />
-              </Button>
+              <Tip content="Delete Server">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  onClick={() => setShowDeleteDialog(true)}
+                  disabled={isRunning || isBusy || !isConnected}
+                >
+                  <FaTrashCan className="h-4 w-4" />
+                </Button>
+              </Tip>
             )}
           </>
+        }
+        mobileMenuTitle={server.name}
+        mobileMenu={
+          <div className="space-y-5">
+            {/* Server info */}
+            <div className="rounded-lg border bg-muted/20 p-3">
+              <div className="flex items-center gap-3">
+                <h2 className="text-sm font-bold truncate flex-1">
+                  {server.name}
+                </h2>
+                <Badge variant={status.variant}>{status.label}</Badge>
+              </div>
+            </div>
+
+            {/* Server actions */}
+            <div className="space-y-1.5">
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1 mb-2">
+                Actions
+              </div>
+              {isRunning ? (
+                <Button
+                  variant="destructive"
+                  className="w-full justify-start"
+                  onClick={handleStop}
+                  disabled={actionLoading || !isConnected}
+                >
+                  <FaStop className="h-4 w-4 mr-2" />
+                  Stop Server
+                </Button>
+              ) : (
+                <Button
+                  variant="success"
+                  className="w-full justify-start"
+                  onClick={handleStart}
+                  disabled={actionLoading || isBusy || !isConnected}
+                >
+                  <FaPlay className="h-4 w-4 mr-2" />
+                  Start Server
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => loadServer(true)}
+                disabled={actionLoading || !isConnected}
+              >
+                <FaArrowsRotate className="h-4 w-4 mr-2" />
+                Refresh
+              </Button>
+              {server.status === "installing" || server.status === "queued" ? (
+                <Button
+                  variant="outline"
+                  className="w-full justify-start text-destructive hover:text-destructive"
+                  onClick={() => setShowCancelDialog(true)}
+                  disabled={!isConnected}
+                >
+                  <FaXmark className="h-4 w-4 mr-2" />
+                  Cancel Installation
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  className="w-full justify-start text-destructive hover:text-destructive"
+                  onClick={() => setShowDeleteDialog(true)}
+                  disabled={isRunning || isBusy || !isConnected}
+                >
+                  <FaTrashCan className="h-4 w-4 mr-2" />
+                  Delete Server
+                </Button>
+              )}
+            </div>
+
+            <div className="border-t" />
+
+            {/* Agent section */}
+            <MobileAgentSection />
+          </div>
         }
       />
 
       <AgentStatusBanner />
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
-        <div className="container mx-auto px-4 py-6">
-          {server.status === "queued" ? (
-            /* ── Queued View ── */
-            <div className="max-w-3xl mx-auto space-y-6">
-              <div className="rounded-xl border bg-card p-6 space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
-                    <FaSpinner className="h-5 w-5 text-muted-foreground animate-spin" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-semibold">
-                      Queued — {server.name}
-                    </h2>
-                    <p className="text-sm text-muted-foreground">
-                      Waiting for the current installation to finish.
-                      Installation will start automatically.
-                    </p>
+      <main className="flex-1 flex flex-col overflow-hidden">
+        {server.status === "queued" ? (
+          /* ── Queued View ── */
+          <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
+            <div className="container mx-auto px-4 py-6">
+              <div className="max-w-3xl mx-auto space-y-6">
+                <div className="rounded-xl border bg-card p-6 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                      <FaSpinner className="h-5 w-5 text-muted-foreground animate-spin" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-semibold">
+                        Queued — {server.name}
+                      </h2>
+                      <p className="text-sm text-muted-foreground">
+                        Waiting for the current installation to finish.
+                        Installation will start automatically.
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          ) : server.status === "installing" ? (
-            /* ── Installation Progress View ── */
-            <div className="max-w-3xl mx-auto space-y-6">
-              <div className="rounded-xl border bg-card p-6 space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-warning/20 flex items-center justify-center">
-                    <FaSpinner className="h-5 w-5 text-warning animate-spin" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-semibold">
-                      Installing {server.name}
-                    </h2>
-                    <p className="text-sm text-muted-foreground">
-                      {installProgress ||
-                        "Starting installation via SteamCMD..."}
-                    </p>
+          </div>
+        ) : server.status === "installing" ? (
+          /* ── Installation Progress View ── */
+          <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
+            <div className="container mx-auto px-4 py-6">
+              <div className="max-w-3xl mx-auto space-y-6">
+                <div className="rounded-xl border bg-card p-6 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-warning/20 flex items-center justify-center">
+                      <FaSpinner className="h-5 w-5 text-warning animate-spin" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-semibold">
+                        Installing {server.name}
+                      </h2>
+                      <p className="text-sm text-muted-foreground">
+                        {installProgress ||
+                          "Starting installation via SteamCMD..."}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="rounded-xl border bg-card p-6 space-y-3">
-                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                  <FaTerminal className="h-4 w-4" />
-                  Installation Output
-                </div>
-                <div
-                  ref={terminalRef}
-                  className="bg-terminal rounded-lg p-4 h-[400px] overflow-y-auto font-mono text-xs text-green-400"
-                >
-                  {terminalOutput.length === 0 ? (
-                    <span className="text-muted-foreground">
-                      Waiting for output...
-                    </span>
-                  ) : (
-                    terminalOutput.map((line, i) => (
-                      <div key={i} className="whitespace-pre-wrap">
-                        {line}
-                      </div>
-                    ))
-                  )}
+                <div className="rounded-xl border bg-card p-6 space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <FaTerminal className="h-4 w-4" />
+                    Installation Output
+                  </div>
+                  <div
+                    ref={terminalRef}
+                    className="bg-terminal rounded-lg p-4 h-[400px] overflow-y-auto font-mono text-xs text-green-400"
+                  >
+                    {terminalOutput.length === 0 ? (
+                      <span className="text-muted-foreground">
+                        Waiting for output...
+                      </span>
+                    ) : (
+                      terminalOutput.map((line, i) => (
+                        <div key={i} className="whitespace-pre-wrap">
+                          {line}
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          ) : (
-            /* ── Normal Tab View ── */
-            <Tabs
-              value={validTabs.includes(tab ?? "") ? tab : "overview"}
-              onValueChange={(value) =>
-                navigate(`/server/${id}/${value}`, { replace: true })
-              }
-              className="space-y-6"
+          </div>
+        ) : (
+          /* ── Normal Sidebar + Content View ── */
+          <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
+            <ServerDetailSidebar
+              active={activeSection}
+              onChange={handleSectionChange}
+              hiddenSections={hiddenSections}
+              gameId={server.gameId}
+            />
+            <div
+              className={`flex-1 min-w-0 min-h-0 [scrollbar-gutter:stable] ${activeSection === "config" || activeSection === "files" || activeSection === "players" || activeSection === "logs" ? "flex flex-col" : "overflow-y-auto"}`}
             >
-              <TabsList
-                className={`grid w-full ${hasPlayers ? "grid-cols-6" : "grid-cols-5"}`}
-              >
-                <TabsTrigger value="overview" className="gap-2">
-                  <FaGauge className="h-4 w-4 text-ring/70" />
-                  <span className="hidden sm:inline">Overview</span>
-                </TabsTrigger>
-                <TabsTrigger value="config" className="gap-2">
-                  <FaGear className="h-4 w-4 text-ring/70" />
-                  <span className="hidden sm:inline">Configuration</span>
-                </TabsTrigger>
-                <TabsTrigger value="mods" className="gap-2">
-                  <FaCubes className="h-4 w-4 text-ring/70" />
-                  <span className="hidden sm:inline">Mods</span>
-                </TabsTrigger>
-                {hasPlayers && (
-                  <TabsTrigger value="players" className="gap-2">
-                    <FaUsers className="h-4 w-4 text-ring/70" />
-                    <span className="hidden sm:inline">Players</span>
-                  </TabsTrigger>
-                )}
-                <TabsTrigger value="logs" className="gap-2">
-                  <FaFileLines className="h-4 w-4 text-ring/70" />
-                  <span className="hidden sm:inline">Logs</span>
-                </TabsTrigger>
-                <TabsTrigger value="settings" className="gap-2">
-                  <FaWrench className="h-4 w-4 text-ring/70" />
-                  <span className="hidden sm:inline">Settings</span>
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="overview">
-                <OverviewTab server={server} onRefresh={loadServer} />
-              </TabsContent>
-
-              <TabsContent value="config">
+              {activeSection === "config" && (
                 <ConfigTab server={server} onRefresh={loadServer} />
-              </TabsContent>
-
-              <TabsContent value="mods">
-                <ModsTab server={server} />
-              </TabsContent>
-
-              {hasPlayers && (
-                <TabsContent value="players">
-                  <PlayersTab server={server} />
-                </TabsContent>
               )}
-
-              <TabsContent value="logs">
-                <LogsTab server={server} />
-              </TabsContent>
-
-              <TabsContent value="settings">
-                <SettingsTab server={server} onRefresh={loadServer} />
-              </TabsContent>
-            </Tabs>
-          )}
-        </div>
+              {showFilesTab && (
+                <div
+                  className={
+                    activeSection === "files"
+                      ? "flex flex-col flex-1 min-h-0"
+                      : "hidden"
+                  }
+                >
+                  <FilesTab server={server} />
+                </div>
+              )}
+              {activeSection === "players" && hasPlayers && (
+                <PlayersTab server={server} />
+              )}
+              {activeSection === "logs" && <LogsTab server={server} />}
+              {activeSection !== "config" &&
+                activeSection !== "files" &&
+                activeSection !== "players" &&
+                activeSection !== "logs" && (
+                  <div
+                    className={cn(
+                      "px-4 pt-4 pb-6 min-h-full flex flex-col",
+                      contentClass,
+                    )}
+                  >
+                    {activeSection === "overview" && (
+                      <OverviewTab server={server} onRefresh={loadServer} />
+                    )}
+                    {activeSection === "mods" && <ModsTab server={server} />}
+                    {activeSection === "backups" && (
+                      <BackupsTab server={server} />
+                    )}
+                    {activeSection === "settings" && (
+                      <SettingsTab server={server} onRefresh={loadServer} />
+                    )}
+                  </div>
+                )}
+            </div>
+          </div>
+        )}
       </main>
 
       <DeleteServerDialog

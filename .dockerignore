@@ -1,0 +1,40 @@
+node_modules
+dist
+.git
+.gitignore
+.github
+.vscode
+\*.md
+!README.md
+
+# Electron-specific (not needed for web build)
+
+electron/
+
+# Agent service (Windows-only)
+
+service/
+
+# Build scripts (only build-commander-web.mjs is needed, copied explicitly)
+
+scripts/build-agent-windows.mjs
+scripts/build-commander-linux.mjs
+scripts/build-commander-windows.mjs
+scripts/bump-version.mjs
+scripts/nsis/
+
+# Server (Agent backend — not used in Commander web, but package.json needed for npm workspaces)
+
+server/
+!server/package.json
+
+# Documentation
+
+docs/
+
+# IDE / OS
+
+.DS_Store
+Thumbs.db
+_.swp
+_.swo

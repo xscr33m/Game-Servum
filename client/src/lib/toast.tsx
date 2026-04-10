@@ -126,21 +126,6 @@ export function toastInfo(
 }
 
 /**
- * Show a warning toast notification.
- * Auto-dismisses after default duration (~4 seconds).
- *
- * @param message - Warning message to display
- * @param options - Optional Sonner toast options
- * @returns Toast ID for programmatic control
- */
-export function toastWarning(
-  message: string,
-  options?: ExternalToast,
-): string | number {
-  return toast.warning(message, options);
-}
-
-/**
  * Show error toast with copyable download links for dependency errors.
  * For errors containing URLs, creates a persistent toast with copyable links.
  * Each link has its own copy button - the entire message is NOT copied.

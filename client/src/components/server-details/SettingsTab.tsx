@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import {
   FaArrowsRotate,
   FaFloppyDisk,
@@ -12,23 +12,20 @@ import {
   FaDownload,
   FaShieldHalved,
   FaSpinner,
+  FaChevronDown,
+  FaChevronRight,
 } from "react-icons/fa6";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useBackend } from "@/hooks/useBackend";
 import { useGameCapabilities } from "@/hooks/useGameCapabilities";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { toastSuccess } from "@/lib/toast";
 import { UpdateCheckDialog } from "@/components/server-details/UpdateCheckDialog";
 import { logger } from "@/lib/logger";
+import { Tip } from "@/components/ui/tooltip";
 import type {
   GameServer,
   ServerSchedule,
@@ -37,6 +34,96 @@ import type {
   UpdateRestartSettings,
   FirewallStatus,
 } from "@/types";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Insert `{VAR_NAME}` into an input ref at cursor position, or append. */
+function insertVariableIntoRef(
+  ref: React.RefObject<HTMLInputElement | null>,
+  setter: React.Dispatch<React.SetStateAction<string>>,
+  varName: string,
+) {
+  const tag = `{${varName}}`;
+  const el = ref.current;
+  if (el && document.activeElement === el) {
+    const start = el.selectionStart ?? el.value.length;
+    const end = el.selectionEnd ?? start;
+    const before = el.value.slice(0, start);
+    const after = el.value.slice(end);
+    const next = before + tag + after;
+    setter(next);
+    requestAnimationFrame(() => {
+      el.setSelectionRange(start + tag.length, start + tag.length);
+      el.focus();
+    });
+  } else if (el) {
+    setter((prev) => prev + tag);
+    requestAnimationFrame(() => el.focus());
+  } else {
+    navigator.clipboard?.writeText(tag);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
+
+/** Clickable variable tag that inserts into the active input. */
+function VariableTag({
+  name,
+  description,
+  onClick,
+}: {
+  name: string;
+  description: string;
+  onClick: (varName: string) => void;
+}) {
+  return (
+    <Tip content={`${description} — click to insert`}>
+      <button
+        type="button"
+        className="text-xs font-mono bg-muted hover:bg-muted/70 text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+        onClick={() => onClick(name)}
+      >
+        {`{${name}}`}
+      </button>
+    </Tip>
+  );
+}
+
+/** Reusable row of variable tags. */
+function VariableTags({
+  hints,
+  exclude,
+  onInsert,
+}: {
+  hints: Array<{ name: string; description: string; builtin: boolean }>;
+  exclude?: string[];
+  onInsert: (varName: string) => void;
+}) {
+  const filtered = exclude
+    ? hints.filter((v) => !exclude.includes(v.name))
+    : hints;
+  if (filtered.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1 mt-1.5">
+      {filtered.map((v) => (
+        <VariableTag
+          key={v.name}
+          name={v.name}
+          description={v.description}
+          onClick={onInsert}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main Component
+// ---------------------------------------------------------------------------
 
 interface SettingsTabProps {
   server: GameServer;
@@ -49,19 +136,26 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
 
   const hasRcon = capabilities?.rcon !== false;
 
-  // Firewall state
+  // ── Firewall state ──
   const [firewallStatus, setFirewallStatus] = useState<FirewallStatus | null>(
     null,
   );
   const [firewallLoading, setFirewallLoading] = useState(true);
   const [firewallSaving, setFirewallSaving] = useState(false);
   const [firewallError, setFirewallError] = useState<string | null>(null);
+  const [firewallOpen, setFirewallOpen] = useState(false);
 
-  // Schedule editing
+  // ── Section expand/collapse ──
+  const [autoRestartOpen, setAutoRestartOpen] = useState(false);
+  const [urOpen, setUrOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [variablesOpen, setVariablesOpen] = useState(false);
+
+  // ── Schedule state ──
   const [schedule, setSchedule] = useState<ServerSchedule | null>(null);
   const [scheduleLoading, setScheduleLoading] = useState(true);
-  const [editingSchedule, setEditingSchedule] = useState(false);
   const [scheduleInterval, setScheduleInterval] = useState("4");
+  const [scheduleRestartTime, setScheduleRestartTime] = useState("");
   const [scheduleWarnings, setScheduleWarnings] = useState("15,5,1");
   const [scheduleMessage, setScheduleMessage] = useState(
     "Server restart in {MINUTES} minutes!",
@@ -70,9 +164,8 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
   const [scheduleSaving, setScheduleSaving] = useState(false);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
 
-  // Scheduled messages state
+  // ── Scheduled messages state ──
   const [messages, setMessages] = useState<ServerMessage[]>([]);
-  const [messagesLoading, setMessagesLoading] = useState(true);
   const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
   const [addingMessage, setAddingMessage] = useState(false);
   const [msgText, setMsgText] = useState("");
@@ -81,12 +174,12 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
   const [msgSaving, setMsgSaving] = useState(false);
   const [msgError, setMsgError] = useState<string | null>(null);
 
-  // Template variables state
+  // ── Template variables state ──
   const [variables, setVariables] = useState<ServerVariable[]>([]);
   const [builtinVars, setBuiltinVars] = useState<
     Array<{ name: string; description: string }>
   >([]);
-  const [variablesLoading, setVariablesLoading] = useState(true);
+
   const [addingVar, setAddingVar] = useState(false);
   const [editingVarId, setEditingVarId] = useState<number | null>(null);
   const [varName, setVarName] = useState("");
@@ -171,11 +264,10 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
     }
   }, [server.id, api.servers, loadFirewallStatus]);
 
-  // Update restart state
+  // ── Update-restart state ──
   const [updateRestart, setUpdateRestart] =
     useState<UpdateRestartSettings | null>(null);
   const [updateRestartLoading, setUpdateRestartLoading] = useState(true);
-  const [editingUpdateRestart, setEditingUpdateRestart] = useState(false);
   const [urEnabled, setUrEnabled] = useState(false);
   const [urCheckInterval, setUrCheckInterval] = useState("30");
   const [urDelay, setUrDelay] = useState("5");
@@ -187,6 +279,116 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
   const [urCheckDialogOpen, setUrCheckDialogOpen] = useState(false);
   const [urCheckGameUpdates, setUrCheckGameUpdates] = useState(true);
   const [urError, setUrError] = useState<string | null>(null);
+
+  // ── Input refs for interactive variable insertion ──
+  const scheduleMessageRef = useRef<HTMLInputElement>(null);
+  const urMessageRef = useRef<HTMLInputElement>(null);
+  const msgTextRef = useRef<HTMLInputElement>(null);
+
+  // Track which input was last focused for variable insertion
+  const activeInsertRef = useRef<{
+    ref: React.RefObject<HTMLInputElement | null>;
+    setter: React.Dispatch<React.SetStateAction<string>>;
+  } | null>(null);
+
+  // ── Variable hints (for tags) ──
+  const allVariableHints = useMemo(
+    () => [
+      ...builtinVars.map((v) => ({
+        name: v.name,
+        description: v.description,
+        builtin: true,
+      })),
+      ...variables.map((v) => ({
+        name: v.name,
+        description: v.value,
+        builtin: false,
+      })),
+    ],
+    [builtinVars, variables],
+  );
+
+  // ── Change detection ──
+  const scheduleChanged = useMemo(() => {
+    if (!schedule) {
+      return (
+        scheduleInterval !== "4" ||
+        scheduleRestartTime !== "" ||
+        scheduleWarnings !== "15,5,1" ||
+        scheduleMessage !== "Server restart in {MINUTES} minutes!" ||
+        scheduleEnabled !== false
+      );
+    }
+    return (
+      scheduleInterval !== schedule.intervalHours.toString() ||
+      scheduleRestartTime !== (schedule.restartTime ?? "") ||
+      scheduleWarnings !== schedule.warningMinutes.join(",") ||
+      scheduleMessage !== schedule.warningMessage ||
+      scheduleEnabled !== schedule.enabled
+    );
+  }, [
+    schedule,
+    scheduleInterval,
+    scheduleRestartTime,
+    scheduleWarnings,
+    scheduleMessage,
+    scheduleEnabled,
+  ]);
+
+  const urChanged = useMemo(() => {
+    if (!updateRestart) {
+      return (
+        urEnabled !== false ||
+        urCheckInterval !== "30" ||
+        urDelay !== "5" ||
+        urWarnings !== "5,1" ||
+        urMessage !==
+          "Server restarting in {MINUTES} minute(s) for mod updates" ||
+        urCheckGameUpdates !== true
+      );
+    }
+    return (
+      urEnabled !== updateRestart.enabled ||
+      urCheckInterval !== updateRestart.checkIntervalMinutes.toString() ||
+      urDelay !== updateRestart.delayMinutes.toString() ||
+      urWarnings !== updateRestart.warningMinutes.join(",") ||
+      urMessage !== updateRestart.warningMessage ||
+      urCheckGameUpdates !== updateRestart.checkGameUpdates
+    );
+  }, [
+    updateRestart,
+    urEnabled,
+    urCheckInterval,
+    urDelay,
+    urWarnings,
+    urMessage,
+    urCheckGameUpdates,
+  ]);
+
+  // ─── Unsaved changes guard ───
+  const msgFormDirty =
+    (addingMessage && msgText.trim() !== "") || editingMessageId !== null;
+  const varFormDirty =
+    (addingVar && varName.trim() !== "") || editingVarId !== null;
+
+  useUnsavedChanges(
+    `settings-tab-${server.id}`,
+    scheduleChanged || urChanged || msgFormDirty || varFormDirty,
+    {
+      onSave: async () => {
+        if (msgFormDirty) await handleSaveMessage();
+        if (varFormDirty) await handleSaveVariable();
+        if (scheduleChanged) await handleSaveSchedule();
+        if (urChanged) await handleSaveUpdateRestart();
+      },
+      onDiscard: () => {
+        if (msgFormDirty) cancelEditMessage();
+        if (varFormDirty) cancelEditVar();
+        if (scheduleChanged) handleRevertSchedule();
+        if (urChanged) handleRevertUpdateRestart();
+      },
+    },
+  );
 
   // Load update restart settings
   const loadUpdateRestart = useCallback(async () => {
@@ -271,7 +473,6 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
       });
       setUpdateRestart(result.settings);
       toastSuccess("Settings saved");
-      setEditingUpdateRestart(false);
     } catch (err) {
       setUrError((err as Error).message);
     } finally {
@@ -295,6 +496,7 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
       setSchedule(result.schedule);
       if (result.schedule) {
         setScheduleInterval(result.schedule.intervalHours.toString());
+        setScheduleRestartTime(result.schedule.restartTime ?? "");
         setScheduleWarnings(result.schedule.warningMinutes.join(","));
         setScheduleMessage(result.schedule.warningMessage);
         setScheduleEnabled(result.schedule.enabled);
@@ -317,9 +519,7 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
       const result = await api.servers.getMessages(server.id);
       setMessages(result.messages);
     } catch {
-      // No messages yet
-    } finally {
-      setMessagesLoading(false);
+      // ignore
     }
   }, [server.id, api.servers]);
 
@@ -333,6 +533,20 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
     if (isNaN(interval) || interval < 1 || interval > 168) {
       setScheduleError("Interval must be between 1 and 168 hours");
       return;
+    }
+
+    // Validate restart time if provided
+    const restartTime = scheduleRestartTime.trim() || null;
+    if (restartTime !== null) {
+      if (!/^\d{2}:\d{2}$/.test(restartTime)) {
+        setScheduleError("First restart time must be in HH:mm format");
+        return;
+      }
+      const [h, m] = restartTime.split(":").map(Number);
+      if (h < 0 || h > 23 || m < 0 || m > 59) {
+        setScheduleError("First restart time must be a valid time");
+        return;
+      }
     }
 
     const warnings = scheduleWarnings
@@ -358,10 +572,10 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
         warningMinutes: warnings,
         warningMessage: scheduleMessage.trim(),
         enabled: scheduleEnabled,
+        restartTime,
       });
       setSchedule(result.schedule);
       toastSuccess("Schedule saved");
-      setEditingSchedule(false);
     } catch (err) {
       setScheduleError((err as Error).message);
     } finally {
@@ -370,6 +584,7 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
   }, [
     server.id,
     scheduleInterval,
+    scheduleRestartTime,
     scheduleWarnings,
     scheduleMessage,
     scheduleEnabled,
@@ -379,11 +594,13 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
   function handleRevertSchedule() {
     if (schedule) {
       setScheduleInterval(schedule.intervalHours.toString());
+      setScheduleRestartTime(schedule.restartTime ?? "");
       setScheduleWarnings(schedule.warningMinutes.join(","));
       setScheduleMessage(schedule.warningMessage);
       setScheduleEnabled(schedule.enabled);
     } else {
       setScheduleInterval("4");
+      setScheduleRestartTime("");
       setScheduleWarnings("15,5,1");
       setScheduleMessage("Server restart in {MINUTES} minutes!");
       setScheduleEnabled(false);
@@ -501,9 +718,7 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
       setVariables(varsResult.variables);
       setBuiltinVars(builtinsResult.variables);
     } catch {
-      // No variables yet
-    } finally {
-      setVariablesLoading(false);
+      // ignore
     }
   }, [server.id, api.servers]);
 
@@ -572,147 +787,136 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
     [server.id, loadVariables, api.servers],
   );
 
-  // Build list of all available variables for display
-  const allVariableHints = [
-    ...builtinVars.map((v) => ({
-      name: v.name,
-      description: v.description,
-      builtin: true,
-    })),
-    ...variables.map((v) => ({
-      name: v.name,
-      description: v.value,
-      builtin: false,
-    })),
-  ];
+  // Insert a variable tag into whatever input was last focused
+  const handleInsertVariable = useCallback((varName: string) => {
+    const target = activeInsertRef.current;
+    if (target) {
+      insertVariableIntoRef(target.ref, target.setter, varName);
+    } else {
+      navigator.clipboard?.writeText(`{${varName}}`);
+    }
+  }, []);
 
   return (
     <>
-      <div className="space-y-6">
-        {/* Auto-Restart on Crash */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FaArrowsRotate className="h-5 w-5 text-ring" />
-              Auto-Restart on Crash
-            </CardTitle>
-            <CardDescription>
-              Automatically restart the server when it crashes unexpectedly
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium">Enable Auto-Restart</p>
-                <p className="text-xs text-muted-foreground">
-                  Restarts with a 10 second delay. Stops after 3 crashes within
-                  10 minutes to prevent loops.
-                </p>
-              </div>
-              <Switch
-                checked={server.autoRestart}
-                onCheckedChange={handleToggleAutoRestart}
-              />
+      <div className="space-y-0">
+        {/* ─── Auto-Restart on Crash (collapsible) ─── */}
+        <div className="pb-6 border-b">
+          <button
+            type="button"
+            className="flex items-center justify-between w-full text-left cursor-pointer group"
+            onClick={() => setAutoRestartOpen((o) => !o)}
+          >
+            <div className="flex items-center gap-2">
+              <FaArrowsRotate className="h-4 w-4 text-ring" />
+              <span className="text-sm font-medium text-muted-foreground">
+                Auto-Restart on Crash
+              </span>
+              <Badge variant={server.autoRestart ? "success" : "secondary"}>
+                {server.autoRestart ? "Active" : "Disabled"}
+              </Badge>
             </div>
-          </CardContent>
-        </Card>
+            {autoRestartOpen ? (
+              <FaChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+            ) : (
+              <FaChevronRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+            )}
+          </button>
 
-        {/* Auto-Restart on Update (RCON warnings) */}
-        {hasRcon && (
-          <Card>
-            <CardHeader>
+          {autoRestartOpen && (
+            <div className="mt-4 space-y-4 rounded-lg border p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <FaDownload className="h-5 w-5 text-ring" />
-                    Auto-Restart on Update
-                  </CardTitle>
-                  <CardDescription>
-                    Periodically check for mod & game server updates and
-                    automatically restart with RCON warnings
-                  </CardDescription>
+                  <p className="text-sm font-medium">Enable Auto-Restart</p>
+                  <p className="text-xs text-muted-foreground">
+                    Restarts with a 10s delay. Stops after 3 crashes in 10 min.
+                  </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  {editingUpdateRestart ? (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          handleRevertUpdateRestart();
-                          setEditingUpdateRestart(false);
-                        }}
-                        disabled={urSaving}
-                      >
-                        <FaRotateLeft className="h-3.5 w-3.5 mr-1.5" />
-                        Cancel
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={handleSaveUpdateRestart}
-                        disabled={urSaving}
-                      >
-                        <FaFloppyDisk className="h-3.5 w-3.5 mr-1.5" />
-                        {urSaving ? "Saving..." : "Save"}
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setUrCheckDialogOpen(true)}
-                      >
-                        <FaArrowsRotate className="h-3.5 w-3.5 mr-1.5" />
-                        Check Now
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setEditingUpdateRestart(true)}
-                      >
-                        <FaPencil className="h-3.5 w-3.5 mr-1.5" />
-                        {updateRestart ? "Edit" : "Configure"}
-                      </Button>
-                    </>
-                  )}
-                </div>
+                <Switch
+                  checked={server.autoRestart}
+                  onCheckedChange={handleToggleAutoRestart}
+                />
               </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {updateRestartLoading ? (
-                <p className="text-sm text-muted-foreground">Loading...</p>
-              ) : editingUpdateRestart ? (
-                <div className="space-y-4">
-                  {/* Enabled toggle */}
-                  <div className="flex items-center justify-between">
+            </div>
+          )}
+        </div>
+
+        {/* ─── Auto-Restart on Update (collapsible) ─── */}
+        {hasRcon && (
+          <div className="py-6 border-b">
+            <button
+              type="button"
+              className="flex items-center justify-between w-full text-left cursor-pointer group"
+              onClick={() => setUrOpen((o) => !o)}
+            >
+              <div className="flex items-center gap-2">
+                <FaDownload className="h-4 w-4 text-ring" />
+                <span className="text-sm font-medium text-muted-foreground">
+                  Auto-Restart on Update
+                </span>
+                {!updateRestartLoading && (
+                  <Badge variant={urEnabled ? "success" : "secondary"}>
+                    {urEnabled ? "Active" : "Disabled"}
+                  </Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setUrCheckDialogOpen(true);
+                  }}
+                >
+                  <FaArrowsRotate className="h-3.5 w-3.5 mr-1.5" />
+                  Check Now
+                </Button>
+                {urOpen ? (
+                  <FaChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+                ) : (
+                  <FaChevronRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+                )}
+              </div>
+            </button>
+
+            {/* Collapsed summary */}
+            {!urOpen && !updateRestartLoading && urEnabled && (
+              <p className="text-xs text-muted-foreground mt-2 ml-6">
+                Check every {urCheckInterval} min · {urDelay} min delay ·
+                Warnings at {urWarnings} min
+              </p>
+            )}
+
+            {/* Expanded form */}
+            {urOpen && (
+              <div className="mt-4 space-y-4 rounded-lg border p-4">
+                {/* Enabled */}
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium">
+                    Enable Auto-Update Restart
+                  </label>
+                  <Switch checked={urEnabled} onCheckedChange={setUrEnabled} />
+                </div>
+
+                {/* Check game server updates */}
+                <div className="flex items-center justify-between">
+                  <div>
                     <label className="text-sm font-medium">
-                      Enable Auto-Update Restart
+                      Check Game Server Updates
                     </label>
-                    <Switch
-                      checked={urEnabled}
-                      onCheckedChange={setUrEnabled}
-                    />
+                    <p className="text-xs text-muted-foreground">
+                      Also check for game server updates via SteamCMD build ID
+                    </p>
                   </div>
+                  <Switch
+                    checked={urCheckGameUpdates}
+                    onCheckedChange={setUrCheckGameUpdates}
+                  />
+                </div>
 
-                  {/* Check game server updates toggle */}
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <label className="text-sm font-medium">
-                        Check Game Server Updates
-                      </label>
-                      <p className="text-xs text-muted-foreground">
-                        Also check for game server updates via SteamCMD build ID
-                        comparison
-                      </p>
-                    </div>
-                    <Switch
-                      checked={urCheckGameUpdates}
-                      onCheckedChange={setUrCheckGameUpdates}
-                    />
-                  </div>
-
-                  {/* Check interval */}
+                {/* Check interval + Restart delay */}
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium text-muted-foreground block mb-1">
                       Check Interval (minutes)
@@ -726,11 +930,10 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
                       onChange={(e) => setUrCheckInterval(e.target.value)}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      Check for updates every {urCheckInterval || "?"} minute(s)
+                      Check every {urCheckInterval || "?"} minute(s)
                     </p>
                   </div>
 
-                  {/* Restart delay */}
                   <div>
                     <label className="text-sm font-medium text-muted-foreground block mb-1">
                       Restart Delay (minutes)
@@ -744,349 +947,153 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
                       onChange={(e) => setUrDelay(e.target.value)}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      Wait {urDelay || "?"} minute(s) after detecting updates
-                      before restarting
+                      Wait {urDelay || "?"} min after detecting updates
                     </p>
                   </div>
+                </div>
 
-                  {/* Warning times */}
+                {/* Warning times */}
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground block mb-1">
+                    Warning Times (minutes)
+                  </label>
+                  <Input
+                    className="font-mono text-sm"
+                    value={urWarnings}
+                    onChange={(e) => setUrWarnings(e.target.value)}
+                    placeholder="5,1"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Comma-separated. Warnings sent via RCON in-game chat.
+                  </p>
+                </div>
+
+                {/* Warning message */}
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground block mb-1">
+                    Warning Message
+                  </label>
+                  <Input
+                    ref={urMessageRef}
+                    className="text-sm"
+                    value={urMessage}
+                    onChange={(e) => setUrMessage(e.target.value)}
+                    onFocus={() => {
+                      activeInsertRef.current = {
+                        ref: urMessageRef,
+                        setter: setUrMessage,
+                      };
+                    }}
+                    placeholder="Server restarting in {MINUTES} minute(s) for mod updates"
+                  />
+                  <VariableTags
+                    hints={allVariableHints}
+                    onInsert={handleInsertVariable}
+                  />
+                </div>
+
+                {urError && <p className="text-xs text-red-500">{urError}</p>}
+
+                {/* Save / Revert */}
+                {urChanged && (
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRevertUpdateRestart}
+                      disabled={urSaving}
+                    >
+                      <FaRotateLeft className="h-3.5 w-3.5 mr-1.5" />
+                      Revert
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSaveUpdateRestart}
+                      disabled={urSaving}
+                    >
+                      <FaFloppyDisk className="h-3.5 w-3.5 mr-1.5" />
+                      {urSaving ? "Saving..." : "Save"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ─── Scheduled Restarts (collapsible) ─── */}
+        {hasRcon && (
+          <div className="py-6 border-b">
+            <button
+              type="button"
+              className="flex items-center justify-between w-full text-left cursor-pointer group"
+              onClick={() => setScheduleOpen((o) => !o)}
+            >
+              <div className="flex items-center gap-2">
+                <FaStopwatch className="h-4 w-4 text-ring" />
+                <span className="text-sm font-medium text-muted-foreground">
+                  Scheduled Restarts
+                </span>
+                {!scheduleLoading && (
+                  <Badge variant={scheduleEnabled ? "success" : "secondary"}>
+                    {scheduleEnabled ? "Active" : "Disabled"}
+                  </Badge>
+                )}
+              </div>
+              {scheduleOpen ? (
+                <FaChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+              ) : (
+                <FaChevronRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+              )}
+            </button>
+
+            {/* Collapsed summary */}
+            {!scheduleOpen && !scheduleLoading && scheduleEnabled && (
+              <p className="text-xs text-muted-foreground mt-2 ml-6">
+                {scheduleRestartTime
+                  ? `Starting at ${scheduleRestartTime}, every ${scheduleInterval}h`
+                  : `Every ${scheduleInterval}h`}{" "}
+                · Warnings at {scheduleWarnings} min
+                {schedule?.nextRestart && schedule.enabled && (
+                  <>
+                    {" "}
+                    · Next: {new Date(schedule.nextRestart).toLocaleString()}
+                  </>
+                )}
+              </p>
+            )}
+
+            {/* Expanded form */}
+            {scheduleOpen && (
+              <div className="mt-4 space-y-4 rounded-lg border p-4">
+                {/* Enabled */}
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium">Enable Schedule</label>
+                  <Switch
+                    checked={scheduleEnabled}
+                    onCheckedChange={setScheduleEnabled}
+                  />
+                </div>
+
+                {/* Interval + Restart Time + Warning times */}
+                <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className="text-sm font-medium text-muted-foreground block mb-1">
-                      Warning Times (minutes before restart)
+                      First Restart Time
                     </label>
                     <Input
                       className="font-mono text-sm"
-                      value={urWarnings}
-                      onChange={(e) => setUrWarnings(e.target.value)}
-                      placeholder="5,1"
+                      type="time"
+                      value={scheduleRestartTime}
+                      onChange={(e) => setScheduleRestartTime(e.target.value)}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      Comma-separated minutes. Warnings are sent via RCON
-                      in-game chat.
+                      {scheduleRestartTime
+                        ? `Restarts anchored at ${scheduleRestartTime}`
+                        : "Optional. Leave empty for interval-only."}
                     </p>
                   </div>
 
-                  {/* Warning message */}
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground block mb-1">
-                      Warning Message
-                    </label>
-                    <Input
-                      className="text-sm"
-                      value={urMessage}
-                      onChange={(e) => setUrMessage(e.target.value)}
-                      placeholder="Server restarting in {MINUTES} minute(s) for mod updates"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Use {"{MOD_NAME}"} to show which mod(s) updated,{" "}
-                      {"{MOD_COUNT}"} for the number of updates
-                    </p>
-                    <div className="flex flex-wrap gap-1 mt-1.5">
-                      {allVariableHints.map((v) => (
-                        <span
-                          key={v.name}
-                          className="text-xs font-mono bg-muted text-muted-foreground px-1.5 py-0.5 rounded cursor-default"
-                          title={v.description}
-                        >
-                          {`{${v.name}}`}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  {urError && <p className="text-xs text-red-500">{urError}</p>}
-                </div>
-              ) : updateRestart ? (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Badge
-                      variant={updateRestart.enabled ? "success" : "secondary"}
-                    >
-                      {updateRestart.enabled ? "Active" : "Disabled"}
-                    </Badge>
-                    {updateRestart.checkGameUpdates && (
-                      <Badge variant="outline">Game Updates</Badge>
-                    )}
-                    <span className="text-sm text-muted-foreground">
-                      Check every {updateRestart.checkIntervalMinutes} min
-                    </span>
-                    <span className="text-sm text-muted-foreground">
-                      · {updateRestart.delayMinutes} min delay
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="bg-muted p-2 rounded">
-                      <span className="text-muted-foreground">
-                        Warnings at:{" "}
-                      </span>
-                      <span className="font-mono">
-                        {updateRestart.warningMinutes.join(", ")} min
-                      </span>
-                    </div>
-                    <div className="bg-muted p-2 rounded">
-                      <span className="text-muted-foreground">Message: </span>
-                      <span className="font-mono text-xs">
-                        {updateRestart.warningMessage}
-                      </span>
-                    </div>
-                  </div>
-                  {urError && <p className="text-xs text-red-500">{urError}</p>}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">
-                    No update restart settings configured. Click "Configure" to
-                    set up automatic update detection and restart.
-                  </p>
-                  {urError && <p className="text-xs text-red-500">{urError}</p>}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Template Variables */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <FaCode className="h-5 w-5 text-ring" />
-                  Template Variables
-                </CardTitle>
-                <CardDescription>
-                  Define custom placeholders like{" "}
-                  <code className="font-mono text-primary bg-muted px-1 py-0.5 rounded">
-                    {"{DISCORD}"}
-                  </code>{" "}
-                  for use in messages and restart warnings
-                </CardDescription>
-              </div>
-              {!addingVar && editingVarId === null && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    resetVarForm();
-                    setAddingVar(true);
-                  }}
-                >
-                  <FaPlus className="h-3.5 w-3.5 mr-1.5" />
-                  Add
-                </Button>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {variablesLoading ? (
-              <p className="text-sm text-muted-foreground">Loading...</p>
-            ) : (
-              <>
-                {/* Built-in variables reference */}
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-2">
-                    Built-in Variables
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {builtinVars.map((v) => (
-                      <span
-                        key={v.name}
-                        className="inline-flex items-center gap-1 text-xs bg-muted px-2 py-1 rounded font-mono"
-                        title={v.description}
-                      >
-                        {`{${v.name}}`}
-                        <span className="text-muted-foreground font-sans">
-                          — {v.description}
-                        </span>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Add / Edit form */}
-                {(addingVar || editingVarId !== null) && (
-                  <div className="space-y-3 border rounded-lg p-4">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground block mb-1">
-                          Variable Name
-                        </label>
-                        <Input
-                          className="font-mono text-sm uppercase"
-                          value={varName}
-                          onChange={(e) => setVarName(e.target.value)}
-                          placeholder="DISCORD"
-                          disabled={editingVarId !== null}
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Used as{" "}
-                          <code className="font-mono text-primary bg-muted px-1 py-0.5 rounded">
-                            {`{${varName.toUpperCase().replace(/[^A-Z0-9_]/g, "") || "NAME"}}`}
-                          </code>{" "}
-                          in messages
-                        </p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground block mb-1">
-                          Value
-                        </label>
-                        <Input
-                          className="text-sm"
-                          value={varValue}
-                          onChange={(e) => setVarValue(e.target.value)}
-                          placeholder="discord.gg/example"
-                        />
-                      </div>
-                    </div>
-                    {varError && (
-                      <p className="text-xs text-red-500">{varError}</p>
-                    )}
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={cancelEditVar}
-                        disabled={varSaving}
-                      >
-                        <FaRotateLeft className="h-3.5 w-3.5 mr-1.5" />
-                        Cancel
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={handleSaveVariable}
-                        disabled={varSaving}
-                      >
-                        <FaFloppyDisk className="h-3.5 w-3.5 mr-1.5" />
-                        {varSaving ? "Saving..." : "Save"}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Custom variables list */}
-                {variables.length > 0 ? (
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-2">
-                      Custom Variables
-                    </p>
-                    <div className="space-y-2">
-                      {variables.map((v) => (
-                        <div
-                          key={v.id}
-                          className="flex items-center justify-between gap-3 bg-muted p-3 rounded-lg"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <code className="text-sm font-mono text-primary">
-                              {`{${v.name}}`}
-                            </code>
-                            <span className="text-sm text-muted-foreground ml-2">
-                              → {v.value}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={() => startEditVar(v)}
-                              disabled={editingVarId !== null || addingVar}
-                            >
-                              <FaPencil className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-red-500 hover:text-red-600"
-                              onClick={() => handleDeleteVariable(v.id)}
-                            >
-                              <FaTrashCan className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  !addingVar && (
-                    <p className="text-sm text-muted-foreground">
-                      No custom variables defined. Click "Add" to create one
-                      (e.g. DISCORD, WEBSITE, TEAMSPEAK).
-                    </p>
-                  )
-                )}
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Scheduled Restarts (RCON warnings) */}
-        {hasRcon && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <FaStopwatch className="h-5 w-5 text-ring" />
-                    Scheduled Restarts
-                  </CardTitle>
-                  <CardDescription>
-                    Automatic periodic restarts with in-game RCON warnings
-                  </CardDescription>
-                </div>
-                <div className="flex items-center gap-2">
-                  {editingSchedule ? (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          handleRevertSchedule();
-                          setEditingSchedule(false);
-                        }}
-                        disabled={scheduleSaving}
-                      >
-                        <FaRotateLeft className="h-3.5 w-3.5 mr-1.5" />
-                        Cancel
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={handleSaveSchedule}
-                        disabled={scheduleSaving}
-                      >
-                        <FaFloppyDisk className="h-3.5 w-3.5 mr-1.5" />
-                        {scheduleSaving ? "Saving..." : "Save"}
-                      </Button>
-                    </>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setEditingSchedule(true)}
-                    >
-                      <FaPencil className="h-3.5 w-3.5 mr-1.5" />
-                      {schedule ? "Edit" : "Configure"}
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {scheduleLoading ? (
-                <p className="text-sm text-muted-foreground">Loading...</p>
-              ) : editingSchedule ? (
-                <div className="space-y-4">
-                  {/* Enabled toggle */}
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium">
-                      Enable Schedule
-                    </label>
-                    <Switch
-                      checked={scheduleEnabled}
-                      onCheckedChange={setScheduleEnabled}
-                    />
-                  </div>
-
-                  {/* Interval */}
                   <div>
                     <label className="text-sm font-medium text-muted-foreground block mb-1">
                       Restart Interval (hours)
@@ -1100,15 +1107,13 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
                       onChange={(e) => setScheduleInterval(e.target.value)}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      Server will restart every {scheduleInterval || "?"}{" "}
-                      hour(s)
+                      Restart every {scheduleInterval || "?"} hour(s)
                     </p>
                   </div>
 
-                  {/* Warning times */}
                   <div>
                     <label className="text-sm font-medium text-muted-foreground block mb-1">
-                      Warning Times (minutes before restart)
+                      Warning Times (minutes)
                     </label>
                     <Input
                       className="font-mono text-sm"
@@ -1117,399 +1122,585 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
                       placeholder="15,5,1"
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      Comma-separated minutes. Warnings are sent via RCON
-                      in-game chat.
+                      Comma-separated. Warnings sent via RCON.
                     </p>
                   </div>
-
-                  {/* Warning message */}
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground block mb-1">
-                      Warning Message
-                    </label>
-                    <Input
-                      className="text-sm"
-                      value={scheduleMessage}
-                      onChange={(e) => setScheduleMessage(e.target.value)}
-                      placeholder="Server restart in {MINUTES} minutes!"
-                    />
-                    <div className="flex flex-wrap gap-1 mt-1.5">
-                      {allVariableHints.map((v) => (
-                        <span
-                          key={v.name}
-                          className="text-xs font-mono bg-muted text-muted-foreground px-1.5 py-0.5 rounded cursor-default"
-                          title={v.description}
-                        >
-                          {`{${v.name}}`}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  {scheduleError && (
-                    <p className="text-xs text-red-500">{scheduleError}</p>
-                  )}
                 </div>
-              ) : schedule ? (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Badge variant={schedule.enabled ? "success" : "secondary"}>
-                      {schedule.enabled ? "Active" : "Disabled"}
-                    </Badge>
-                    <span className="text-sm text-muted-foreground">
-                      Every {schedule.intervalHours}h
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="bg-muted p-2 rounded">
-                      <span className="text-muted-foreground">
-                        Warnings at:{" "}
-                      </span>
-                      <span className="font-mono">
-                        {schedule.warningMinutes.join(", ")} min
-                      </span>
-                    </div>
-                    <div className="bg-muted p-2 rounded">
-                      <span className="text-muted-foreground">Message: </span>
-                      <span className="font-mono text-xs">
-                        {schedule.warningMessage}
-                      </span>
-                    </div>
-                  </div>
-                  {schedule.nextRestart && schedule.enabled && (
-                    <p className="text-xs text-muted-foreground">
-                      Next restart:{" "}
-                      {new Date(schedule.nextRestart).toLocaleString()}
-                    </p>
-                  )}
-                  {schedule.lastRestart && (
-                    <p className="text-xs text-muted-foreground">
-                      Last restart:{" "}
-                      {new Date(schedule.lastRestart).toLocaleString()}
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <div className="text-sm text-muted-foreground">
-                  No restart schedule configured. Click "Configure" to set one
-                  up.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
 
-        {/* Scheduled Messages (RCON broadcasts) */}
-        {hasRcon && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
+                {/* Warning message */}
                 <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <FaCommentDots className="h-5 w-5 text-ring" />
-                    Scheduled Messages
-                  </CardTitle>
-                  <CardDescription>
-                    Recurring RCON messages broadcast to all players (e.g.
-                    server name, rules, Discord link)
-                  </CardDescription>
-                </div>
-                {!addingMessage && editingMessageId === null && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      resetMessageForm();
-                      setAddingMessage(true);
+                  <label className="text-sm font-medium text-muted-foreground block mb-1">
+                    Warning Message
+                  </label>
+                  <Input
+                    ref={scheduleMessageRef}
+                    className="text-sm"
+                    value={scheduleMessage}
+                    onChange={(e) => setScheduleMessage(e.target.value)}
+                    onFocus={() => {
+                      activeInsertRef.current = {
+                        ref: scheduleMessageRef,
+                        setter: setScheduleMessage,
+                      };
                     }}
-                  >
-                    <FaPlus className="h-3.5 w-3.5 mr-1.5" />
-                    Add
-                  </Button>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {messagesLoading ? (
-                <p className="text-sm text-muted-foreground">Loading...</p>
-              ) : (
-                <>
-                  {/* Add / Edit form */}
-                  {(addingMessage || editingMessageId !== null) && (
-                    <div className="space-y-3 border rounded-lg p-4">
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground block mb-1">
-                          Message Text
-                        </label>
-                        <Input
-                          className="text-sm"
-                          value={msgText}
-                          onChange={(e) => setMsgText(e.target.value)}
-                          placeholder="Welcome to {SERVER_NAME}! Rules: {DISCORD}"
-                        />
-                        <div className="flex flex-wrap gap-1 mt-1.5">
-                          {allVariableHints
-                            .filter((v) => v.name !== "MINUTES")
-                            .map((v) => (
-                              <span
-                                key={v.name}
-                                className="text-xs font-mono bg-muted text-muted-foreground px-1.5 py-0.5 rounded cursor-default"
-                                title={v.description}
-                              >
-                                {`{${v.name}}`}
-                              </span>
-                            ))}
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-sm font-medium text-muted-foreground block mb-1">
-                            Interval (minutes)
-                          </label>
-                          <Input
-                            className="font-mono text-sm"
-                            type="number"
-                            min={1}
-                            max={1440}
-                            value={msgInterval}
-                            onChange={(e) => setMsgInterval(e.target.value)}
-                          />
-                        </div>
-                        <div className="flex items-end">
-                          <div className="flex items-center gap-2 pb-0.5">
-                            <Switch
-                              checked={msgEnabled}
-                              onCheckedChange={setMsgEnabled}
-                            />
-                            <label className="text-sm font-medium">
-                              Enabled
-                            </label>
-                          </div>
-                        </div>
-                      </div>
-                      {msgError && (
-                        <p className="text-xs text-red-500">{msgError}</p>
-                      )}
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={cancelEditMessage}
-                          disabled={msgSaving}
-                        >
-                          <FaRotateLeft className="h-3.5 w-3.5 mr-1.5" />
-                          Cancel
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={handleSaveMessage}
-                          disabled={msgSaving}
-                        >
-                          <FaFloppyDisk className="h-3.5 w-3.5 mr-1.5" />
-                          {msgSaving ? "Saving..." : "Save"}
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Message list */}
-                  {messages.length > 0 ? (
-                    <div className="space-y-2">
-                      {messages.map((msg) => (
-                        <div
-                          key={msg.id}
-                          className="flex items-start justify-between gap-3 bg-muted p-3 rounded-lg"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <Badge
-                                variant={msg.enabled ? "success" : "secondary"}
-                                className="text-xs"
-                              >
-                                {msg.enabled ? "Active" : "Disabled"}
-                              </Badge>
-                              <span className="text-xs text-muted-foreground">
-                                Every {msg.intervalMinutes} min
-                              </span>
-                            </div>
-                            <p className="text-sm font-mono break-all">
-                              {msg.message}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <Switch
-                              checked={msg.enabled}
-                              onCheckedChange={() => handleToggleMessage(msg)}
-                              className="scale-75"
-                            />
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={() => startEditMessage(msg)}
-                              disabled={
-                                editingMessageId !== null || addingMessage
-                              }
-                            >
-                              <FaPencil className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-red-500 hover:text-red-600"
-                              onClick={() => handleDeleteMessage(msg.id)}
-                            >
-                              <FaTrashCan className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    !addingMessage && (
-                      <p className="text-sm text-muted-foreground">
-                        No scheduled messages configured. Click "Add" to create
-                        one.
-                      </p>
-                    )
-                  )}
-                </>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Windows Firewall Rules */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <FaShieldHalved className="h-5 w-5 text-ring" />
-                  Windows Firewall Rules
-                </CardTitle>
-                <CardDescription>
-                  Manage Windows Firewall rules for this game server's ports and
-                  executable
-                </CardDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                {firewallStatus &&
-                  !firewallLoading &&
-                  (firewallStatus.allPresent ? (
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={handleRemoveFirewallRules}
-                      disabled={firewallSaving}
-                    >
-                      {firewallSaving ? (
-                        <FaSpinner className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <FaTrashCan className="mr-2 h-4 w-4" />
-                      )}
-                      Remove Rules
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      onClick={handleAddFirewallRules}
-                      disabled={firewallSaving}
-                    >
-                      {firewallSaving ? (
-                        <FaSpinner className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <FaShieldHalved className="mr-2 h-4 w-4" />
-                      )}
-                      {firewallStatus.rules.some((r) => r.exists) ||
-                      firewallStatus.executableRule.exists
-                        ? "Add Missing Rules"
-                        : "Add Rules"}
-                    </Button>
-                  ))}
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {firewallLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <FaSpinner className="h-4 w-4 animate-spin" />
-                Checking firewall rules...
-              </div>
-            ) : firewallStatus ? (
-              <div className="space-y-3">
-                {/* Summary badge */}
-                <div className="flex items-center gap-2">
-                  {firewallStatus.allPresent ? (
-                    <Badge variant="success">All rules configured</Badge>
-                  ) : (
-                    <Badge variant="warning">
-                      {firewallStatus.rules.filter((r) => !r.exists).length +
-                        (firewallStatus.executableRule.exists ? 0 : 1)}{" "}
-                      of {firewallStatus.rules.length + 1} rule(s) missing
-                    </Badge>
-                  )}
+                    placeholder="Server restart in {MINUTES} minutes!"
+                  />
+                  <VariableTags
+                    hints={allVariableHints}
+                    onInsert={handleInsertVariable}
+                  />
                 </div>
 
-                {/* Port rules */}
-                <div className="space-y-2">
-                  {firewallStatus.rules.map((rule) => (
-                    <div
-                      key={rule.name}
-                      className="flex items-center justify-between gap-3 bg-muted p-3 rounded-lg"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium">
-                          {rule.description}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {rule.protocol} {rule.ports}
-                        </p>
-                      </div>
-                      <Badge variant={rule.exists ? "success" : "destructive"}>
-                        {rule.exists ? "Active" : "Missing"}
-                      </Badge>
-                    </div>
-                  ))}
-
-                  {/* Executable rule */}
-                  <div className="flex items-center justify-between gap-3 bg-muted p-3 rounded-lg">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium">Program Rule</p>
+                {/* Restart schedule preview */}
+                {scheduleRestartTime &&
+                  (() => {
+                    const interval = parseInt(scheduleInterval, 10);
+                    if (isNaN(interval) || interval < 1 || interval > 24)
+                      return null;
+                    const [h, m] = scheduleRestartTime.split(":").map(Number);
+                    if (isNaN(h) || isNaN(m)) return null;
+                    const times: string[] = [];
+                    let totalMinutes = h * 60 + m;
+                    for (let i = 0; i < Math.ceil(24 / interval); i++) {
+                      const wrapped = totalMinutes % (24 * 60);
+                      times.push(
+                        `${String(Math.floor(wrapped / 60)).padStart(2, "0")}:${String(wrapped % 60).padStart(2, "0")}`,
+                      );
+                      totalMinutes += interval * 60;
+                      if (totalMinutes >= 24 * 60 + (h * 60 + m)) break;
+                    }
+                    return (
                       <p className="text-xs text-muted-foreground">
-                        {server.executable ?? "Server executable"}
+                        Restart times: {times.join(", ")}
                       </p>
-                    </div>
-                    <Badge
-                      variant={
-                        firewallStatus.executableRule.exists
-                          ? "success"
-                          : "destructive"
-                      }
-                    >
-                      {firewallStatus.executableRule.exists
-                        ? "Active"
-                        : "Missing"}
-                    </Badge>
-                  </div>
-                </div>
+                    );
+                  })()}
 
-                {firewallError && (
-                  <p className="text-xs text-red-500">{firewallError}</p>
+                {/* Next / last restart info */}
+                {schedule && (
+                  <div className="text-xs text-muted-foreground space-y-0.5">
+                    {schedule.nextRestart && schedule.enabled && (
+                      <p>
+                        Next restart:{" "}
+                        {new Date(schedule.nextRestart).toLocaleString()}
+                      </p>
+                    )}
+                    {schedule.lastRestart && (
+                      <p>
+                        Last restart:{" "}
+                        {new Date(schedule.lastRestart).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
                 )}
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">
-                  Could not check firewall rules.
-                </p>
-                {firewallError && (
-                  <p className="text-xs text-red-500">{firewallError}</p>
+
+                {scheduleError && (
+                  <p className="text-xs text-red-500">{scheduleError}</p>
+                )}
+
+                {/* Save / Revert */}
+                {scheduleChanged && (
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRevertSchedule}
+                      disabled={scheduleSaving}
+                    >
+                      <FaRotateLeft className="h-3.5 w-3.5 mr-1.5" />
+                      Revert
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSaveSchedule}
+                      disabled={scheduleSaving}
+                    >
+                      <FaFloppyDisk className="h-3.5 w-3.5 mr-1.5" />
+                      {scheduleSaving ? "Saving..." : "Save"}
+                    </Button>
+                  </div>
                 )}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        )}
+
+        {/* ─── Scheduled Messages ─── */}
+        {hasRcon && (
+          <div className="py-6 border-b">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <FaCommentDots className="h-4 w-4 text-ring" />
+                <label className="text-sm font-medium text-muted-foreground">
+                  Scheduled Messages
+                </label>
+              </div>
+              {!addingMessage && editingMessageId === null && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    resetMessageForm();
+                    setAddingMessage(true);
+                  }}
+                >
+                  <FaPlus className="h-3.5 w-3.5 mr-1.5" />
+                  Add
+                </Button>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              {/* Add / Edit form */}
+              {(addingMessage || editingMessageId !== null) && (
+                <div className="space-y-3 border rounded-lg p-3">
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground block mb-1">
+                      Message Text
+                    </label>
+                    <Input
+                      ref={msgTextRef}
+                      className="text-sm"
+                      value={msgText}
+                      onChange={(e) => setMsgText(e.target.value)}
+                      onFocus={() => {
+                        activeInsertRef.current = {
+                          ref: msgTextRef,
+                          setter: setMsgText,
+                        };
+                      }}
+                      placeholder="Welcome to {SERVER_NAME}! Rules: {DISCORD}"
+                    />
+                    <VariableTags
+                      hints={allVariableHints}
+                      exclude={["MINUTES"]}
+                      onInsert={handleInsertVariable}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground block mb-1">
+                        Interval (min)
+                      </label>
+                      <Input
+                        className="font-mono text-sm"
+                        type="number"
+                        min={1}
+                        max={1440}
+                        value={msgInterval}
+                        onChange={(e) => setMsgInterval(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <div className="flex items-center gap-2 pb-0.5">
+                        <Switch
+                          checked={msgEnabled}
+                          onCheckedChange={setMsgEnabled}
+                        />
+                        <label className="text-sm font-medium">Enabled</label>
+                      </div>
+                    </div>
+                  </div>
+                  {msgError && (
+                    <p className="text-xs text-red-500">{msgError}</p>
+                  )}
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={cancelEditMessage}
+                      disabled={msgSaving}
+                    >
+                      <FaRotateLeft className="h-3.5 w-3.5 mr-1.5" />
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSaveMessage}
+                      disabled={msgSaving}
+                    >
+                      <FaFloppyDisk className="h-3.5 w-3.5 mr-1.5" />
+                      {msgSaving ? "Saving..." : "Save"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Message list — compact rows */}
+              {messages.length > 0 ? (
+                <div className="space-y-2">
+                  {messages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className="flex items-center gap-3 bg-muted/50 p-2.5 rounded-lg"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant={msg.enabled ? "success" : "secondary"}
+                            className="text-xs shrink-0"
+                          >
+                            {msg.enabled ? "On" : "Off"}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground shrink-0">
+                            {msg.intervalMinutes}m
+                          </span>
+                          <p className="text-sm font-mono truncate">
+                            {msg.message}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Switch
+                          checked={msg.enabled}
+                          onCheckedChange={() => handleToggleMessage(msg)}
+                          className="scale-75"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => startEditMessage(msg)}
+                          disabled={editingMessageId !== null || addingMessage}
+                        >
+                          <FaPencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-red-500 hover:text-red-600"
+                          onClick={() => handleDeleteMessage(msg.id)}
+                        >
+                          <FaTrashCan className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                !addingMessage && (
+                  <p className="text-sm text-muted-foreground">
+                    No messages yet. Click "Add" to create one.
+                  </p>
+                )
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ─── Template Variables (collapsible) ─── */}
+        <div className="py-6 border-b">
+          <button
+            type="button"
+            className="flex items-center justify-between w-full text-left cursor-pointer group"
+            onClick={() => setVariablesOpen((o) => !o)}
+          >
+            <div className="flex items-center gap-2">
+              <FaCode className="h-4 w-4 text-ring" />
+              <span className="text-sm font-medium text-muted-foreground">
+                Template Variables
+              </span>
+              {variables.length > 0 && (
+                <Badge variant="secondary">{variables.length} custom</Badge>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {!addingVar && editingVarId === null && variablesOpen && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    resetVarForm();
+                    setAddingVar(true);
+                  }}
+                >
+                  <FaPlus className="h-3.5 w-3.5 mr-1.5" />
+                  Add
+                </Button>
+              )}
+              {variablesOpen ? (
+                <FaChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+              ) : (
+                <FaChevronRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+              )}
+            </div>
+          </button>
+
+          {/* Collapsed summary */}
+          {!variablesOpen && builtinVars.length > 0 && (
+            <p className="text-xs text-muted-foreground mt-2 ml-6">
+              {builtinVars.length} built-in
+              {variables.length > 0 ? ` · ${variables.length} custom` : ""}
+            </p>
+          )}
+
+          {variablesOpen && (
+            <div className="mt-4 space-y-4 rounded-lg border p-4">
+              {/* Built-in variables */}
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-2">
+                  Built-in Variables
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {builtinVars.map((v) => (
+                    <Tip key={v.name} content={v.description}>
+                      <span className="inline-flex items-center gap-1 text-xs bg-muted px-2 py-1 rounded font-mono">
+                        {`{${v.name}}`}
+                        <span className="text-muted-foreground font-sans">
+                          — {v.description}
+                        </span>
+                      </span>
+                    </Tip>
+                  ))}
+                </div>
+              </div>
+
+              {/* Add / Edit form */}
+              {(addingVar || editingVarId !== null) && (
+                <div className="space-y-3 border rounded-lg p-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground block mb-1">
+                        Variable Name
+                      </label>
+                      <Input
+                        className="font-mono text-sm uppercase"
+                        value={varName}
+                        onChange={(e) => setVarName(e.target.value)}
+                        placeholder="DISCORD"
+                        disabled={editingVarId !== null}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Used as{" "}
+                        <code className="font-mono text-primary bg-muted px-1 py-0.5 rounded">
+                          {`{${varName.toUpperCase().replace(/[^A-Z0-9_]/g, "") || "NAME"}}`}
+                        </code>{" "}
+                        in messages
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground block mb-1">
+                        Value
+                      </label>
+                      <Input
+                        className="text-sm"
+                        value={varValue}
+                        onChange={(e) => setVarValue(e.target.value)}
+                        placeholder="discord.gg/example"
+                      />
+                    </div>
+                  </div>
+                  {varError && (
+                    <p className="text-xs text-red-500">{varError}</p>
+                  )}
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={cancelEditVar}
+                      disabled={varSaving}
+                    >
+                      <FaRotateLeft className="h-3.5 w-3.5 mr-1.5" />
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSaveVariable}
+                      disabled={varSaving}
+                    >
+                      <FaFloppyDisk className="h-3.5 w-3.5 mr-1.5" />
+                      {varSaving ? "Saving..." : "Save"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Custom variables list */}
+              {variables.length > 0 ? (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-2">
+                    Custom Variables
+                  </p>
+                  <div className="space-y-2">
+                    {variables.map((v) => (
+                      <div
+                        key={v.id}
+                        className="flex items-center justify-between gap-3 bg-muted p-3 rounded-lg"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <code className="text-sm font-mono text-primary">
+                            {`{${v.name}}`}
+                          </code>
+                          <span className="text-sm text-muted-foreground ml-2">
+                            → {v.value}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => startEditVar(v)}
+                            disabled={editingVarId !== null || addingVar}
+                          >
+                            <FaPencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-red-500 hover:text-red-600"
+                            onClick={() => handleDeleteVariable(v.id)}
+                          >
+                            <FaTrashCan className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                !addingVar && (
+                  <p className="text-sm text-muted-foreground">
+                    No custom variables defined. Click "Add" to create one (e.g.
+                    DISCORD, WEBSITE, TEAMSPEAK).
+                  </p>
+                )
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ─── Windows Firewall Rules (collapsible) ─── */}
+        <div className="py-6">
+          <button
+            type="button"
+            className="flex items-center justify-between w-full text-left cursor-pointer group"
+            onClick={() => setFirewallOpen((o) => !o)}
+          >
+            <div className="flex items-center gap-2">
+              <FaShieldHalved className="h-4 w-4 text-ring" />
+              <span className="text-sm font-medium text-muted-foreground">
+                Windows Firewall Rules
+              </span>
+              {!firewallLoading && firewallStatus && (
+                <Badge
+                  variant={firewallStatus.allPresent ? "success" : "warning"}
+                >
+                  {firewallStatus.allPresent
+                    ? "All configured"
+                    : `${firewallStatus.rules.filter((r) => !r.exists).length + (firewallStatus.executableRule.exists ? 0 : 1)} missing`}
+                </Badge>
+              )}
+            </div>
+            {firewallOpen ? (
+              <FaChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+            ) : (
+              <FaChevronRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+            )}
+          </button>
+
+          {firewallOpen && (
+            <div className="mt-4 space-y-4">
+              {firewallStatus ? (
+                <div className="space-y-3 rounded-lg border p-4">
+                  {/* Action button */}
+                  <div className="flex items-center gap-2">
+                    {firewallStatus.allPresent ? (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleRemoveFirewallRules}
+                        disabled={firewallSaving}
+                      >
+                        {firewallSaving ? (
+                          <FaSpinner className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <FaTrashCan className="mr-2 h-4 w-4" />
+                        )}
+                        Remove Rules
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={handleAddFirewallRules}
+                        disabled={firewallSaving}
+                      >
+                        {firewallSaving ? (
+                          <FaSpinner className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <FaShieldHalved className="mr-2 h-4 w-4" />
+                        )}
+                        {firewallStatus.rules.some((r) => r.exists) ||
+                        firewallStatus.executableRule.exists
+                          ? "Add Missing Rules"
+                          : "Add Rules"}
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Port rules */}
+                  <div className="space-y-2">
+                    {firewallStatus.rules.map((rule) => (
+                      <div
+                        key={rule.name}
+                        className="flex items-center justify-between gap-3 bg-muted/50 p-3 rounded-lg"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium">
+                            {rule.description}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {rule.protocol} {rule.ports}
+                          </p>
+                        </div>
+                        <Badge
+                          variant={rule.exists ? "success" : "destructive"}
+                        >
+                          {rule.exists ? "Active" : "Missing"}
+                        </Badge>
+                      </div>
+                    ))}
+
+                    {/* Executable rule */}
+                    <div className="flex items-center justify-between gap-3 bg-muted/50 p-3 rounded-lg">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium">Program Rule</p>
+                        <p className="text-xs text-muted-foreground">
+                          {server.executable ?? "Server executable"}
+                        </p>
+                      </div>
+                      <Badge
+                        variant={
+                          firewallStatus.executableRule.exists
+                            ? "success"
+                            : "destructive"
+                        }
+                      >
+                        {firewallStatus.executableRule.exists
+                          ? "Active"
+                          : "Missing"}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  {firewallError && (
+                    <p className="text-xs text-red-500">{firewallError}</p>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    Could not check firewall rules.
+                  </p>
+                  {firewallError && (
+                    <p className="text-xs text-red-500">{firewallError}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Update Check Dialog */}
@@ -1517,6 +1708,7 @@ export function SettingsTab({ server, onRefresh }: SettingsTabProps) {
         open={urCheckDialogOpen}
         onOpenChange={setUrCheckDialogOpen}
         serverId={server.id}
+        serverStatus={server.status}
       />
     </>
   );

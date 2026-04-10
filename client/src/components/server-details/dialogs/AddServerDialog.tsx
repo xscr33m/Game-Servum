@@ -362,7 +362,7 @@ export function AddServerDialog({
                     Loading available games...
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {games.map((game) => {
                       const logo = getGameLogo(game.id);
                       return (
@@ -484,7 +484,7 @@ export function AddServerDialog({
                         className="h-8 w-auto object-contain"
                       />
                     )}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium">{selectedGame.name}</span>
                       <Badge variant="secondary">
                         App ID: {selectedGame.appId}

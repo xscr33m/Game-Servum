@@ -11,7 +11,7 @@
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { logger } from "../../index.js";
+import { logger } from "../../core/logger.js";
 import { BaseGameAdapter } from "../base.js";
 import type {
   GameDefinition,
@@ -21,8 +21,10 @@ import type {
   EditableFileConfig,
   LogPaths,
   StartupDetector,
+  BackupPathConfig,
 } from "../types.js";
 import type { GameServer } from "../../types/index.js";
+import type { RconClient } from "../../core/rcon/types.js";
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -85,6 +87,8 @@ export class SevenDaysAdapter extends BaseGameAdapter {
       logParsing: false,
       playerListEditable: false,
       profilesPath: false,
+      directMessage: true,
+      priorityQueue: false,
     },
     broadcastCommand: 'say "{MESSAGE}"',
     playerListCommand: "listplayers",
@@ -185,6 +189,17 @@ export class SevenDaysAdapter extends BaseGameAdapter {
     return null;
   }
 
+  async sendDirectMessage(
+    rcon: RconClient,
+    playerId: string,
+    _playerName: string,
+    message: string,
+  ): Promise<boolean> {
+    // playerId is Steam64 ID
+    await rcon.sendCommand(`pm ${playerId} "${message}"`);
+    return true;
+  }
+
   // ── Mods (not supported via Workshop) ────────────────────────────
 
   // Uses BaseGameAdapter defaults: no-op copyModToServer, empty generateModLaunchParams
@@ -210,7 +225,7 @@ export class SevenDaysAdapter extends BaseGameAdapter {
   }
 
   formatPlayerEntry(
-    _type: "whitelist" | "ban",
+    _type: "whitelist" | "ban" | "priority",
     playerId: string,
     _playerName?: string,
   ): string {
@@ -227,10 +242,13 @@ export class SevenDaysAdapter extends BaseGameAdapter {
 
   addToPlayerList(
     server: GameServer,
-    type: "whitelist" | "ban",
+    type: "whitelist" | "ban" | "priority",
     playerId: string,
     _playerName?: string,
   ): PlayerListResult {
+    if (type === "priority") {
+      return super.addToPlayerList(server, type, playerId, _playerName);
+    }
     const adminPath = this.getServerAdminPath(server);
     const listLabel = type === "ban" ? "ban list" : "whitelist";
 
@@ -269,9 +287,12 @@ export class SevenDaysAdapter extends BaseGameAdapter {
 
   removeFromPlayerList(
     server: GameServer,
-    type: "whitelist" | "ban",
+    type: "whitelist" | "ban" | "priority",
     playerId: string,
   ): PlayerListResult {
+    if (type === "priority") {
+      return super.removeFromPlayerList(server, type, playerId);
+    }
     const adminPath = this.getServerAdminPath(server);
     const listLabel = type === "ban" ? "ban list" : "whitelist";
 
@@ -313,7 +334,13 @@ export class SevenDaysAdapter extends BaseGameAdapter {
     }
   }
 
-  getPlayerListContent(server: GameServer, type: "whitelist" | "ban"): string {
+  getPlayerListContent(
+    server: GameServer,
+    type: "whitelist" | "ban" | "priority",
+  ): string {
+    if (type === "priority") {
+      return super.getPlayerListContent(server, type);
+    }
     const adminPath = this.getServerAdminPath(server);
     if (!fs.existsSync(adminPath)) return "";
 
@@ -390,6 +417,16 @@ export class SevenDaysAdapter extends BaseGameAdapter {
         path: path.join(server.installPath, "serverconfig.xml"),
       },
     ];
+  }
+
+  // ── Backup ──────────────────────────────────────────────────────
+
+  getBackupPaths(_server: GameServer): BackupPathConfig {
+    return {
+      savePaths: ["Data/Saves"],
+      configPaths: ["serverconfig.xml", "serveradmin.xml"],
+      excludePatterns: ["**/*.log", "**/output_log*.txt"],
+    };
   }
 }
 

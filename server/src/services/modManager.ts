@@ -3,7 +3,8 @@ import fs from "fs";
 import { spawn, type ChildProcess } from "child_process";
 import { getConfig, getSteamCMDExecutable } from "./config.js";
 import { getGameAdapter, getGameDefinition } from "../games/index.js";
-import { broadcast, logger } from "../index.js";
+import { broadcast } from "../core/broadcast.js";
+import { logger } from "../core/logger.js";
 import {
   getModById,
   getModsByServerId,
@@ -11,6 +12,7 @@ import {
   updateModWorkshopTimestamp,
   deleteMod,
   getServerById,
+  incrementAppSetting,
 } from "../db/index.js";
 import { getSteamConfig } from "../db/index.js";
 import type { ServerMod } from "../types/index.js";
@@ -276,6 +278,9 @@ export async function installMod(
           );
           updateModStatus(modId, "installed", copyResult.modName || mod.name);
 
+          // Increment cumulative stats counter for live stats reporting
+          incrementAppSetting("stats_mods_installed_total");
+
           // Fetch and store the workshop time_updated for future update checks
           try {
             const modInfo = await getWorkshopModInfo(mod.workshopId);
@@ -516,13 +521,6 @@ export function cancelModInstallation(modId: number): {
     return { success: true, message: "Installation cancelled" };
   }
   return { success: false, message: "No active installation found" };
-}
-
-/**
- * Check if a mod is currently being installed
- */
-export function isModInstalling(modId: number): boolean {
-  return activeInstallations.has(modId);
 }
 
 /**

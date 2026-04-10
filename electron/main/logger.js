@@ -2,6 +2,10 @@
  * Simple Logger Service for Electron Main Process
  * Zero dependencies - uses only Node.js fs module
  * Supports daily rotation, buffering, and automatic cleanup
+ *
+ * SYNC: LogLevel, DEFAULT_LOG_SETTINGS, and SimpleLogger are manually ported
+ * from packages/shared/src/types/logging.ts and server/src/services/logger.ts.
+ * This file is plain CommonJS (no TS compilation) — keep in sync manually.
  */
 
 const fs = require("fs");
@@ -25,7 +29,7 @@ const DEFAULT_LOG_SETTINGS = {
 
 class SimpleLogger {
   constructor(context, logsDir, settings) {
-    this.context = context; // 'agent', or 'dashboard'
+    this.context = context; // 'agent', or 'commander'
     this.logsDir = logsDir;
     this.currentDate = this.getDate();
     this.buffer = [];
@@ -353,4 +357,4 @@ class SimpleLogger {
   }
 }
 
-module.exports = { SimpleLogger, LogLevel, DEFAULT_LOG_SETTINGS };
+module.exports = { SimpleLogger, DEFAULT_LOG_SETTINGS };

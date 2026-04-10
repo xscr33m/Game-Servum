@@ -6,7 +6,7 @@ import { SteamCmdInstallStep } from "./steps/SteamCmdInstallStep";
 import { SteamLoginStep } from "./steps/SteamLoginStep";
 import { SteamGuardStep } from "./steps/SteamGuardStep";
 import { CompleteStep } from "./steps/CompleteStep";
-import { markOnboardingComplete } from "./onboardingState";
+import { hasSeenWelcome, markWelcomeSeen } from "./onboardingState";
 import { useBackend } from "@/hooks/useBackend";
 import type { SteamCMDStatus } from "@/types";
 
@@ -20,6 +20,8 @@ const STEPS: StepDef[] = [
   { key: "complete", label: "Done" },
 ];
 
+const STEPS_NO_WELCOME: StepDef[] = STEPS.filter((s) => s.key !== "welcome");
+
 // ── Step type union ──
 type WizardStep =
   | "welcome"
@@ -31,23 +33,32 @@ type WizardStep =
 
 interface OnboardingWizardProps {
   onComplete: () => void;
+  onClose: () => void;
   initialStep?: WizardStep;
 }
 
 /**
- * Unified onboarding wizard.
+ * Agent setup wizard.
  *
- * Flow: Welcome → Connect Agent → SteamCMD Install → Steam Login → (Guard) → Complete
+ * Flow: [Welcome →] Connect Agent → SteamCMD Install → Steam Login → (Guard) → Complete
+ * Welcome step is only shown on the very first launch.
  */
 export function OnboardingWizard({
   onComplete,
+  onClose,
   initialStep,
 }: OnboardingWizardProps) {
   const { api, activeConnection } = useBackend();
 
-  const [step, setStep] = useState<WizardStep>(initialStep ?? "welcome");
+  // Determine initial step: skip welcome if already seen
+  const defaultStep = hasSeenWelcome() ? "connect" : "welcome";
+  const [step, setStep] = useState<WizardStep>(initialStep ?? defaultStep);
   const [steamcmd, setSteamcmd] = useState<SteamCMDStatus | null>(null);
   const [loadingSteamcmd, setLoadingSteamcmd] = useState(false);
+
+  // Use step list without Welcome when welcome was already seen
+  const showWelcome = !hasSeenWelcome() && !initialStep;
+  const steps = showWelcome ? STEPS : STEPS_NO_WELCOME;
 
   // Fetch SteamCMD status when reaching the steamcmd step
   const fetchSteamcmdStatus = useCallback(async () => {
@@ -77,14 +88,39 @@ export function OnboardingWizard({
   const wide = step === "steamcmd" || step === "login";
 
   function handleFinish() {
-    markOnboardingComplete();
     onComplete();
+  }
+
+  function handleWelcomeNext() {
+    markWelcomeSeen();
+    setStep("connect");
   }
 
   // ── Step flow helpers ──
 
-  function goToSteamcmd() {
-    setStep("steamcmd");
+  // Called by ConnectAgentStep with the freshly-connected agent's URL and token.
+  // Uses direct fetch to check SteamCMD status — no dependency on React state.
+  async function handleAgentConnected(agentUrl: string, sessionToken: string) {
+    setLoadingSteamcmd(true);
+    try {
+      const res = await fetch(`${agentUrl}/api/v1/steamcmd/status`, {
+        headers: { Authorization: `Bearer ${sessionToken}` },
+      });
+      if (!res.ok) throw new Error("Failed to fetch SteamCMD status");
+      const status = await res.json();
+      setSteamcmd(status);
+      if (status?.installed && status?.loggedIn) {
+        setStep("complete");
+      } else if (status?.installed) {
+        setStep("login");
+      } else {
+        setStep("steamcmd");
+      }
+    } catch {
+      setStep("steamcmd");
+    } finally {
+      setLoadingSteamcmd(false);
+    }
   }
 
   function goToLogin() {
@@ -99,13 +135,27 @@ export function OnboardingWizard({
     setStep("complete");
   }
 
-  return (
-    <OnboardingLayout steps={STEPS} currentStepKey={displayStepKey} wide={wide}>
-      {/* Welcome */}
-      {step === "welcome" && <WelcomeStep onNext={() => setStep("connect")} />}
+  // When closing the wizard on the welcome step, mark it as seen
+  // so re-opening doesn't show the welcome again.
+  function handleClose() {
+    if (step === "welcome") {
+      markWelcomeSeen();
+    }
+    onClose();
+  }
 
-      {/* Connect Agent (Dashboard only) */}
-      {step === "connect" && <ConnectAgentStep onNext={goToSteamcmd} />}
+  return (
+    <OnboardingLayout
+      steps={steps}
+      currentStepKey={displayStepKey}
+      wide={wide}
+      onClose={handleClose}
+    >
+      {/* Welcome */}
+      {step === "welcome" && <WelcomeStep onNext={handleWelcomeNext} />}
+
+      {/* Connect Agent (Commander only) */}
+      {step === "connect" && <ConnectAgentStep onNext={handleAgentConnected} />}
 
       {/* SteamCMD Install */}
       {step === "steamcmd" && !loadingSteamcmd && (

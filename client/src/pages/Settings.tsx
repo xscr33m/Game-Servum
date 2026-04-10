@@ -8,25 +8,74 @@ import {
   FaGlobe,
   FaDesktop,
   FaDownload,
+  FaArrowsLeftRight,
+  FaKey,
+  FaArrowRightFromBracket,
+  FaChartSimple,
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import { useBackend } from "@/hooks/useBackend";
 import { publicAsset } from "@/lib/assets";
 import { AppHeader } from "@/components/AppHeader";
 import { AgentStatusBanner } from "@/components/agent/AgentStatusBanner";
 import { getElectronSettings } from "@/lib/electronSettings";
+import { useContentWidth, setContentWidthMode } from "@/hooks/useContentWidth";
 import { logger } from "@/lib/logger";
 import { toastSuccess, toastError, toastInfo } from "@/lib/toast";
 
 // Detect if we're in Electron
 const isElectron = typeof window !== "undefined" && "electronAPI" in window;
+const isWebMode = import.meta.env.VITE_WEB_MODE === "true";
+
+function ContentWidthSetting() {
+  const { mode } = useContentWidth();
+  return (
+    <div className="px-4 py-3 flex items-center justify-between gap-4">
+      <div className="flex-1">
+        <div className="flex items-center gap-2 mb-0.5">
+          <FaArrowsLeftRight className="h-3.5 w-3.5 text-muted-foreground" />
+          <Label className="text-sm font-medium">Content Width</Label>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Content area width: Full width stretches to edges of window, Centered
+          adds margins on wide screens
+        </p>
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={() => setContentWidthMode("full")}
+          className={`px-3 py-1.5 text-xs rounded border ${
+            mode === "full"
+              ? "bg-ring/10 border-ring text-foreground"
+              : "border-border text-muted-foreground hover:border-ring/50 hover:text-foreground transition-colors"
+          }`}
+        >
+          Full Width
+        </button>
+        <button
+          onClick={() => setContentWidthMode("centered")}
+          className={`px-3 py-1.5 text-xs rounded border ${
+            mode === "centered"
+              ? "bg-ring/10 border-ring text-foreground"
+              : "border-border text-muted-foreground hover:border-ring/50 hover:text-foreground transition-colors"
+          }`}
+        >
+          Centered
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function Settings() {
   const navigate = useNavigate();
   const { api, isConnected } = useBackend();
+  const { contentClass } = useContentWidth();
   const [isWindows, setIsWindows] = useState(false);
   const [monitoringEnabled, setMonitoringEnabled] = useState(() => {
     return (
@@ -37,6 +86,8 @@ export function Settings() {
     return getElectronSettings().getItem("auto_update_enabled") !== "false";
   });
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [statsEnabled, setStatsEnabled] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(false);
 
   // Desktop app settings (load synchronously from app-settings.json)
   const [launchOnStartup, setLaunchOnStartup] = useState(() => {
@@ -53,6 +104,12 @@ export function Settings() {
     );
     return value !== "false";
   });
+
+  // Web mode: password change state
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
 
   useEffect(() => {
     // Detect platform (Windows vs Linux/macOS)
@@ -76,6 +133,13 @@ export function Settings() {
           "system_monitoring_enabled",
           String(s.monitoringEnabled),
         );
+      })
+      .catch(() => {});
+
+    api.system
+      .getStatsSettings()
+      .then((s) => {
+        setStatsEnabled(s.enabled);
       })
       .catch(() => {});
 
@@ -132,7 +196,7 @@ export function Settings() {
             <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
               <FaArrowLeft className="h-4 w-4 mr-2" />
               <img
-                src={publicAsset("dashboard-icon.png")}
+                src={publicAsset("commander-icon.png")}
                 alt=""
                 className="h-7 w-auto mr-1"
               />
@@ -146,7 +210,7 @@ export function Settings() {
       <AgentStatusBanner />
 
       <main className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
-        <div className="max-w-6xl mx-auto px-6 py-6">
+        <div className={cn("mx-auto px-6 py-6", contentClass)}>
           {/* ── General Settings ── */}
           <section className="rounded-lg border bg-card mb-6">
             <div className="px-4 py-3 border-b bg-muted/30">
@@ -167,7 +231,7 @@ export function Settings() {
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Show real-time CPU, memory, disk, and network usage on
-                    Dashboard
+                    Commander
                   </p>
                 </div>
                 <Switch
@@ -280,22 +344,81 @@ export function Settings() {
             </div>
           </section>
 
-          {/* ── Appearance (Coming Soon) ── */}
-          <section className="rounded-lg border bg-card mb-6 opacity-60">
+          {/* ── Privacy ── */}
+          <section className="rounded-lg border bg-card mb-6">
             <div className="px-4 py-3 border-b bg-muted/30">
-              <div className="flex items-center justify-between">
-                <h2 className="font-semibold text-sm">Appearance</h2>
-                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                  Coming Soon
-                </Badge>
-              </div>
+              <h2 className="font-semibold text-sm">Privacy</h2>
             </div>
             <div className="divide-y">
               <div className="px-4 py-3 flex items-center justify-between gap-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-0.5">
+                    <FaChartSimple className="h-3.5 w-3.5 text-muted-foreground" />
+                    <Label
+                      htmlFor="stats-toggle"
+                      className="text-sm font-medium cursor-pointer"
+                    >
+                      Anonymous Stats
+                    </Label>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Periodically share anonymous usage statistics (server count,
+                    mod count, player count) to help improve Game-Servum. No
+                    server names, player names, or IPs are ever sent.
+                  </p>
+                </div>
+                <Switch
+                  id="stats-toggle"
+                  checked={statsEnabled}
+                  disabled={!isConnected || statsLoading}
+                  onCheckedChange={async (checked) => {
+                    setStatsLoading(true);
+                    try {
+                      const result = await api.system.updateStatsSettings({
+                        enabled: checked,
+                      });
+                      if (result.success) {
+                        setStatsEnabled(checked);
+                        toastSuccess(
+                          checked
+                            ? "Anonymous stats enabled"
+                            : "Anonymous stats disabled",
+                        );
+                      } else {
+                        toastError(
+                          result.message || "Failed to update setting",
+                        );
+                      }
+                    } catch {
+                      toastError("Failed to update setting");
+                    } finally {
+                      setStatsLoading(false);
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* ── Appearance ── */}
+          <section className="rounded-lg border bg-card mb-6">
+            <div className="px-4 py-3 border-b bg-muted/30">
+              <h2 className="font-semibold text-sm">Appearance</h2>
+            </div>
+            <div className="divide-y">
+              <ContentWidthSetting />
+
+              <div className="px-4 py-3 flex items-center justify-between gap-4 opacity-60">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-0.5">
                     <FaPalette className="h-3.5 w-3.5 text-muted-foreground" />
                     <Label className="text-sm font-medium">Theme</Label>
+                    <Badge
+                      variant="secondary"
+                      className="text-[10px] px-1.5 py-0"
+                    >
+                      Coming Soon
+                    </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Dark, light, or system preference
@@ -323,11 +446,17 @@ export function Settings() {
                 </div>
               </div>
 
-              <div className="px-4 py-3 flex items-center justify-between gap-4">
+              <div className="px-4 py-3 flex items-center justify-between gap-4 opacity-60">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-0.5">
                     <FaGlobe className="h-3.5 w-3.5 text-muted-foreground" />
                     <Label className="text-sm font-medium">Language</Label>
+                    <Badge
+                      variant="secondary"
+                      className="text-[10px] px-1.5 py-0"
+                    >
+                      Coming Soon
+                    </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Interface language
@@ -454,6 +583,131 @@ export function Settings() {
                       );
                     }}
                   />
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* ── Web App Settings (web mode only) ── */}
+          {isWebMode && (
+            <section className="rounded-lg border bg-card mb-6">
+              <div className="px-4 py-3 border-b bg-muted/30">
+                <h2 className="font-semibold text-sm">Web App</h2>
+              </div>
+              <div className="divide-y">
+                {/* Change Password */}
+                <div className="px-4 py-3">
+                  <div className="flex items-center gap-2 mb-3">
+                    <FaKey className="h-3.5 w-3.5 text-muted-foreground" />
+                    <Label className="text-sm font-medium">
+                      Change Admin Password
+                    </Label>
+                  </div>
+                  <form
+                    className="space-y-3"
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      if (newPassword.length < 8) {
+                        toastError(
+                          "New password must be at least 8 characters",
+                        );
+                        return;
+                      }
+                      if (newPassword !== confirmNewPassword) {
+                        toastError("Passwords do not match");
+                        return;
+                      }
+                      setChangingPassword(true);
+                      try {
+                        const res = await fetch(
+                          "/commander/api/auth/password",
+                          {
+                            method: "PUT",
+                            headers: {
+                              "Content-Type": "application/json",
+                            },
+                            credentials: "same-origin",
+                            body: JSON.stringify({
+                              currentPassword,
+                              newPassword,
+                            }),
+                          },
+                        );
+                        const data = await res.json();
+                        if (data.success) {
+                          toastSuccess("Password changed successfully");
+                          setCurrentPassword("");
+                          setNewPassword("");
+                          setConfirmNewPassword("");
+                        } else {
+                          toastError(
+                            data.message || "Failed to change password",
+                          );
+                        }
+                      } catch {
+                        toastError("Could not connect to server");
+                      } finally {
+                        setChangingPassword(false);
+                      }
+                    }}
+                  >
+                    <Input
+                      type="password"
+                      placeholder="Current password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      autoComplete="current-password"
+                    />
+                    <Input
+                      type="password"
+                      placeholder="New password (min. 8 characters)"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      autoComplete="new-password"
+                    />
+                    <Input
+                      type="password"
+                      placeholder="Confirm new password"
+                      value={confirmNewPassword}
+                      onChange={(e) => setConfirmNewPassword(e.target.value)}
+                      autoComplete="new-password"
+                    />
+                    <Button
+                      type="submit"
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      disabled={changingPassword}
+                    >
+                      {changingPassword && (
+                        <FaSpinner className="h-3.5 w-3.5 mr-2 animate-spin" />
+                      )}
+                      Change Password
+                    </Button>
+                  </form>
+                </div>
+
+                {/* Logout */}
+                <div className="px-4 py-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-destructive hover:text-destructive"
+                    onClick={async () => {
+                      try {
+                        await fetch("/commander/api/auth/logout", {
+                          method: "POST",
+                          credentials: "same-origin",
+                        });
+                      } catch {
+                        // Ignore errors — we'll redirect regardless
+                      }
+                      window.location.reload();
+                    }}
+                  >
+                    <FaArrowRightFromBracket className="h-3.5 w-3.5 mr-2" />
+                    Logout
+                  </Button>
                 </div>
               </div>
             </section>

@@ -2,8 +2,8 @@ import initSqlJs, { Database as SqlJsDatabase } from "sql.js";
 import path from "path";
 import fs from "fs";
 import { getConfig } from "../services/config.js";
-import { logger } from "../index.js";
-import { runMigrations } from "./migrations.js";
+import { logger } from "../core/logger.js";
+import { runMigrations } from "./migrations/index.js";
 import type {
   GameServer,
   SteamConfig,
@@ -15,6 +15,8 @@ import type {
   ServerMessage,
   ServerVariable,
   UpdateRestartSettings,
+  BackupMetadata,
+  BackupSettings,
 } from "../types/index.js";
 
 let db: SqlJsDatabase;
@@ -60,7 +62,7 @@ export async function initDatabase(): Promise<SqlJsDatabase> {
   return db;
 }
 
-export function saveDatabase(): void {
+function saveDatabase(): void {
   if (db && dbPath) {
     const data = db.export();
     const buffer = Buffer.from(data);
@@ -77,7 +79,7 @@ export function getDb(): SqlJsDatabase {
 
 // ── API Keys queries ──
 
-export interface ApiKeyRecord {
+interface ApiKeyRecord {
   id: number;
   keyHash: string;
   passwordHash: string;
@@ -323,7 +325,9 @@ export function createServer(
   const result = getDb().exec("SELECT last_insert_rowid()");
   const lastId = result[0].values[0][0] as number;
 
-  saveDatabase();
+  // Increment cumulative stats counter for live stats reporting
+  incrementAppSetting("stats_servers_created_total");
+
   return lastId;
 }
 
@@ -401,6 +405,8 @@ export function deleteServer(id: number): void {
   db.run("DELETE FROM log_settings WHERE server_id = ?", [id]);
   db.run("DELETE FROM player_sessions WHERE server_id = ?", [id]);
   db.run("DELETE FROM server_mods WHERE server_id = ?", [id]);
+  db.run("DELETE FROM server_backups WHERE server_id = ?", [id]);
+  db.run("DELETE FROM backup_settings WHERE server_id = ?", [id]);
   db.run("DELETE FROM game_servers WHERE id = ?", [id]);
   saveDatabase();
 }
@@ -544,6 +550,7 @@ export function recordPlayerConnect(
   playerName: string,
   connectedAt?: string,
   characterId?: string,
+  steam64Id?: string,
 ): number {
   const timestamp = connectedAt || new Date().toISOString();
 
@@ -555,9 +562,16 @@ export function recordPlayerConnect(
   );
 
   getDb().run(
-    `INSERT INTO player_sessions (server_id, steam_id, player_name, character_id, connected_at, is_online)
-     VALUES (?, ?, ?, ?, ?, 1)`,
-    [serverId, steamId, playerName, characterId || null, timestamp],
+    `INSERT INTO player_sessions (server_id, steam_id, player_name, character_id, steam64_id, connected_at, is_online)
+     VALUES (?, ?, ?, ?, ?, ?, 1)`,
+    [
+      serverId,
+      steamId,
+      playerName,
+      characterId || null,
+      steam64Id || null,
+      timestamp,
+    ],
   );
 
   const result = getDb().exec("SELECT last_insert_rowid()");
@@ -577,6 +591,24 @@ export function lookupCharacterId(
   const result = getDb().exec(
     `SELECT character_id FROM player_sessions
      WHERE server_id = ? AND player_name = ? AND character_id IS NOT NULL
+     ORDER BY connected_at DESC LIMIT 1`,
+    [serverId, playerName],
+  );
+
+  if (result.length === 0 || result[0].values.length === 0) return null;
+  return result[0].values[0][0] as string;
+}
+
+/**
+ * Look up the Steam64 ID for a player by name from previous sessions
+ */
+export function lookupSteam64Id(
+  serverId: number,
+  playerName: string,
+): string | null {
+  const result = getDb().exec(
+    `SELECT steam64_id FROM player_sessions
+     WHERE server_id = ? AND player_name = ? AND steam64_id IS NOT NULL
      ORDER BY connected_at DESC LIMIT 1`,
     [serverId, playerName],
   );
@@ -606,6 +638,34 @@ export function updateCharacterIds(
         `UPDATE player_sessions SET character_id = ?
          WHERE server_id = ? AND player_name = ? AND character_id IS NULL`,
         [characterId, serverId, playerName],
+      );
+      updated += count;
+    }
+  }
+  if (updated > 0) saveDatabase();
+  return updated;
+}
+
+/**
+ * Bulk update Steam64 IDs for sessions matching player names
+ */
+export function updateSteam64Ids(
+  serverId: number,
+  mappings: Map<string, string>,
+): number {
+  let updated = 0;
+  for (const [playerName, steam64Id] of mappings) {
+    const check = getDb().exec(
+      `SELECT COUNT(*) FROM player_sessions
+       WHERE server_id = ? AND player_name = ? AND steam64_id IS NULL`,
+      [serverId, playerName],
+    );
+    const count = check.length > 0 ? (check[0].values[0][0] as number) : 0;
+    if (count > 0) {
+      getDb().run(
+        `UPDATE player_sessions SET steam64_id = ?
+         WHERE server_id = ? AND player_name = ? AND steam64_id IS NULL`,
+        [steam64Id, serverId, playerName],
       );
       updated += count;
     }
@@ -653,7 +713,7 @@ export function disconnectAllPlayers(serverId: number): void {
  */
 export function getOnlinePlayers(serverId: number): PlayerSession[] {
   const result = getDb().exec(
-    `SELECT id, server_id, steam_id, player_name, character_id, connected_at, disconnected_at, is_online
+    `SELECT id, server_id, steam_id, player_name, character_id, steam64_id, connected_at, disconnected_at, is_online
      FROM player_sessions
      WHERE server_id = ? AND is_online = 1
      ORDER BY connected_at ASC`,
@@ -668,9 +728,10 @@ export function getOnlinePlayers(serverId: number): PlayerSession[] {
     steamId: row[2] as string,
     playerName: row[3] as string,
     characterId: row[4] as string | null,
-    connectedAt: row[5] as string,
-    disconnectedAt: row[6] as string | null,
-    isOnline: row[7] === 1,
+    steam64Id: row[5] as string | null,
+    connectedAt: row[6] as string,
+    disconnectedAt: row[7] as string | null,
+    isOnline: row[8] === 1,
   }));
 }
 
@@ -687,6 +748,7 @@ export function getPlayerSummaries(serverId: number): PlayerSummary[] {
        COALESCE(character_id, steam_id) as primary_id,
        player_name,
        MAX(character_id) as character_id,
+       MAX(steam64_id) as steam64_id,
        MAX(is_online) as is_online,
        MAX(CASE WHEN is_online = 1 THEN connected_at ELSE NULL END) as current_session_start,
        COUNT(*) as session_count,
@@ -713,11 +775,12 @@ export function getPlayerSummaries(serverId: number): PlayerSummary[] {
     steamId: row[0] as string,
     playerName: row[1] as string,
     characterId: row[2] as string | null,
-    isOnline: (row[3] as number) === 1,
-    currentSessionStart: row[4] as string | null,
-    sessionCount: row[5] as number,
-    lastSeen: row[6] as string,
-    totalPlaytimeSeconds: Math.max(0, row[7] as number),
+    steam64Id: row[3] as string | null,
+    isOnline: (row[4] as number) === 1,
+    currentSessionStart: row[5] as string | null,
+    sessionCount: row[6] as number,
+    lastSeen: row[7] as string,
+    totalPlaytimeSeconds: Math.max(0, row[8] as number),
   }));
 }
 
@@ -772,7 +835,7 @@ export function updateLogSettings(
 // Server schedule queries
 export function getScheduleByServerId(serverId: number): ServerSchedule | null {
   const result = getDb().exec(
-    `SELECT id, server_id, interval_hours, warning_minutes, warning_message, enabled, last_restart, next_restart
+    `SELECT id, server_id, interval_hours, warning_minutes, warning_message, enabled, last_restart, next_restart, restart_time
      FROM server_schedules WHERE server_id = ?`,
     [serverId],
   );
@@ -789,6 +852,7 @@ export function getScheduleByServerId(serverId: number): ServerSchedule | null {
     enabled: (row[5] as number) === 1,
     lastRestart: row[6] as string | null,
     nextRestart: row[7] as string | null,
+    restartTime: (row[8] as string) || null,
   };
 }
 
@@ -798,21 +862,24 @@ export function upsertSchedule(
   warningMinutes: number[],
   warningMessage: string,
   enabled: boolean,
+  restartTime: string | null = null,
 ): ServerSchedule {
   getDb().run(
-    `INSERT INTO server_schedules (server_id, interval_hours, warning_minutes, warning_message, enabled)
-     VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO server_schedules (server_id, interval_hours, warning_minutes, warning_message, enabled, restart_time)
+     VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(server_id) DO UPDATE SET
        interval_hours = excluded.interval_hours,
        warning_minutes = excluded.warning_minutes,
        warning_message = excluded.warning_message,
-       enabled = excluded.enabled`,
+       enabled = excluded.enabled,
+       restart_time = excluded.restart_time`,
     [
       serverId,
       intervalHours,
       JSON.stringify(warningMinutes),
       warningMessage,
       enabled ? 1 : 0,
+      restartTime,
     ],
   );
   saveDatabase();
@@ -845,7 +912,7 @@ export function deleteSchedule(serverId: number): void {
 
 export function getAllEnabledSchedules(): ServerSchedule[] {
   const result = getDb().exec(
-    `SELECT id, server_id, interval_hours, warning_minutes, warning_message, enabled, last_restart, next_restart
+    `SELECT id, server_id, interval_hours, warning_minutes, warning_message, enabled, last_restart, next_restart, restart_time
      FROM server_schedules WHERE enabled = 1`,
   );
 
@@ -860,6 +927,7 @@ export function getAllEnabledSchedules(): ServerSchedule[] {
     enabled: (row[5] as number) === 1,
     lastRestart: row[6] as string | null,
     nextRestart: row[7] as string | null,
+    restartTime: (row[8] as string) || null,
   }));
 }
 
@@ -1097,6 +1165,15 @@ export function setAppSetting(key: string, value: string): void {
   saveDatabase();
 }
 
+/**
+ * Atomically increment a numeric app setting by the given amount.
+ * If the key does not exist, it is created with the increment value.
+ */
+export function incrementAppSetting(key: string, amount = 1): void {
+  const current = parseInt(getAppSetting(key) ?? "0", 10) || 0;
+  setAppSetting(key, String(current + amount));
+}
+
 // ─── Mod Workshop Timestamp ─────────────────────────────────────────────
 
 export function updateModWorkshopTimestamp(
@@ -1123,5 +1200,233 @@ export function clearModUpdateStatus(modId: number): void {
     "UPDATE server_mods SET status = 'installed' WHERE id = ? AND status = 'update_available'",
     [modId],
   );
+  saveDatabase();
+}
+
+// ─── Backup Records ────────────────────────────────────────────────────
+
+export function createBackupRecord(
+  backup: Pick<
+    BackupMetadata,
+    | "id"
+    | "serverId"
+    | "gameId"
+    | "serverName"
+    | "timestamp"
+    | "name"
+    | "tag"
+    | "trigger"
+    | "status"
+  > & { filePath?: string },
+): void {
+  getDb().run(
+    `INSERT INTO server_backups (id, server_id, game_id, server_name, timestamp, name, tag, trigger_type, status, file_path)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      backup.id,
+      backup.serverId,
+      backup.gameId,
+      backup.serverName,
+      backup.timestamp,
+      backup.name ?? null,
+      backup.tag ?? null,
+      backup.trigger,
+      backup.status,
+      backup.filePath ?? null,
+    ],
+  );
+  saveDatabase();
+}
+
+export function updateBackupRecord(
+  id: string,
+  updates: Partial<
+    Pick<
+      BackupMetadata,
+      | "status"
+      | "sizeBytes"
+      | "fileCount"
+      | "durationMs"
+      | "errorMessage"
+      | "name"
+      | "tag"
+    >
+  >,
+): void {
+  const sets: string[] = [];
+  const params: unknown[] = [];
+  if (updates.status !== undefined) {
+    sets.push("status = ?");
+    params.push(updates.status);
+  }
+  if (updates.sizeBytes !== undefined) {
+    sets.push("size_bytes = ?");
+    params.push(updates.sizeBytes);
+  }
+  if (updates.fileCount !== undefined) {
+    sets.push("file_count = ?");
+    params.push(updates.fileCount);
+  }
+  if (updates.durationMs !== undefined) {
+    sets.push("duration_ms = ?");
+    params.push(updates.durationMs);
+  }
+  if (updates.errorMessage !== undefined) {
+    sets.push("error_message = ?");
+    params.push(updates.errorMessage);
+  }
+  if (updates.name !== undefined) {
+    sets.push("name = ?");
+    params.push(updates.name);
+  }
+  if (updates.tag !== undefined) {
+    sets.push("tag = ?");
+    params.push(updates.tag);
+  }
+  if (sets.length === 0) return;
+  params.push(id);
+  getDb().run(
+    `UPDATE server_backups SET ${sets.join(", ")} WHERE id = ?`,
+    params,
+  );
+  saveDatabase();
+}
+
+export function deleteBackupRecord(id: string): void {
+  getDb().run("DELETE FROM server_backups WHERE id = ?", [id]);
+  saveDatabase();
+}
+
+export function getBackupById(id: string): BackupMetadata | null {
+  const result = getDb().exec(
+    `SELECT id, server_id, game_id, server_name, timestamp, tag, trigger_type, status, size_bytes, file_count, duration_ms, error_message, file_path, name
+     FROM server_backups WHERE id = ?`,
+    [id],
+  );
+  if (result.length === 0 || result[0].values.length === 0) return null;
+  return mapBackupRow(result[0].values[0]);
+}
+
+export function getBackupsByServerId(serverId: number): BackupMetadata[] {
+  const result = getDb().exec(
+    `SELECT id, server_id, game_id, server_name, timestamp, tag, trigger_type, status, size_bytes, file_count, duration_ms, error_message, file_path, name
+     FROM server_backups WHERE server_id = ? ORDER BY timestamp DESC`,
+    [serverId],
+  );
+  if (result.length === 0) return [];
+  return result[0].values.map(mapBackupRow);
+}
+
+function mapBackupRow(row: unknown[]): BackupMetadata {
+  return {
+    id: row[0] as string,
+    serverId: row[1] as number,
+    gameId: row[2] as string,
+    serverName: row[3] as string,
+    timestamp: row[4] as string,
+    tag: row[5] as string | null,
+    trigger: row[6] as BackupMetadata["trigger"],
+    status: row[7] as BackupMetadata["status"],
+    sizeBytes: row[8] as number | null,
+    fileCount: row[9] as number | null,
+    durationMs: row[10] as number | null,
+    errorMessage: row[11] as string | null,
+    name: row[13] as string | null,
+  };
+}
+
+// ─── Backup Settings ───────────────────────────────────────────────────
+
+export function getBackupSettings(serverId: number): BackupSettings | null {
+  const result = getDb().exec(
+    `SELECT server_id, enabled, backup_before_restart, backup_before_update, retention_count, retention_days, custom_include_paths, custom_exclude_paths, full_backup, backup_before_start
+     FROM backup_settings WHERE server_id = ?`,
+    [serverId],
+  );
+  if (result.length === 0 || result[0].values.length === 0) return null;
+  const row = result[0].values[0];
+  return {
+    serverId: row[0] as number,
+    enabled: row[1] === 1,
+    backupBeforeRestart: row[2] === 1,
+    backupBeforeUpdate: row[3] === 1,
+    retentionCount: row[4] as number,
+    retentionDays: row[5] as number,
+    customIncludePaths: JSON.parse((row[6] as string) || "[]"),
+    customExcludePaths: JSON.parse((row[7] as string) || "[]"),
+    fullBackup: row[8] === 1,
+    backupBeforeStart: row[9] === 1,
+  };
+}
+
+export function upsertBackupSettings(
+  serverId: number,
+  settings: Partial<Omit<BackupSettings, "serverId">>,
+): void {
+  const existing = getBackupSettings(serverId);
+  if (!existing) {
+    getDb().run(
+      `INSERT INTO backup_settings (server_id, enabled, full_backup, backup_before_start, backup_before_restart, backup_before_update, retention_count, retention_days, custom_include_paths, custom_exclude_paths)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        serverId,
+        settings.enabled ? 1 : 0,
+        settings.fullBackup ? 1 : 0,
+        settings.backupBeforeStart ? 1 : 0,
+        settings.backupBeforeRestart ? 1 : 0,
+        settings.backupBeforeUpdate ? 1 : 0,
+        settings.retentionCount ?? 5,
+        settings.retentionDays ?? 30,
+        JSON.stringify(settings.customIncludePaths ?? []),
+        JSON.stringify(settings.customExcludePaths ?? []),
+      ],
+    );
+  } else {
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    if (settings.enabled !== undefined) {
+      sets.push("enabled = ?");
+      params.push(settings.enabled ? 1 : 0);
+    }
+    if (settings.fullBackup !== undefined) {
+      sets.push("full_backup = ?");
+      params.push(settings.fullBackup ? 1 : 0);
+    }
+    if (settings.backupBeforeStart !== undefined) {
+      sets.push("backup_before_start = ?");
+      params.push(settings.backupBeforeStart ? 1 : 0);
+    }
+    if (settings.backupBeforeRestart !== undefined) {
+      sets.push("backup_before_restart = ?");
+      params.push(settings.backupBeforeRestart ? 1 : 0);
+    }
+    if (settings.backupBeforeUpdate !== undefined) {
+      sets.push("backup_before_update = ?");
+      params.push(settings.backupBeforeUpdate ? 1 : 0);
+    }
+    if (settings.retentionCount !== undefined) {
+      sets.push("retention_count = ?");
+      params.push(settings.retentionCount);
+    }
+    if (settings.retentionDays !== undefined) {
+      sets.push("retention_days = ?");
+      params.push(settings.retentionDays);
+    }
+    if (settings.customIncludePaths !== undefined) {
+      sets.push("custom_include_paths = ?");
+      params.push(JSON.stringify(settings.customIncludePaths));
+    }
+    if (settings.customExcludePaths !== undefined) {
+      sets.push("custom_exclude_paths = ?");
+      params.push(JSON.stringify(settings.customExcludePaths));
+    }
+    if (sets.length > 0) {
+      params.push(serverId);
+      getDb().run(
+        `UPDATE backup_settings SET ${sets.join(", ")} WHERE server_id = ?`,
+        params,
+      );
+    }
+  }
   saveDatabase();
 }

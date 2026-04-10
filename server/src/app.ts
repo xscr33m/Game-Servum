@@ -1,5 +1,4 @@
 import express from "express";
-import path from "path";
 import os from "os";
 import cors from "cors";
 import {
@@ -14,7 +13,8 @@ import { authRouter } from "./routes/auth.js";
 import logsRouter from "./routes/logs.js";
 import { agentAuth } from "./middleware/auth.js";
 import { getConfig } from "./services/config.js";
-import { logger } from "./index.js";
+import { getTlsConfig } from "./services/tlsManager.js";
+import { logger } from "./core/logger.js";
 
 const app = express();
 const config = getConfig();
@@ -31,6 +31,17 @@ const corsOptions: cors.CorsOptions = {
 };
 
 app.use(cors(corsOptions));
+
+// Private Network Access (PNA) — allows Commanders hosted on public domains
+// (e.g. Docker/Coolify) to reach this Agent on a private/local network.
+// The browser sends Access-Control-Request-Private-Network: true on preflight;
+// we must respond with Access-Control-Allow-Private-Network: true.
+app.use((req, res, next) => {
+  if (req.headers["access-control-request-private-network"]) {
+    res.setHeader("Access-Control-Allow-Private-Network", "true");
+  }
+  next();
+});
 app.use(express.json({ limit: "10mb" }));
 
 // Public endpoints (no auth required)
@@ -44,6 +55,7 @@ app.get("/api/v1/health", (_req, res) => {
 });
 
 app.get("/api/v1/info", (_req, res) => {
+  const tlsConfig = getTlsConfig();
   res.json({
     name: "Game-Servum Agent",
     version: APP_VERSION,
@@ -54,20 +66,15 @@ app.get("/api/v1/info", (_req, res) => {
     apiVersion: API_VERSION,
     minCompatibleVersion: MIN_COMPATIBLE_AGENT_VERSION,
     requiresAuth: config.authEnabled,
+    tlsEnabled: tlsConfig.enabled,
     features: ["steamcmd", "mods", "rcon", "player-tracking", "scheduler"],
   });
 });
 
-// Legacy health check (kept for backward compatibility)
-app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
-});
-
 // Agent Status Page (localhost only, no auth required)
-app.get("/", (req, res, next) => {
+app.get("/", (req, res, _next) => {
   // Security: Only allow access from localhost
-  const clientIp =
-    req.ip || req.socket.remoteAddress || req.connection.remoteAddress || "";
+  const clientIp = req.ip || req.socket.remoteAddress || "";
   const isLocalhost =
     clientIp === "127.0.0.1" ||
     clientIp === "::1" ||
@@ -275,11 +282,6 @@ app.use("/api/v1/steamcmd", steamcmdRouter);
 app.use("/api/v1/servers", serversRouter);
 app.use("/api/v1/system", systemRouter);
 app.use("/api/v1/logs", logsRouter);
-
-// Legacy routes (redirect to v1 — backward compatibility)
-app.use("/api/steamcmd", steamcmdRouter);
-app.use("/api/servers", serversRouter);
-app.use("/api/system", systemRouter);
 
 // 404 handler for unmatched routes
 app.use((req, res) => {

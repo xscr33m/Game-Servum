@@ -1,6 +1,6 @@
-# Game-Servum — Dashboard (Frontend)
+# Game-Servum — Commander (Frontend)
 
-React 19 + Vite 7 + TypeScript + Tailwind CSS 4 + shadcn/ui dashboard for game server management.
+React 19 + Vite 7 + TypeScript + Tailwind CSS 4 + shadcn/ui Commander for game server management.
 
 ## Quick Start
 

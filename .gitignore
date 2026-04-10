@@ -31,3 +31,5 @@ data/
 
 # TypeScript
 *.tsbuildinfo
+.fallow/
+.fallow-baseline.json

@@ -15,6 +15,7 @@ import type {
 } from "@game-servum/shared";
 import type { GameServer } from "../types/index.js";
 import type { ServerMod } from "../types/index.js";
+import type { RconClient } from "../core/rcon/types.js";
 
 export type { GameMetadata, StartupDetector };
 
@@ -97,6 +98,17 @@ export interface LogPaths {
   includeFiles?: string[];
 }
 
+// ── Backup Path Config ───────────────────────────────────────────────
+
+export interface BackupPathConfig {
+  /** Directories/files containing world/save data (relative to installPath) */
+  savePaths: string[];
+  /** Directories/files containing config data (relative to installPath) */
+  configPaths: string[];
+  /** Glob patterns to exclude from backup (e.g., logs, temp files) */
+  excludePatterns: string[];
+}
+
 // ── Player List Operation Result ─────────────────────────────────────
 
 export interface PlayerListResult {
@@ -110,6 +122,22 @@ export interface ModCopyResult {
   success: boolean;
   message: string;
   modName?: string;
+}
+
+// ── Mod List Export/Import Result ────────────────────────────────────
+
+export interface ExportModListResult {
+  modListWritten: boolean;
+  serverModListWritten: boolean;
+  backups: {
+    modList: string | null;
+    serverModList: string | null;
+  };
+}
+
+export interface ParseModListResult {
+  clientMods: string[];
+  serverMods: string[];
 }
 
 // ── GameAdapter Interface ────────────────────────────────────────────
@@ -143,6 +171,20 @@ export interface GameAdapter {
    * Returns null if RCON is not available or config cannot be determined.
    */
   readRconConfig(server: GameServer): RconConfig | null;
+
+  /**
+   * Send a direct message to a specific online player via RCON.
+   * `playerId` is the game-specific identifier (Steam64 for 7DTD).
+   * `playerName` is the in-game name (used by BattlEye games to resolve the player index).
+   * Returns true if the message was sent, false if the player was not found.
+   * Undefined means the game does not support direct messages.
+   */
+  sendDirectMessage?(
+    rcon: RconClient,
+    playerId: string,
+    playerName: string,
+    message: string,
+  ): Promise<boolean>;
 
   // ── Mods ─────────────────────────────────────────────────────────
 
@@ -189,11 +231,16 @@ export interface GameAdapter {
   getBanListConfig(server: GameServer): PlayerFileConfig | null;
 
   /**
-   * Format a player entry for writing to whitelist/ban file.
+   * Get priority queue file config, or null if not supported / not file-based.
+   */
+  getPriorityConfig(server: GameServer): PlayerFileConfig | null;
+
+  /**
+   * Format a player entry for writing to whitelist/ban/priority file.
    * Returns the line to append.
    */
   formatPlayerEntry(
-    type: "whitelist" | "ban",
+    type: "whitelist" | "ban" | "priority",
     playerId: string,
     playerName?: string,
   ): string;
@@ -211,19 +258,19 @@ export interface GameAdapter {
    */
   addToPlayerList(
     server: GameServer,
-    type: "whitelist" | "ban",
+    type: "whitelist" | "ban" | "priority",
     playerId: string,
     playerName?: string,
   ): PlayerListResult;
 
   /**
-   * Remove a player from a whitelist or ban list.
+   * Remove a player from a whitelist, ban, or priority list.
    * Default: removes matching lines from the text file.
    * Games with XML configs (7DTD) override this.
    */
   removeFromPlayerList(
     server: GameServer,
-    type: "whitelist" | "ban",
+    type: "whitelist" | "ban" | "priority",
     playerId: string,
   ): PlayerListResult;
 
@@ -232,7 +279,10 @@ export interface GameAdapter {
    * (one player ID per line) for status badge checks in the frontend.
    * Games with XML configs (7DTD) override to extract IDs from XML.
    */
-  getPlayerListContent(server: GameServer, type: "whitelist" | "ban"): string;
+  getPlayerListContent(
+    server: GameServer,
+    type: "whitelist" | "ban" | "priority",
+  ): string;
 
   // ── Logs ─────────────────────────────────────────────────────────
 
@@ -347,4 +397,33 @@ export interface GameAdapter {
    * Called after the first successful server start once configs exist.
    */
   writeInitialSettingsToConfig?(server: GameServer): void;
+
+  // ── Mod List Files ─────────────────────────────────────────────
+
+  /**
+   * Export installed mods as mod list files (e.g. DayZ mod_list.txt / server_mod_list.txt).
+   * Backs up existing files with a timestamp into backupDir before overwriting.
+   */
+  exportModList?(
+    mods: ServerMod[],
+    serverInstallPath: string,
+    backupDir: string,
+    includeDisabled?: boolean,
+  ): ExportModListResult;
+
+  /**
+   * Parse mod list files from the server directory and return workshop IDs.
+   * Returns separate arrays for client mods and server-only mods.
+   */
+  parseModList?(serverInstallPath: string): ParseModListResult;
+
+  // ── Backup ──────────────────────────────────────────────────────
+
+  /**
+   * Return paths to include in server backups.
+   * savePaths: world/save data, configPaths: configuration files.
+   * All paths are relative to the server's installPath.
+   * excludePatterns: glob patterns to skip (logs, temp files).
+   */
+  getBackupPaths(server: GameServer): BackupPathConfig;
 }

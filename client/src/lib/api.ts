@@ -15,7 +15,7 @@ import type {
   UpdateState,
   AgentSystemInfo,
 } from "@/types";
-import type { BackendConnection } from "./config";
+import type { BackendConnection } from "@/types";
 import { getApiBase } from "./config";
 
 // ── Types for the API client ──
@@ -29,12 +29,18 @@ export interface BrowseTreeEntry {
   children?: BrowseTreeEntry[];
 }
 
-export type FetchApiFn = <T>(
-  endpoint: string,
-  options?: RequestInit,
-) => Promise<T>;
+export interface BrowseListEntry {
+  name: string;
+  type: "file" | "directory";
+  size?: number;
+  extension?: string;
+  editable?: boolean;
+  hasChildren?: boolean;
+}
 
-export interface SteamcmdApiClient {
+type FetchApiFn = <T>(endpoint: string, options?: RequestInit) => Promise<T>;
+
+interface SteamcmdApiClient {
   getStatus: () => Promise<SteamCMDStatus>;
   install: () => Promise<{ success: boolean; message: string }>;
   login: (data: SteamLoginRequest) => Promise<{
@@ -49,7 +55,7 @@ export interface SteamcmdApiClient {
   logout: () => Promise<{ success: boolean; message: string }>;
 }
 
-export interface ServersApiClient {
+interface ServersApiClient {
   getAll: () => Promise<GameServer[]>;
   getById: (id: number) => Promise<GameServer>;
   getAvailableGames: () => Promise<GameDefinition[]>;
@@ -112,6 +118,7 @@ export interface ServersApiClient {
       warningMinutes: number[];
       warningMessage: string;
       enabled: boolean;
+      restartTime?: string | null;
     },
   ) => Promise<{
     success: boolean;
@@ -188,6 +195,7 @@ export interface ServersApiClient {
     steamcmdOutput?: string;
     loginRequired?: boolean;
   }>;
+  applyUpdates: (id: number) => Promise<{ success: boolean; message: string }>;
   getDirectories: (id: number) => Promise<{ directories: string[] }>;
   getDiskUsage: (
     id: number,
@@ -209,6 +217,7 @@ export interface ServersApiClient {
   delete: (
     id: number,
     confirmName: string,
+    deleteBackups?: boolean,
   ) => Promise<{ success: boolean; message: string }>;
   getConfig: (
     id: number,
@@ -299,6 +308,10 @@ export interface ServersApiClient {
     serverId: number,
     modId: number,
   ) => Promise<{ success: boolean; message: string }>;
+  cancelModInstall: (
+    serverId: number,
+    modId: number,
+  ) => Promise<{ success: boolean; message: string }>;
   removeMod: (
     serverId: number,
     modId: number,
@@ -307,6 +320,22 @@ export interface ServersApiClient {
     serverId: number,
     modIds: number[],
   ) => Promise<{ success: boolean; message: string }>;
+  exportModList: (
+    serverId: number,
+    includeDisabled?: boolean,
+  ) => Promise<{
+    success: boolean;
+    message: string;
+    modListWritten: boolean;
+    serverModListWritten: boolean;
+    backups: { modList: string | null; serverModList: string | null };
+  }>;
+  importModList: (serverId: number) => Promise<{
+    success: boolean;
+    message: string;
+    imported: number;
+    skipped: number;
+  }>;
   getPlayers: (serverId: number) => Promise<{
     online: Array<{
       steamId: string;
@@ -337,6 +366,22 @@ export interface ServersApiClient {
   ) => Promise<{ success: boolean; message: string }>;
   getWhitelistContent: (serverId: number) => Promise<{ content: string }>;
   getBanContent: (serverId: number) => Promise<{ content: string }>;
+  addToPriority: (
+    serverId: number,
+    steamId: string,
+    playerName?: string,
+  ) => Promise<{ success: boolean; message: string }>;
+  removeFromPriority: (
+    serverId: number,
+    steamId: string,
+  ) => Promise<{ success: boolean; message: string }>;
+  getPriorityContent: (serverId: number) => Promise<{ content: string }>;
+  sendDirectMessage: (
+    serverId: number,
+    playerId: string,
+    playerName: string,
+    message: string,
+  ) => Promise<{ success: boolean; message: string }>;
   // File browser
   browseRoots: (
     id: number,
@@ -347,6 +392,14 @@ export interface ServersApiClient {
   ) => Promise<{
     root: string;
     tree: BrowseTreeEntry[];
+  }>;
+  browseList: (
+    id: number,
+    rootKey: string,
+    dirPath?: string,
+  ) => Promise<{
+    path: string;
+    entries: BrowseListEntry[];
   }>;
   browseReadFile: (
     id: number,
@@ -403,9 +456,48 @@ export interface ServersApiClient {
     files: string[];
     warnings?: string[];
   }>;
+  // Backups
+  getBackups: (
+    id: number,
+  ) => Promise<{ backups: import("@/types").BackupMetadata[] }>;
+  createBackup: (
+    id: number,
+    name?: string,
+    tag?: string,
+  ) => Promise<{ success: boolean; message: string }>;
+  deleteBackup: (
+    serverId: number,
+    backupId: string,
+  ) => Promise<{ success: boolean; message: string }>;
+  updateBackup: (
+    serverId: number,
+    backupId: string,
+    updates: { name?: string | null; tag?: string | null },
+  ) => Promise<{ success: boolean }>;
+  restoreBackup: (
+    serverId: number,
+    backupId: string,
+    preRestoreBackup?: boolean,
+  ) => Promise<{ success: boolean; message: string }>;
+  downloadBackup: (serverId: number, backupId: string) => Promise<void>;
+  getBackupSettings: (id: number) => Promise<{
+    settings: import("@/types").BackupSettings;
+    defaultPaths: {
+      savePaths: string[];
+      configPaths: string[];
+      excludePatterns: string[];
+    };
+  }>;
+  updateBackupSettings: (
+    id: number,
+    settings: Partial<import("@/types").BackupSettings>,
+  ) => Promise<{
+    success: boolean;
+    settings: import("@/types").BackupSettings;
+  }>;
 }
 
-export interface SystemApiClient {
+interface SystemApiClient {
   getMetrics: () => Promise<SystemMetrics>;
   getSettings: () => Promise<SystemSettings>;
   updateSettings: (
@@ -422,13 +514,17 @@ export interface SystemApiClient {
   installUpdate: () => Promise<{ success: boolean; message: string }>;
   restart: () => Promise<{ success: boolean; message: string }>;
   shutdown: () => Promise<{ success: boolean; message: string }>;
+  getStatsSettings: () => Promise<{ enabled: boolean; agentId: string | null }>;
+  updateStatsSettings: (settings: {
+    enabled: boolean;
+  }) => Promise<{ success: boolean; message: string }>;
 }
 
-export interface HealthApiClient {
+interface HealthApiClient {
   check: () => Promise<{ status: string; timestamp: string }>;
 }
 
-export interface AuthApiClient {
+interface AuthApiClient {
   connect: (
     apiKey: string,
     password: string,
@@ -436,7 +532,7 @@ export interface AuthApiClient {
   refresh: () => Promise<{ token: string; expiresIn: number }>;
 }
 
-export interface LogsApiClient {
+interface LogsApiClient {
   getSettings: () => Promise<{
     success: boolean;
     settings: import("@game-servum/shared").LoggerSettings;
@@ -514,7 +610,7 @@ function createFetchApi(
     }
 
     if (response.status === 401) {
-      throw new ApiAuthError("Invalid or expired session token");
+      await handleUnauthorized(response);
     }
 
     if (!response.ok) {
@@ -528,11 +624,33 @@ function createFetchApi(
   };
 }
 
-export class ApiAuthError extends Error {
+class ApiAuthError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ApiAuthError";
   }
+}
+
+/**
+ * Handle a 401 response — distinguishes Commander session expiry from Agent token expiry
+ * in web/Docker mode, and throws the appropriate ApiAuthError.
+ */
+async function handleUnauthorized(response: Response): Promise<never> {
+  if (import.meta.env.VITE_WEB_MODE === "true") {
+    try {
+      const body = await response.clone().json();
+      const msg = body?.message || "";
+      if (msg === "Not authenticated" || msg === "Invalid or expired session") {
+        window.dispatchEvent(new CustomEvent("commander:session-expired"));
+        throw new ApiAuthError(
+          "Commander session expired — please log in again",
+        );
+      }
+    } catch (e) {
+      if (e instanceof ApiAuthError) throw e;
+    }
+  }
+  throw new ApiAuthError("Invalid or expired session token");
 }
 
 function createSteamcmdApi(fetchApi: FetchApiFn): SteamcmdApiClient {
@@ -657,6 +775,7 @@ function createServersApi(
         warningMinutes: number[];
         warningMessage: string;
         enabled: boolean;
+        restartTime?: string | null;
       },
     ) =>
       fetchApi<{
@@ -762,6 +881,11 @@ function createServersApi(
       }>(`/servers/${id}/check-updates`, {
         method: "POST",
       }),
+    applyUpdates: (id: number) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${id}/apply-updates`,
+        { method: "POST" },
+      ),
     getDirectories: (id: number) =>
       fetchApi<{ directories: string[] }>(`/servers/${id}/directories`),
     getDiskUsage: (id: number) =>
@@ -798,10 +922,10 @@ function createServersApi(
       fetchApi<import("@/types").FirewallResult>(`/servers/${id}/firewall`, {
         method: "DELETE",
       }),
-    delete: (id: number, confirmName: string) =>
+    delete: (id: number, confirmName: string, deleteBackups?: boolean) =>
       fetchApi<{ success: boolean; message: string }>(`/servers/${id}`, {
         method: "DELETE",
-        body: JSON.stringify({ confirmName }),
+        body: JSON.stringify({ confirmName, deleteBackups }),
       }),
     getConfig: (id: number, file?: string) =>
       fetchApi<{
@@ -926,6 +1050,13 @@ function createServersApi(
           method: "POST",
         },
       ),
+    cancelModInstall: (serverId: number, modId: number) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${serverId}/mods/${modId}/cancel`,
+        {
+          method: "POST",
+        },
+      ),
     removeMod: (serverId: number, modId: number) =>
       fetchApi<{ success: boolean; message: string }>(
         `/servers/${serverId}/mods/${modId}`,
@@ -941,6 +1072,26 @@ function createServersApi(
           body: JSON.stringify({ modIds }),
         },
       ),
+    exportModList: (serverId: number, includeDisabled?: boolean) =>
+      fetchApi<{
+        success: boolean;
+        message: string;
+        modListWritten: boolean;
+        serverModListWritten: boolean;
+        backups: { modList: string | null; serverModList: string | null };
+      }>(`/servers/${serverId}/mods/export-modlist`, {
+        method: "POST",
+        body: JSON.stringify({ includeDisabled: includeDisabled ?? false }),
+      }),
+    importModList: (serverId: number) =>
+      fetchApi<{
+        success: boolean;
+        message: string;
+        imported: number;
+        skipped: number;
+      }>(`/servers/${serverId}/mods/import-modlist`, {
+        method: "POST",
+      }),
     getPlayers: (serverId: number) =>
       fetchApi<{
         online: Array<{
@@ -998,6 +1149,39 @@ function createServersApi(
       ),
     getBanContent: (serverId: number) =>
       fetchApi<{ content: string }>(`/servers/${serverId}/players/ban-content`),
+    addToPriority: (serverId: number, steamId: string, playerName?: string) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${serverId}/players/priority`,
+        {
+          method: "POST",
+          body: JSON.stringify({ steamId, playerName }),
+        },
+      ),
+    removeFromPriority: (serverId: number, steamId: string) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${serverId}/players/priority`,
+        {
+          method: "DELETE",
+          body: JSON.stringify({ steamId }),
+        },
+      ),
+    getPriorityContent: (serverId: number) =>
+      fetchApi<{ content: string }>(
+        `/servers/${serverId}/players/priority-content`,
+      ),
+    sendDirectMessage: (
+      serverId: number,
+      playerId: string,
+      playerName: string,
+      message: string,
+    ) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${serverId}/players/${encodeURIComponent(playerId)}/message`,
+        {
+          method: "POST",
+          body: JSON.stringify({ message, playerName }),
+        },
+      ),
     // File browser
     browseRoots: (id: number) =>
       fetchApi<{ roots: Array<{ key: string; label: string }> }>(
@@ -1006,6 +1190,10 @@ function createServersApi(
     browseTree: (id: number, rootKey: string) =>
       fetchApi<{ root: string; tree: BrowseTreeEntry[] }>(
         `/servers/${id}/browse/tree?root=${encodeURIComponent(rootKey)}`,
+      ),
+    browseList: (id: number, rootKey: string, dirPath: string = ".") =>
+      fetchApi<{ path: string; entries: BrowseListEntry[] }>(
+        `/servers/${id}/browse/list?root=${encodeURIComponent(rootKey)}&path=${encodeURIComponent(dirPath)}`,
       ),
     browseReadFile: (id: number, rootKey: string, filePath: string) =>
       fetchApi<{ content: string; size: number; path: string }>(
@@ -1103,7 +1291,7 @@ function createServersApi(
       }
 
       if (response.status === 401) {
-        throw new ApiAuthError("Invalid or expired session token");
+        await handleUnauthorized(response);
       }
 
       if (!response.ok) {
@@ -1159,7 +1347,7 @@ function createServersApi(
       }
 
       if (response.status === 401) {
-        throw new ApiAuthError("Invalid or expired session token");
+        await handleUnauthorized(response);
       }
 
       if (!response.ok) {
@@ -1171,6 +1359,113 @@ function createServersApi(
 
       return response.json();
     },
+    // Backups
+    getBackups: (id: number) =>
+      fetchApi<{ backups: import("@/types").BackupMetadata[] }>(
+        `/servers/${id}/backups`,
+      ),
+    createBackup: (id: number, name?: string, tag?: string) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${id}/backups`,
+        {
+          method: "POST",
+          body: JSON.stringify({ name, tag }),
+        },
+      ),
+    deleteBackup: (serverId: number, backupId: string) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${serverId}/backups/${backupId}`,
+        { method: "DELETE" },
+      ),
+    updateBackup: (
+      serverId: number,
+      backupId: string,
+      updates: { name?: string | null; tag?: string | null },
+    ) =>
+      fetchApi<{ success: boolean }>(
+        `/servers/${serverId}/backups/${backupId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(updates),
+        },
+      ),
+    restoreBackup: (
+      serverId: number,
+      backupId: string,
+      preRestoreBackup?: boolean,
+    ) =>
+      fetchApi<{ success: boolean; message: string }>(
+        `/servers/${serverId}/backups/${backupId}/restore`,
+        {
+          method: "POST",
+          body: JSON.stringify({ preRestoreBackup }),
+        },
+      ),
+    downloadBackup: async (
+      serverId: number,
+      backupId: string,
+    ): Promise<void> => {
+      const url = `${baseUrl}/servers/${serverId}/backups/${backupId}/download`;
+
+      const headers: Record<string, string> = {};
+      const token = getToken?.();
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      let response: Response;
+      try {
+        response = await fetch(url, { headers });
+      } catch {
+        throw new Error("Agent not reachable \u2014 check connection");
+      }
+
+      if (response.status === 401) {
+        await handleUnauthorized(response);
+      }
+
+      if (!response.ok) {
+        const error = await response
+          .json()
+          .catch(() => ({ error: "Unknown error" }));
+        throw new Error(error.error || `HTTP ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition");
+      let filename = `backup-${backupId}.zip`;
+      if (disposition) {
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        if (match) filename = match[1];
+      }
+
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    },
+    getBackupSettings: (id: number) =>
+      fetchApi<{
+        settings: import("@/types").BackupSettings;
+        defaultPaths: {
+          savePaths: string[];
+          configPaths: string[];
+          excludePatterns: string[];
+        };
+      }>(`/servers/${id}/backup-settings`),
+    updateBackupSettings: (
+      id: number,
+      settings: Partial<import("@/types").BackupSettings>,
+    ) =>
+      fetchApi<{
+        success: boolean;
+        settings: import("@/types").BackupSettings;
+      }>(`/servers/${id}/backup-settings`, {
+        method: "PUT",
+        body: JSON.stringify(settings),
+      }),
   };
 }
 
@@ -1220,6 +1515,18 @@ function createSystemApi(fetchApi: FetchApiFn): SystemApiClient {
       fetchApi<{ success: boolean; message: string }>("/system/shutdown", {
         method: "POST",
       }),
+    getStatsSettings: () =>
+      fetchApi<{ enabled: boolean; agentId: string | null }>(
+        "/system/stats-settings",
+      ),
+    updateStatsSettings: (settings: { enabled: boolean }) =>
+      fetchApi<{ success: boolean; message: string }>(
+        "/system/stats-settings",
+        {
+          method: "PUT",
+          body: JSON.stringify(settings),
+        },
+      ),
   };
 }
 
@@ -1320,14 +1627,3 @@ export function createApiClient(
     logs: createLogsApi(fetchApi),
   };
 }
-
-// ── Backward-compatible static exports ──
-// These use the default (same-origin) API client.
-// Components should migrate to useBackend() context hook over time.
-
-const defaultClient = createApiClient();
-
-export const steamcmdApi = defaultClient.steamcmd;
-export const serversApi = defaultClient.servers;
-export const systemApi = defaultClient.system;
-export const healthApi = defaultClient.health;

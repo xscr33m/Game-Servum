@@ -11,3 +11,4 @@ export * from "./updater.js";
 export * from "./logging.js";
 export * from "./firewall.js";
 export * from "./game.js";
+export * from "./backup.js";

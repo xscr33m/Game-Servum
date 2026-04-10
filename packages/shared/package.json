@@ -1,6 +1,6 @@
 {
   "name": "@game-servum/shared",
-  "version": "0.9.8",
+  "version": "0.9.9",
   "type": "module",
   "license": "GPL-3.0-only",
   "description": "Shared types and constants for Game-Servum",
@@ -14,7 +14,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch --preserveWatchOutput"
+    "dev": "tsc --watch --preserveWatchOutput",
+    "lint": "eslint src/"
   },
   "devDependencies": {
     "typescript": "~5.8.0"

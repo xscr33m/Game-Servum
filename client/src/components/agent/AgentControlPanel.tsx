@@ -23,14 +23,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AddAgentDialog } from "@/components/agent/AddAgentDialog";
 import { RemoveAgentDialog } from "@/components/agent/RemoveAgentDialog";
 import { EditAgentDialog } from "@/components/agent/EditAgentDialog";
 import { AgentUpdateNotification } from "@/components/agent/AgentUpdateNotification";
 import { useBackend } from "@/hooks/useBackend";
 import { toastSuccess, toastError, toastInfo } from "@/lib/toast";
-import type { BackendConnection } from "@/lib/config";
+import type { BackendConnection } from "@/types";
 import type { UpdateState } from "@/types";
+import { Tip } from "@/components/ui/tooltip";
 
 const STATUS_COLORS = {
   connected: "text-green-500",
@@ -42,11 +42,16 @@ const STATUS_COLORS = {
   error: "text-red-500",
 } as const;
 
+interface AgentControlPanelProps {
+  /** Called when the user wants to add a new agent (opens the wizard) */
+  onAddAgent?: () => void;
+}
+
 /**
- * Unified agent control panel for the Dashboard header.
+ * Unified agent control panel for the Commander header.
  * Combines agent selection, actions, and management in one component.
  */
-export function AgentControlPanel() {
+export function AgentControlPanel({ onAddAgent }: AgentControlPanelProps) {
   const {
     connections,
     activeConnection,
@@ -67,7 +72,6 @@ export function AgentControlPanel() {
   const [reconnecting, setReconnecting] = useState(false);
 
   // Agent management dialogs
-  const [showAdd, setShowAdd] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<BackendConnection | null>(
     null,
   );
@@ -130,11 +134,17 @@ export function AgentControlPanel() {
   }, [fetchInfo, fetchAgentSettings, fetchUpdateState]);
 
   // Listen for real-time agent update WebSocket events
+  // Game server updates broadcast the same event types but always include
+  // a `serverId` in the payload — skip those to avoid confusing a game
+  // server update with an agent self-update.
   useEffect(() => {
     if (!isConnected) return;
     const unsubscribe = subscribe((message) => {
-      if (message.type === "update:detected") {
-        const { currentVersion, latestVersion } = message.payload as {
+      const payload = message.payload as Record<string, unknown> | undefined;
+      const isServerEvent = payload && "serverId" in payload;
+
+      if (message.type === "update:detected" && !isServerEvent) {
+        const { currentVersion, latestVersion } = payload as {
           currentVersion: string;
           latestVersion: string;
         };
@@ -145,13 +155,12 @@ export function AgentControlPanel() {
           latestVersion,
           checking: false,
         }));
-      } else if (message.type === "update-check:complete") {
-        const { updateAvailable, currentVersion, latestVersion } =
-          message.payload as {
-            updateAvailable: boolean;
-            currentVersion: string;
-            latestVersion: string;
-          };
+      } else if (message.type === "update-check:complete" && !isServerEvent) {
+        const { updateAvailable, currentVersion, latestVersion } = payload as {
+          updateAvailable: boolean;
+          currentVersion: string;
+          latestVersion: string;
+        };
         setUpdateState((prev) => ({
           ...prev!,
           updateAvailable,
@@ -163,13 +172,13 @@ export function AgentControlPanel() {
           toastInfo("Agent is up to date");
         }
         manualCheckRef.current = false;
-      } else if (message.type === "update:applied") {
+      } else if (message.type === "update:applied" && !isServerEvent) {
         setUpdateState((prev) => ({
           ...prev!,
           downloaded: true,
           downloading: false,
         }));
-      } else if (message.type === "update:restart") {
+      } else if (message.type === "update:restart" && !isServerEvent) {
         toastInfo("Agent is restarting to install update...");
         if (activeConnection) {
           updateConnectionStatus(activeConnection.id, "updating");
@@ -189,7 +198,19 @@ export function AgentControlPanel() {
     return () => clearInterval(timer);
   }, [isConnected, hasUptime]);
 
-  if (!activeConnection) return null;
+  // No active connection — show minimal UI with just "Add Agent" button
+  if (!activeConnection) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <Tip content="Connect an agent">
+          <Button variant="outline" size="sm" onClick={() => onAddAgent?.()}>
+            <FaPlus className="h-3.5 w-3.5 mr-1.5" />
+            Connect Agent
+          </Button>
+        </Tip>
+      </div>
+    );
+  }
 
   const status = activeConnection.status || "disconnected";
   const statusColor =
@@ -391,7 +412,7 @@ export function AgentControlPanel() {
                       size="sm"
                       onClick={() => {
                         setMenuOpen(false);
-                        setShowAdd(true);
+                        onAddAgent?.();
                       }}
                     >
                       <FaPlus className="h-3 w-3 mr-1.5" />
@@ -470,20 +491,22 @@ export function AgentControlPanel() {
                               onMouseEnter={() => setHoveringActionsId(conn.id)}
                               onMouseLeave={() => setHoveringActionsId(null)}
                             >
-                              <button
-                                onClick={(e) => handleEdit(e, conn)}
-                                className="p-1.5 rounded hover:bg-muted/50 transition-colors hover:cursor-pointer"
-                                title="Edit agent"
-                              >
-                                <FaPen className="h-4 w-4 text-muted-foreground" />
-                              </button>
-                              <button
-                                onClick={(e) => handleRemove(e, conn)}
-                                className="p-1.5 rounded hover:bg-destructive/20 transition-colors hover:cursor-pointer"
-                                title="Remove agent"
-                              >
-                                <FaTrash className="h-4 w-4 text-destructive" />
-                              </button>
+                              <Tip content="Edit agent">
+                                <button
+                                  onClick={(e) => handleEdit(e, conn)}
+                                  className="p-1.5 rounded hover:bg-muted/50 transition-colors hover:cursor-pointer"
+                                >
+                                  <FaPen className="h-4 w-4 text-muted-foreground" />
+                                </button>
+                              </Tip>
+                              <Tip content="Remove agent">
+                                <button
+                                  onClick={(e) => handleRemove(e, conn)}
+                                  className="p-1.5 rounded hover:bg-destructive/20 transition-colors hover:cursor-pointer"
+                                >
+                                  <FaTrash className="h-4 w-4 text-destructive" />
+                                </button>
+                              </Tip>
                             </div>
                           </div>
                         </button>
@@ -498,14 +521,15 @@ export function AgentControlPanel() {
 
         {/* Agent Actions Menu */}
         <div className="relative">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setActionsMenuOpen(!actionsMenuOpen)}
-            title="Agent actions"
-          >
-            <FaEllipsis className="h-4 w-4" />
-          </Button>
+          <Tip content="Agent actions">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setActionsMenuOpen(!actionsMenuOpen)}
+            >
+              <FaEllipsis className="h-4 w-4" />
+            </Button>
+          </Tip>
 
           {actionsMenuOpen && (
             <>
@@ -642,18 +666,12 @@ export function AgentControlPanel() {
         </div>
 
         {/* Add Agent Button */}
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => setShowAdd(true)}
-          title="Add agent"
-        >
-          <FaPlus className="h-4 w-4" />
-        </Button>
+        <Tip content="Add agent">
+          <Button variant="outline" size="icon" onClick={() => onAddAgent?.()}>
+            <FaPlus className="h-4 w-4" />
+          </Button>
+        </Tip>
       </div>
-
-      {/* Add Agent Dialog */}
-      <AddAgentDialog open={showAdd} onOpenChange={setShowAdd} />
 
       {/* Remove Agent Dialog */}
       <RemoveAgentDialog

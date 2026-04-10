@@ -34,7 +34,7 @@ interface ElectronAPI {
   };
 }
 
-const TOAST_ID = "dashboard-update";
+const TOAST_ID = "commander-update";
 
 export function UpdateNotification() {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);

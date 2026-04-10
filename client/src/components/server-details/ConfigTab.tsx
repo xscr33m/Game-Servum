@@ -7,25 +7,25 @@ import {
   FaFilePen,
   FaCircleExclamation,
   FaCircleInfo,
-  FaFolderOpen,
 } from "react-icons/fa6";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CodeMirrorEditor } from "@/components/ui/code-editor";
 import { useBackend } from "@/hooks/useBackend";
-import { useWebSocket } from "@/hooks/useWebSocket";
+import { useContentWidth } from "@/hooks/useContentWidth";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { toastSuccess } from "@/lib/toast";
+import { cn } from "@/lib/utils";
 import { getConfigEditor } from "@/components/server-details/games/registry";
-import { FileExplorer } from "@/components/file-explorer/FileExplorer";
 import type { GameServer } from "@/types";
 
 interface FileState {
@@ -41,8 +41,8 @@ interface ConfigTabProps {
 }
 
 export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
-  const { api, isConnected } = useBackend();
-  const { subscribe } = useWebSocket();
+  const { api, isConnected, subscribe } = useBackend();
+  const { contentClass } = useContentWidth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,9 +63,11 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
       try {
         const data = await api.servers.getConfig(server.id, fileName);
 
-        // Set available config files from first response
+        // Set available config files from first response, filtering out directory entries
         if (data.configFiles && data.configFiles.length > 0) {
-          setConfigFiles(data.configFiles);
+          setConfigFiles(
+            data.configFiles.filter((f: string) => !f.endsWith("/")),
+          );
         } else if (configFiles.length === 0) {
           setConfigFiles([data.fileName]);
         }
@@ -132,12 +134,21 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
   }, [subscribe, server.id, loadFile]);
 
   function handleFileSwitch(fileName: string) {
-    setActiveFile(fileName);
-    // Directory entries are handled by the FileExplorer — don't load as config file
-    if (fileName.endsWith("/")) return;
-    const state = fileStates.current.get(fileName);
-    if (!state?.loaded) {
-      loadFile(fileName);
+    const currentHasChanges = fileStates.current.get(activeFile)?.hasChanges;
+    if (currentHasChanges) {
+      requestNavigation(() => {
+        setActiveFile(fileName);
+        const state = fileStates.current.get(fileName);
+        if (!state?.loaded) {
+          loadFile(fileName);
+        }
+      });
+    } else {
+      setActiveFile(fileName);
+      const state = fileStates.current.get(fileName);
+      if (!state?.loaded) {
+        loadFile(fileName);
+      }
     }
   }
 
@@ -178,9 +189,43 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
     }
   }
 
+  // Save all dirty files (used by the unsaved-changes guard dialog)
+  async function handleSaveAllFiles() {
+    setError(null);
+    for (const [fileName, state] of fileStates.current.entries()) {
+      if (state.hasChanges) {
+        await api.servers.saveConfig(server.id, state.rawContent, fileName);
+        state.originalContent = state.rawContent;
+        state.hasChanges = false;
+      }
+    }
+    setRenderKey((k) => k + 1);
+  }
+
+  // Reset all dirty files (used by the unsaved-changes guard dialog)
+  function handleResetAllFiles() {
+    for (const state of fileStates.current.values()) {
+      if (state.hasChanges) {
+        state.rawContent = state.originalContent;
+        state.hasChanges = false;
+      }
+    }
+    setRenderKey((k) => k + 1);
+  }
+
   const currentState = fileStates.current.get(activeFile);
   const anyUnsaved = Array.from(fileStates.current.values()).some(
     (s) => s.hasChanges,
+  );
+
+  // ─── Unsaved changes guard ───
+  const { requestNavigation } = useUnsavedChanges(
+    `config-tab-${server.id}`,
+    anyUnsaved,
+    {
+      onSave: handleSaveAllFiles,
+      onDiscard: handleResetAllFiles,
+    },
   );
 
   if (
@@ -189,11 +234,11 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
     !initialMode
   ) {
     return (
-      <Card>
-        <CardContent className="py-8 text-center text-muted-foreground">
+      <div className={cn("px-4 pt-4 pb-6 w-full", contentClass)}>
+        <div className="py-8 text-center text-muted-foreground">
           Loading configuration...
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     );
   }
 
@@ -201,7 +246,7 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
   if (initialMode) {
     const Editor = getConfigEditor(server.gameId);
     return (
-      <div className="space-y-4">
+      <div className={cn("px-4 pt-4 pb-6 w-full space-y-4", contentClass)}>
         <Alert>
           <FaCircleInfo className="h-4 w-4" />
           <AlertDescription>
@@ -224,12 +269,10 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
             serverName={server.name}
           />
         ) : (
-          <Card>
-            <CardContent className="py-8 text-center text-muted-foreground">
-              Start the server once to generate configuration files, then return
-              here to edit them.
-            </CardContent>
-          </Card>
+          <div className="py-8 text-center text-muted-foreground">
+            Start the server once to generate configuration files, then return
+            here to edit them.
+          </div>
         )}
       </div>
     );
@@ -237,154 +280,151 @@ export function ConfigTab({ server, onRefresh }: ConfigTabProps) {
 
   if (error && !currentState?.rawContent) {
     return (
-      <Card>
-        <CardContent className="py-8">
-          <Alert variant="destructive">
-            <FaCircleExclamation className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        </CardContent>
-      </Card>
+      <div className={cn("px-4 pt-4 pb-6 w-full", contentClass)}>
+        <Alert variant="destructive">
+          <FaCircleExclamation className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      </div>
     );
   }
 
   const isRunning = server.status === "running";
   const hasMultipleFiles = configFiles.length > 1;
-  const isActiveFileBrowsable = activeFile.endsWith("/");
 
   return (
-    <div
-      className={
-        isActiveFileBrowsable
-          ? "flex flex-col gap-4 h-[calc(100vh-14rem)] min-h-[400px]"
-          : "space-y-4"
-      }
-    >
+    <div className="flex flex-col flex-1 min-h-0 pt-2">
       {/* Messages */}
       {error && (
-        <Alert variant="destructive">
-          <FaCircleExclamation className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {/* File selector tabs for multi-file games */}
-      {hasMultipleFiles && (
-        <Tabs value={activeFile} onValueChange={handleFileSwitch}>
-          <TabsList>
-            {configFiles.map((file) => {
-              const isDirEntry = file.endsWith("/");
-              const state = fileStates.current.get(file);
-              return (
-                <TabsTrigger key={file} value={file} className="gap-2">
-                  {isDirEntry ? (
-                    <FaFolderOpen className="h-3.5 w-3.5 text-ring/70" />
-                  ) : (
-                    <FaFile className="h-3.5 w-3.5 text-ring/70" />
-                  )}
-                  {isDirEntry ? file.slice(0, -1) : file}
-                  {!isDirEntry && state?.hasChanges && (
-                    <span className="h-2 w-2 rounded-full bg-yellow-500" />
-                  )}
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
-        </Tabs>
-      )}
-
-      {/* File Explorer for browsable directory entries */}
-      {isActiveFileBrowsable && (
-        <div className="flex-1 min-h-0">
-          <FileExplorer
-            serverId={server.id}
-            rootKey={activeFile.slice(0, -1)}
-          />
+        <div className={cn("w-full px-4 pt-4", contentClass)}>
+          <Alert variant="destructive">
+            <FaCircleExclamation className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         </div>
       )}
 
-      {/* Config Editor for regular file entries */}
-      {!isActiveFileBrowsable && currentState && (
-        <Tabs defaultValue="form">
-          <div className="flex items-center justify-between sticky top-0 z-10 bg-background/95 backdrop-blur-sm py-2 -mt-2">
-            <TabsList>
-              <TabsTrigger value="form" className="gap-2">
-                <FaFilePen className="h-4 w-4 text-ring/70" />
-                Form Editor
-              </TabsTrigger>
-              <TabsTrigger value="raw" className="gap-2">
-                <FaFileCode className="h-4 w-4 text-ring/70" />
-                Raw Editor
-              </TabsTrigger>
-            </TabsList>
-            <div className="flex items-center gap-2">
-              {(currentState.hasChanges || anyUnsaved) && (
-                <Badge variant="warning">Unsaved Changes</Badge>
+      {/* Config Editor */}
+      {currentState && (
+        <Tabs defaultValue="form" className="flex flex-col flex-1 min-h-0">
+          <div className="shrink-0 bg-background px-4">
+            <div
+              className={cn(
+                "flex flex-wrap items-center justify-between gap-3 pb-2 border-b",
+                contentClass,
               )}
-              {isRunning && (
-                <Badge variant="destructive">Restart required</Badge>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleReset}
-                disabled={!currentState.hasChanges || saving}
-              >
-                <FaRotateLeft className="h-4 w-4 mr-2" />
-                Reset
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleSave}
-                disabled={!currentState.hasChanges || saving || isRunning}
-              >
-                <FaFloppyDisk className="h-4 w-4 mr-2" />
-                {saving ? "Saving..." : "Save"}
-              </Button>
+            >
+              <div className="flex items-center gap-3">
+                {/* File selector dropdown for multi-file games */}
+                {hasMultipleFiles && (
+                  <Select value={activeFile} onValueChange={handleFileSwitch}>
+                    <SelectTrigger className="w-auto min-w-[180px] gap-2">
+                      <FaFile className="h-3.5 w-3.5 text-ring/70 shrink-0" />
+                      <SelectValue />
+                      {currentState.hasChanges && (
+                        <span className="h-2 w-2 rounded-full bg-yellow-500 shrink-0" />
+                      )}
+                    </SelectTrigger>
+                    <SelectContent>
+                      {configFiles.map((file) => {
+                        const state = fileStates.current.get(file);
+                        return (
+                          <SelectItem key={file} value={file}>
+                            <span className="flex items-center gap-2">
+                              {file}
+                              {state?.hasChanges && (
+                                <span className="h-2 w-2 rounded-full bg-yellow-500" />
+                              )}
+                            </span>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                <TabsList>
+                  <TabsTrigger value="form" className="gap-2">
+                    <FaFilePen className="h-4 w-4 text-ring/70" />
+                    Form Editor
+                  </TabsTrigger>
+                  <TabsTrigger value="raw" className="gap-2">
+                    <FaFileCode className="h-4 w-4 text-ring/70" />
+                    Raw Editor
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+              <div className="flex items-center gap-2">
+                {(currentState.hasChanges || anyUnsaved) && (
+                  <Badge variant="warning">Unsaved Changes</Badge>
+                )}
+                {isRunning && (
+                  <Badge variant="destructive">Restart required</Badge>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleReset}
+                  disabled={!currentState.hasChanges || saving}
+                >
+                  <FaRotateLeft className="h-4 w-4 mr-2" />
+                  Reset
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSave}
+                  disabled={!currentState.hasChanges || saving || isRunning}
+                >
+                  <FaFloppyDisk className="h-4 w-4 mr-2" />
+                  {saving ? "Saving..." : "Save"}
+                </Button>
+              </div>
             </div>
           </div>
 
-          <TabsContent value="form" className="space-y-4">
-            {(() => {
-              const Editor = getConfigEditor(server.gameId);
-              return Editor ? (
-                <Editor
-                  rawContent={currentState.rawContent}
-                  originalContent={currentState.originalContent}
-                  onContentChange={handleContentChange}
-                  fileName={activeFile}
-                  serverId={server.id}
-                  launchParams={server.launchParams ?? undefined}
-                  onLaunchParamsChange={onRefresh}
-                />
-              ) : (
-                <Card>
-                  <CardContent className="py-8 text-center text-muted-foreground">
+          <TabsContent value="form" className="flex-1 overflow-y-auto mt-0">
+            <div className={cn("px-4 pt-4 pb-6", contentClass)}>
+              {(() => {
+                const Editor = getConfigEditor(server.gameId);
+                return Editor ? (
+                  <Editor
+                    rawContent={currentState.rawContent}
+                    originalContent={currentState.originalContent}
+                    onContentChange={handleContentChange}
+                    fileName={activeFile}
+                    serverId={server.id}
+                    launchParams={server.launchParams ?? undefined}
+                    onLaunchParamsChange={onRefresh}
+                  />
+                ) : (
+                  <div className="py-8 text-center text-muted-foreground">
                     No form editor available for this game. Use the Raw Editor
                     tab.
-                  </CardContent>
-                </Card>
-              );
-            })()}
+                  </div>
+                );
+              })()}
+            </div>
           </TabsContent>
 
-          <TabsContent value="raw">
-            <Card>
-              <CardHeader>
-                <CardTitle>Raw Configuration</CardTitle>
-                <CardDescription>
-                  Edit the configuration file directly
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Textarea
-                  className="font-mono text-sm h-[calc(100vh-28rem)] min-h-[200px]"
-                  value={currentState.rawContent}
-                  onChange={(e) => handleContentChange(e.target.value)}
-                  spellCheck={false}
+          <TabsContent value="raw" className="flex-1 min-h-0 mt-0 px-4 py-4">
+            <div className={cn("h-full", contentClass)}>
+              <div className="rounded-md border overflow-hidden h-full min-h-[300px]">
+                <CodeMirrorEditor
+                  content={currentState.rawContent}
+                  originalContent={currentState.originalContent}
+                  fileName={activeFile}
+                  onContentChange={handleContentChange}
+                  onSave={
+                    isRunning
+                      ? undefined
+                      : () => {
+                          handleSave();
+                        }
+                  }
+                  className="h-full"
                 />
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
       )}

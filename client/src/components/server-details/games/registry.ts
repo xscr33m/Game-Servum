@@ -32,11 +32,6 @@ register(sevenDays);
 
 // ── Public API ─────────────────────────────────────────────────────
 
-/** Get the full UI plugin for a game, or undefined if not registered. */
-export function getGamePlugin(gameId: string): GameUIPlugin | undefined {
-  return plugins.get(gameId);
-}
-
 /** Get display name for a game. Falls back to gameId if not registered. */
 export function getGameName(gameId: string, fallback?: string): string {
   return plugins.get(gameId)?.metadata.name ?? fallback ?? gameId;
@@ -65,5 +60,3 @@ export function getWorkshopUrl(
   const id = workshopAppId || appId;
   return `https://steamcommunity.com/app/${id}/workshop/`;
 }
-
-export type { GameUIPlugin, ConfigEditorProps } from "./types";

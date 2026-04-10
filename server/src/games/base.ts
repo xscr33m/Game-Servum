@@ -21,6 +21,7 @@ import type {
   BrowsableRoot,
   ModCopyResult,
   LogPaths,
+  BackupPathConfig,
 } from "./types.js";
 
 // ── Port Helper Functions ──────────────────────────────────────────
@@ -203,8 +204,12 @@ export abstract class BaseGameAdapter implements GameAdapter {
     return null;
   }
 
+  getPriorityConfig(_server: GameServer): PlayerFileConfig | null {
+    return null;
+  }
+
   formatPlayerEntry(
-    _type: "whitelist" | "ban",
+    _type: "whitelist" | "ban" | "priority",
     playerId: string,
     playerName?: string,
   ): string {
@@ -225,14 +230,16 @@ export abstract class BaseGameAdapter implements GameAdapter {
    */
   addToPlayerList(
     server: GameServer,
-    type: "whitelist" | "ban",
+    type: "whitelist" | "ban" | "priority",
     playerId: string,
     playerName?: string,
   ): PlayerListResult {
     const config =
       type === "whitelist"
         ? this.getWhitelistConfig(server)
-        : this.getBanListConfig(server);
+        : type === "ban"
+          ? this.getBanListConfig(server)
+          : this.getPriorityConfig(server);
     if (!config) {
       return { success: false, message: `This game does not support ${type}` };
     }
@@ -245,7 +252,7 @@ export abstract class BaseGameAdapter implements GameAdapter {
     if (content.includes(playerId)) {
       return {
         success: false,
-        message: `Player is already on the ${type === "ban" ? "ban list" : "whitelist"}`,
+        message: `Player is already on the ${type === "ban" ? "ban list" : type === "priority" ? "priority queue" : "whitelist"}`,
       };
     }
 
@@ -258,7 +265,7 @@ export abstract class BaseGameAdapter implements GameAdapter {
     fs.writeFileSync(config.filePath, newContent, "utf-8");
     return {
       success: true,
-      message: `${playerName || "Player"} added to ${type === "ban" ? "ban list" : "whitelist"}`,
+      message: `${playerName || "Player"} added to ${type === "ban" ? "ban list" : type === "priority" ? "priority queue" : "whitelist"}`,
     };
   }
 
@@ -267,13 +274,15 @@ export abstract class BaseGameAdapter implements GameAdapter {
    */
   removeFromPlayerList(
     server: GameServer,
-    type: "whitelist" | "ban",
+    type: "whitelist" | "ban" | "priority",
     playerId: string,
   ): PlayerListResult {
     const config =
       type === "whitelist"
         ? this.getWhitelistConfig(server)
-        : this.getBanListConfig(server);
+        : type === "ban"
+          ? this.getBanListConfig(server)
+          : this.getPriorityConfig(server);
     if (!config) {
       return { success: false, message: `This game does not support ${type}` };
     }
@@ -281,7 +290,7 @@ export abstract class BaseGameAdapter implements GameAdapter {
     if (!fs.existsSync(config.filePath)) {
       return {
         success: false,
-        message: `${type === "ban" ? "Ban" : "Whitelist"} file not found`,
+        message: `${type === "ban" ? "Ban" : type === "priority" ? "Priority" : "Whitelist"} file not found`,
       };
     }
 
@@ -292,25 +301,30 @@ export abstract class BaseGameAdapter implements GameAdapter {
     if (lines.length === filtered.length) {
       return {
         success: false,
-        message: `Player not found on the ${type === "ban" ? "ban list" : "whitelist"}`,
+        message: `Player not found on the ${type === "ban" ? "ban list" : type === "priority" ? "priority queue" : "whitelist"}`,
       };
     }
 
     fs.writeFileSync(config.filePath, filtered.join("\n"), "utf-8");
     return {
       success: true,
-      message: `Player removed from ${type === "ban" ? "ban list" : "whitelist"}`,
+      message: `Player removed from ${type === "ban" ? "ban list" : type === "priority" ? "priority queue" : "whitelist"}`,
     };
   }
 
   /**
    * Default: read the text file and return its content as-is.
    */
-  getPlayerListContent(server: GameServer, type: "whitelist" | "ban"): string {
+  getPlayerListContent(
+    server: GameServer,
+    type: "whitelist" | "ban" | "priority",
+  ): string {
     const config =
       type === "whitelist"
         ? this.getWhitelistConfig(server)
-        : this.getBanListConfig(server);
+        : type === "ban"
+          ? this.getBanListConfig(server)
+          : this.getPriorityConfig(server);
     if (!config) return "";
     if (!fs.existsSync(config.filePath)) return "";
     return fs.readFileSync(config.filePath, "utf-8");
@@ -343,7 +357,13 @@ export abstract class BaseGameAdapter implements GameAdapter {
   }
 
   getBrowsableRoots(_server: GameServer): BrowsableRoot[] {
-    return [];
+    return [
+      {
+        key: "root",
+        label: "Server Root",
+        resolvePath: (s: GameServer) => s.installPath,
+      },
+    ];
   }
 
   /**
@@ -382,6 +402,15 @@ export abstract class BaseGameAdapter implements GameAdapter {
       logo: this.definition.logo,
       description: this.definition.description,
     };
+  }
+
+  // ── Backup ─────────────────────────────────────────────────────────
+
+  /**
+   * Default: no backup paths defined — subclasses must override.
+   */
+  getBackupPaths(_server: GameServer): BackupPathConfig {
+    return { savePaths: [], configPaths: [], excludePatterns: [] };
   }
 }
 

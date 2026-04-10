@@ -39,10 +39,10 @@ export function CompleteStep({
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground text-center">
-          You can now install and manage game servers from the dashboard.
+          You can now install and manage game servers from here.
         </p>
         <Button onClick={onFinish} className="w-full group" size="lg">
-          Go to Dashboard
+          Go to Home
           <FaArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
         </Button>
       </CardContent>

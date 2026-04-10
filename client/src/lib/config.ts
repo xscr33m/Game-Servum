@@ -1,40 +1,20 @@
 // ── Backend Connection Configuration ──
-// Defines the connection model for multi-agent support.
+// Connection model and helpers for multi-agent support.
 
-export interface BackendConnection {
-  id: string;
-  name: string;
-  url: string; // z.B. "http://192.168.1.100:3001"
-  apiKey: string;
-  password: string; // stored in plaintext locally
-  sessionToken?: string;
-  tokenExpiresAt?: number;
-  isActive: boolean;
-  status?:
-    | "connected"
-    | "disconnected"
-    | "error"
-    | "authenticating"
-    | "reconnecting"
-    | "updating"
-    | "restarting";
-  reconnectAttempts?: number; // Track number of reconnection attempts
-  lastError?: string; // Last error message for UI display
-  statusUpdatedAt?: number; // Timestamp when status was last set (for stale status detection)
-  agentInfo?: {
-    version: string;
-    hostname: string;
-    platform: string;
-    serverCount: number;
-    compatibilityWarning?: string;
-  };
-}
+import type { BackendConnection } from "@/types";
+
+const isWebMode = import.meta.env.VITE_WEB_MODE === "true";
 
 /**
  * Returns the API base URL for a given connection.
+ * In web mode, requests are proxied through the Commander Server
+ * to avoid cross-origin / Private Network Access / self-signed cert issues.
  */
 export function getApiBase(connection?: BackendConnection | null): string {
   if (connection?.url) {
+    if (isWebMode) {
+      return `/commander/agent-proxy/${connection.id}${new URL(connection.url).pathname.replace(/\/$/, "")}/api/v1`;
+    }
     return `${connection.url}/api/v1`;
   }
   // Development fallback (if no connection specified)
@@ -43,9 +23,17 @@ export function getApiBase(connection?: BackendConnection | null): string {
 
 /**
  * Returns the WebSocket URL for a given connection.
+ * In web mode, WebSocket is proxied through the Commander Server.
  */
 export function getWsUrl(connection?: BackendConnection | null): string {
   if (connection?.url) {
+    if (isWebMode) {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const tokenParam = connection.sessionToken
+        ? `?token=${connection.sessionToken}`
+        : "";
+      return `${protocol}//${window.location.host}/commander/agent-ws/${connection.id}${tokenParam}`;
+    }
     const url = new URL(connection.url);
     const protocol = url.protocol === "https:" ? "wss:" : "ws:";
     const tokenParam = connection.sessionToken
@@ -59,7 +47,6 @@ export function getWsUrl(connection?: BackendConnection | null): string {
 }
 
 // ── Connection persistence ──
-// Uses pluggable CredentialStore. Sync wrappers for backward compatibility.
 
 import {
   getCredentialStore,
@@ -73,9 +60,17 @@ const STORAGE_KEY = "game-servum-connections";
  * Synchronous load — reads cached data for initial render.
  * In Electron: returns pre-loaded data from ElectronCredentialStore cache.
  * In browser:  reads from localStorage directly.
+ * In web mode:  returns empty (connections loaded async after mount).
  */
 export function loadConnections(): BackendConnection[] {
   console.log("[config] loadConnections() called");
+
+  // Web mode: connections are stored server-side, loaded asynchronously
+  if (import.meta.env.VITE_WEB_MODE === "true") {
+    console.log("[config] Web mode — returning empty (async load after mount)");
+    return [];
+  }
+
   const store = getCredentialStore();
 
   // Electron store has pre-loaded cache from init() — use it directly
@@ -122,14 +117,6 @@ export function loadConnections(): BackendConnection[] {
 }
 
 /**
- * Async load — uses the credential store.
- */
-export async function loadConnectionsAsync(): Promise<BackendConnection[]> {
-  const store = getCredentialStore();
-  return store.load();
-}
-
-/**
  * Save connections via the credential store.
  */
 export async function saveConnectionsAsync(
@@ -137,12 +124,4 @@ export async function saveConnectionsAsync(
 ): Promise<void> {
   const store = getCredentialStore();
   await store.save(connections);
-}
-
-/**
- * Synchronous save — for backward compatibility during migration.
- * Delegates to async save (fire-and-forget).
- */
-export function saveConnections(connections: BackendConnection[]): void {
-  saveConnectionsAsync(connections);
 }

@@ -11,7 +11,7 @@
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { logger } from "../../index.js";
+import { logger } from "../../core/logger.js";
 import { recordPlayerConnect, recordPlayerDisconnect } from "../../db/index.js";
 import {
   BaseGameAdapter,
@@ -27,6 +27,7 @@ import type {
   ModCopyResult,
   LogPaths,
   StartupDetector,
+  BackupPathConfig,
 } from "../types.js";
 import type { GameServer } from "../../types/index.js";
 import type { ServerMod } from "../../types/index.js";
@@ -184,6 +185,8 @@ export class ArkAdapter extends BaseGameAdapter {
       logParsing: true,
       playerListEditable: true,
       profilesPath: false,
+      directMessage: false,
+      priorityQueue: false,
     },
     broadcastCommand: "ServerChat {MESSAGE}",
     playerListCommand: "ListPlayers",
@@ -931,7 +934,7 @@ export class ArkAdapter extends BaseGameAdapter {
   }
 
   formatPlayerEntry(
-    _type: "whitelist" | "ban",
+    _type: "whitelist" | "ban" | "priority",
     playerId: string,
     _playerName?: string,
   ): string {
@@ -1015,6 +1018,16 @@ export class ArkAdapter extends BaseGameAdapter {
         ),
       },
     ];
+  }
+
+  // ── Backup ──────────────────────────────────────────────────────
+
+  getBackupPaths(_server: GameServer): BackupPathConfig {
+    return {
+      savePaths: ["ShooterGame/Saved/SavedArks"],
+      configPaths: ["ShooterGame/Saved/Config"],
+      excludePatterns: ["ShooterGame/Saved/Logs/**"],
+    };
   }
 }
 

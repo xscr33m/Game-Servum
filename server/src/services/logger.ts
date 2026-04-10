@@ -13,7 +13,7 @@ import {
   logLevelToString,
 } from "@game-servum/shared";
 
-type LogContext = "agent" | "dashboard";
+type LogContext = "agent" | "commander";
 
 class SimpleLogger {
   private context: LogContext;
@@ -355,4 +355,4 @@ class SimpleLogger {
   }
 }
 
-export { SimpleLogger, LogContext };
+export { SimpleLogger };

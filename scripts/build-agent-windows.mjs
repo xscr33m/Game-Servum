@@ -34,9 +34,17 @@ import {
 import { resolve, dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { createReadStream, statSync } from "fs";
+import {
+  signFile,
+  isSigningAvailable,
+  printSigningStatus,
+  getSigntoolPath,
+} from "./sign-windows.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
+
+const TIMESTAMP_SERVER = "http://time.certum.pl";
 
 // Read version from package.json
 const pkg = JSON.parse(readFileSync(resolve(ROOT, "package.json"), "utf-8"));
@@ -53,6 +61,7 @@ console.log(`║  Game-Servum Agent Builder (Windows)       `);
 console.log(`║  Version: ${APP_VERSION.padEnd(32)}`);
 console.log(`║  Mode: Windows Service (WinSW + NSIS)      `);
 console.log("╚════════════════════════════════════════════");
+printSigningStatus();
 
 // ─── 1. Build shared types ─────────────────────────────────────
 
@@ -157,7 +166,7 @@ HOST=0.0.0.0
 # CORS_ORIGINS=https://your-dashboard.com,http://localhost:5173
 CORS_ORIGINS=*
 
-# Authentication (enabled by default for remote Dashboard access)
+# Authentication (enabled by default for remote Commander access)
 AUTH_ENABLED=true
 # JWT_SECRET=  (auto-generated if not set)
 `;
@@ -175,6 +184,25 @@ if (existsSync(resolve(ROOT, "LICENSE"))) {
 }
 
 console.log("  ✓ Staged all service files");
+
+// 3f. Sign staged executables + prepare uninstaller signing
+const signingEnabled = isSigningAvailable();
+if (signingEnabled) {
+  console.log("\n  Signing staged executables...");
+  signFile(resolve(STAGING, "GameServumAgent.exe"));
+
+  // Create sign.bat for NSIS !uninstfinalize (signs uninstaller during compilation)
+  const signtoolPath = getSigntoolPath();
+  let certArgs = "/a";
+  if (process.env.WIN_CSC_THUMBPRINT) {
+    certArgs = `/sha1 ${process.env.WIN_CSC_THUMBPRINT}`;
+  } else if (process.env.WIN_CSC_NAME) {
+    certArgs = `/n "${process.env.WIN_CSC_NAME}"`;
+  }
+  const signBat = `@"${signtoolPath}" sign ${certArgs} /tr ${TIMESTAMP_SERVER} /td sha256 /fd sha256 %1\r\n`;
+  writeFileSync(resolve(STAGING, "sign.bat"), signBat, "utf-8");
+  console.log("  ✓ Created sign.bat for uninstaller signing");
+}
 
 // ─── 4. Build NSIS installer ────────────────────────────────────
 
@@ -220,15 +248,33 @@ const nsisScript = resolve(ROOT, "scripts", "nsis", "agent-installer.nsi");
 const installerExe = `Game-Servum-Agent-Setup-v${APP_VERSION}.exe`;
 const installerPath = resolve(DIST_DIR, installerExe);
 
+// Build NSIS defines string — conditionally include signing flag
+let nsisDefines = `-DPRODUCT_VERSION="${APP_VERSION}" -DSTAGING_DIR="${STAGING}" -DOUTPUT_FILE="${installerPath}"`;
+if (signingEnabled) {
+  nsisDefines += ` -DENABLE_SIGNING`;
+}
+
 try {
-  execSync(
-    `${makensis} -DPRODUCT_VERSION="${APP_VERSION}" -DSTAGING_DIR="${STAGING}" -DOUTPUT_FILE="${installerPath}" "${nsisScript}"`,
-    { cwd: ROOT, stdio: "inherit" },
-  );
+  execSync(`${makensis} ${nsisDefines} "${nsisScript}"`, {
+    cwd: ROOT,
+    stdio: "inherit",
+  });
   console.log(`  ✓ Created installer: ${installerExe}`);
 } catch (err) {
   console.error("  ✗ NSIS build failed!");
   process.exit(1);
+}
+
+// ─── 4b. Sign installer ─────────────────────────────────────────
+
+if (isSigningAvailable()) {
+  console.log("\nSigning installer...");
+  signFile(installerPath);
+} else if (
+  process.env.SKIP_CODE_SIGNING !== "true" &&
+  process.platform === "win32"
+) {
+  console.warn("\n  ⚠ Code signing skipped (signtool.exe not found)");
 }
 
 // ─── 5. Create update ZIP ────────────────────────────────────────

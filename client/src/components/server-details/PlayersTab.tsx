@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   FaShieldHalved,
   FaUserShield,
@@ -14,22 +14,30 @@ import {
   FaCopy,
   FaUserPlus,
   FaUserMinus,
+  FaMessage,
+  FaStar,
 } from "react-icons/fa6";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useBackend } from "@/hooks/useBackend";
 import { useGameCapabilities } from "@/hooks/useGameCapabilities";
+import { useContentWidth } from "@/hooks/useContentWidth";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { toastSuccess, toastError } from "@/lib/toast";
+import { cn } from "@/lib/utils";
+import { Tip } from "@/components/ui/tooltip";
 import type { GameServer, PlayerSummary } from "@/types";
 
 interface PlayersTabProps {
@@ -80,28 +88,45 @@ function formatLastSeen(isoDate: string): string {
 }
 
 export function PlayersTab({ server }: PlayersTabProps) {
+  // Tab state
+  const [activeTab, setActiveTab] = useState("overview");
+
   // Player overview state
   const [players, setPlayers] = useState<PlayerSummary[]>([]);
   const [onlineCount, setOnlineCount] = useState(0);
   const [playersLoading, setPlayersLoading] = useState(true);
   const [playersError, setPlayersError] = useState<string | null>(null);
 
-  // Whitelist/ban state
+  // Whitelist/ban/priority state
   const [whitelistContent, setWhitelistContent] = useState("");
   const [banContent, setBanContent] = useState("");
+  const [priorityContent, setPriorityContent] = useState("");
   const [originalWhitelist, setOriginalWhitelist] = useState("");
   const [originalBan, setOriginalBan] = useState("");
+  const [originalPriority, setOriginalPriority] = useState("");
   const [filesLoading, setFilesLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
+  // Direct message dialog state
+  const [messageDialogOpen, setMessageDialogOpen] = useState(false);
+  const [messageTarget, setMessageTarget] = useState<PlayerSummary | null>(
+    null,
+  );
+  const [messageText, setMessageText] = useState("");
+  const [messageSending, setMessageSending] = useState(false);
+  const messageInputRef = useRef<HTMLInputElement>(null);
+
   const { api, subscribe, isConnected } = useBackend();
   const { capabilities } = useGameCapabilities(server.gameId);
+  const { contentClass } = useContentWidth();
 
   const hasWhitelist = capabilities?.whitelist !== false;
   const hasBanList = capabilities?.banList !== false;
+  const hasPriority = capabilities?.priorityQueue !== false;
   const isPlayerListEditable = capabilities?.playerListEditable !== false;
+  const hasDirectMessage = capabilities?.directMessage === true;
 
   // Resolve the effective player ID for whitelist/ban based on game type:
   // DayZ uses BattlEye GUID (characterId from ADM logs), ARK/7DTD use SteamID64.
@@ -129,6 +154,14 @@ export function PlayersTab({ server }: PlayersTabProps) {
     return banContent.includes(characterId);
   }
 
+  /**
+   * Check if a Steam ID is present in the priority queue content
+   */
+  function isPrioritized(steamId: string | null): boolean {
+    if (!steamId) return false;
+    return priorityContent.includes(steamId);
+  }
+
   // Load player data
   const loadPlayers = useCallback(async () => {
     try {
@@ -143,9 +176,9 @@ export function PlayersTab({ server }: PlayersTabProps) {
     }
   }, [server.id, api.servers]);
 
-  // Load whitelist/ban content (only for games that support them)
+  // Load whitelist/ban/priority content (only for games that support them)
   const loadFiles = useCallback(async () => {
-    if (!hasWhitelist && !hasBanList) {
+    if (!hasWhitelist && !hasBanList && !hasPriority) {
       setFilesLoading(false);
       return;
     }
@@ -163,18 +196,25 @@ export function PlayersTab({ server }: PlayersTabProps) {
       } else {
         promises.push(Promise.resolve({ content: "" }));
       }
-      const [whitelist, ban] = await Promise.all(promises);
+      if (hasPriority) {
+        promises.push(api.servers.getPriorityContent(server.id));
+      } else {
+        promises.push(Promise.resolve({ content: "" }));
+      }
+      const [whitelist, ban, priority] = await Promise.all(promises);
 
       setWhitelistContent(whitelist.content);
       setBanContent(ban.content);
+      setPriorityContent(priority.content);
       setOriginalWhitelist(whitelist.content);
       setOriginalBan(ban.content);
+      setOriginalPriority(priority.content);
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setFilesLoading(false);
     }
-  }, [server.id, api.servers, hasWhitelist, hasBanList]);
+  }, [server.id, api.servers, hasWhitelist, hasBanList, hasPriority]);
 
   useEffect(() => {
     if (!isConnected) return;
@@ -227,6 +267,26 @@ export function PlayersTab({ server }: PlayersTabProps) {
       await api.servers.saveFile(server.id, "ban.txt", banContent);
       setOriginalBan(banContent);
       toastSuccess("Ban list saved successfully");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSavePriority() {
+    setSaving(true);
+    setError(null);
+    try {
+      // Convert one-per-line display format back to semicolon-separated file format
+      const semicolonContent = priorityContent
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .join(";");
+      await api.servers.saveFile(server.id, "priority.txt", semicolonContent);
+      setOriginalPriority(priorityContent);
+      toastSuccess("Priority queue saved successfully");
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -310,6 +370,40 @@ export function PlayersTab({ server }: PlayersTabProps) {
   }
 
   /**
+   * Add a player to the priority queue via API
+   */
+  async function handleAddToPriority(steamId: string, playerName: string) {
+    setActionLoading(`priority-${steamId}`);
+    setError(null);
+    try {
+      await api.servers.addToPriority(server.id, steamId, playerName);
+      toastSuccess(`${playerName} added to priority queue`);
+      loadFiles();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  /**
+   * Remove a player from the priority queue via API
+   */
+  async function handleRemoveFromPriority(steamId: string, playerName: string) {
+    setActionLoading(`unpriority-${steamId}`);
+    setError(null);
+    try {
+      await api.servers.removeFromPriority(server.id, steamId);
+      toastSuccess(`${playerName} removed from priority queue`);
+      loadFiles();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  /**
    * Copy character ID to clipboard
    */
   async function handleCopyId(id: string) {
@@ -321,82 +415,249 @@ export function PlayersTab({ server }: PlayersTabProps) {
     }
   }
 
+  function openMessageDialog(player: PlayerSummary) {
+    setMessageTarget(player);
+    setMessageText("");
+    setMessageDialogOpen(true);
+    // Focus input after dialog opens
+    setTimeout(() => messageInputRef.current?.focus(), 100);
+  }
+
+  async function handleSendDirectMessage() {
+    if (!messageTarget || !messageText.trim()) return;
+    setMessageSending(true);
+    try {
+      await api.servers.sendDirectMessage(
+        server.id,
+        messageTarget.steamId,
+        messageTarget.playerName,
+        messageText.trim(),
+      );
+      toastSuccess(`Message sent to ${messageTarget.playerName}`);
+      setMessageDialogOpen(false);
+    } catch (err) {
+      toastError((err as Error).message);
+    } finally {
+      setMessageSending(false);
+    }
+  }
+
   const whitelistChanged = whitelistContent !== originalWhitelist;
   const banChanged = banContent !== originalBan;
+  const priorityChanged = priorityContent !== originalPriority;
 
-  function countEntries(content: string): number {
-    return content
-      .split("\n")
-      .filter((line) => line.trim() && !line.trim().startsWith("//")).length;
-  }
+  // ─── Unsaved changes guard ───
+  useUnsavedChanges(
+    `players-tab-${server.id}`,
+    whitelistChanged || banChanged || priorityChanged,
+    {
+      onSave: async () => {
+        if (whitelistChanged) {
+          await api.servers.saveFile(
+            server.id,
+            "whitelist.txt",
+            whitelistContent,
+          );
+          setOriginalWhitelist(whitelistContent);
+        }
+        if (banChanged) {
+          await api.servers.saveFile(server.id, "ban.txt", banContent);
+          setOriginalBan(banContent);
+        }
+        if (priorityChanged) {
+          const semicolonContent = priorityContent
+            .split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .join(";");
+          await api.servers.saveFile(
+            server.id,
+            "priority.txt",
+            semicolonContent,
+          );
+          setOriginalPriority(priorityContent);
+        }
+      },
+      onDiscard: () => {
+        setWhitelistContent(originalWhitelist);
+        setBanContent(originalBan);
+        setPriorityContent(originalPriority);
+      },
+    },
+  );
 
   const onlinePlayers = players.filter((p) => p.isOnline);
   const offlinePlayers = players.filter((p) => !p.isOnline);
 
   return (
-    <div className="space-y-4">
-      {/* Messages */}
+    <div className="flex flex-col flex-1 min-h-0 pt-2">
+      {/* Error message */}
       {error && (
-        <Alert variant="destructive">
-          <FaCircleExclamation className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
+        <div className={cn("w-full px-4 pt-4", contentClass)}>
+          <Alert variant="destructive">
+            <FaCircleExclamation className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        </div>
       )}
 
-      <Tabs defaultValue="overview">
-        <TabsList
-          className={`grid w-full ${hasWhitelist && hasBanList ? "grid-cols-3" : hasWhitelist || hasBanList ? "grid-cols-2" : "grid-cols-1"}`}
-        >
-          <TabsTrigger value="overview" className="gap-2">
-            <FaUsers className="h-4 w-4 text-ring/70" />
-            Players
-            {onlineCount > 0 && (
-              <Badge variant="success" className="ml-1">
-                {onlineCount}
-              </Badge>
+      <Tabs
+        defaultValue="overview"
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="flex flex-col flex-1 min-h-0"
+      >
+        <div className="shrink-0 bg-background px-4">
+          <div
+            className={cn(
+              "flex flex-wrap items-center justify-between gap-3 pb-2 border-b",
+              contentClass,
             )}
-          </TabsTrigger>
-          {hasWhitelist && (
-            <TabsTrigger value="whitelist" className="gap-2">
-              <FaShield className="h-4 w-4 text-ring/70" />
-              Whitelist
-              {whitelistChanged && (
-                <Badge variant="warning" className="ml-1">
-                  Modified
-                </Badge>
+          >
+            <TabsList className="w-full sm:w-auto">
+              <TabsTrigger
+                value="overview"
+                className="gap-2 flex-1 sm:flex-initial"
+              >
+                <FaUsers className="h-4 w-4 text-ring/70" />
+                <span className="hidden xs:inline">Players</span>
+                {onlineCount > 0 && (
+                  <Badge variant="success" className="ml-1">
+                    {onlineCount}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              {hasWhitelist && (
+                <TabsTrigger
+                  value="whitelist"
+                  className="gap-2 flex-1 sm:flex-initial"
+                >
+                  <FaShield className="h-4 w-4 text-ring/70" />
+                  <span className="hidden xs:inline">Whitelist</span>
+                  {whitelistChanged && (
+                    <Badge variant="warning" className="ml-1">
+                      <span className="hidden xs:inline">Modified</span>
+                      <span className="xs:hidden">!</span>
+                    </Badge>
+                  )}
+                </TabsTrigger>
               )}
-            </TabsTrigger>
-          )}
-          {hasBanList && (
-            <TabsTrigger value="ban" className="gap-2">
-              <FaBan className="h-4 w-4 text-ring/70" />
-              Ban List
-              {banChanged && (
-                <Badge variant="warning" className="ml-1">
-                  Modified
-                </Badge>
+              {hasBanList && (
+                <TabsTrigger
+                  value="ban"
+                  className="gap-2 flex-1 sm:flex-initial"
+                >
+                  <FaBan className="h-4 w-4 text-ring/70" />
+                  <span className="hidden xs:inline">Ban List</span>
+                  {banChanged && (
+                    <Badge variant="warning" className="ml-1">
+                      <span className="hidden xs:inline">Modified</span>
+                      <span className="xs:hidden">!</span>
+                    </Badge>
+                  )}
+                </TabsTrigger>
               )}
-            </TabsTrigger>
-          )}
-        </TabsList>
+              {hasPriority && (
+                <TabsTrigger
+                  value="priority"
+                  className="gap-2 flex-1 sm:flex-initial"
+                >
+                  <FaStar className="h-4 w-4 text-ring/70" />
+                  <span className="hidden xs:inline">Priority</span>
+                  {priorityChanged && (
+                    <Badge variant="warning" className="ml-1">
+                      <span className="hidden xs:inline">Modified</span>
+                      <span className="xs:hidden">!</span>
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              )}
+            </TabsList>
+            {activeTab === "whitelist" && isPlayerListEditable && (
+              <div className="flex items-center gap-2">
+                {whitelistChanged && (
+                  <Badge variant="warning">Unsaved Changes</Badge>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setWhitelistContent(originalWhitelist)}
+                  disabled={!whitelistChanged || saving}
+                >
+                  <FaRotateLeft className="h-4 w-4 mr-2" />
+                  Reset
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSaveWhitelist}
+                  disabled={!whitelistChanged || saving}
+                >
+                  <FaFloppyDisk className="h-4 w-4 mr-2" />
+                  {saving ? "Saving..." : "Save"}
+                </Button>
+              </div>
+            )}
+            {activeTab === "ban" && isPlayerListEditable && (
+              <div className="flex items-center gap-2">
+                {banChanged && <Badge variant="warning">Unsaved Changes</Badge>}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setBanContent(originalBan)}
+                  disabled={!banChanged || saving}
+                >
+                  <FaRotateLeft className="h-4 w-4 mr-2" />
+                  Reset
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSaveBan}
+                  disabled={!banChanged || saving}
+                >
+                  <FaFloppyDisk className="h-4 w-4 mr-2" />
+                  {saving ? "Saving..." : "Save"}
+                </Button>
+              </div>
+            )}
+            {activeTab === "priority" && (
+              <div className="flex items-center gap-2">
+                {priorityChanged && (
+                  <Badge variant="warning">Unsaved Changes</Badge>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPriorityContent(originalPriority)}
+                  disabled={!priorityChanged || saving}
+                >
+                  <FaRotateLeft className="h-4 w-4 mr-2" />
+                  Reset
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSavePriority}
+                  disabled={!priorityChanged || saving}
+                >
+                  <FaFloppyDisk className="h-4 w-4 mr-2" />
+                  {saving ? "Saving..." : "Save"}
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
 
-        {/* Player Overview Tab */}
-        <TabsContent value="overview" className="space-y-4">
-          {/* Online Players Card */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <FaWifi className="h-5 w-5 text-ring" />
+        {/* ── Player Overview Tab ── */}
+        <TabsContent value="overview" className="flex-1 overflow-y-auto mt-0">
+          <div className={cn("px-4 pt-4 pb-6 space-y-0", contentClass)}>
+            {/* Online Players */}
+            <div className="pb-6 border-b">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <FaWifi className="h-4 w-4 text-ring" />
+                  <span className="text-sm font-medium text-muted-foreground">
                     Online Players
-                    <Badge variant="success">{onlineCount}</Badge>
-                  </CardTitle>
-                  <CardDescription>
-                    {server.status === "running"
-                      ? "Currently connected players"
-                      : "Server is not running"}
-                  </CardDescription>
+                  </span>
+                  <Badge variant="success">{onlineCount}</Badge>
                 </div>
                 <Button
                   variant="outline"
@@ -405,12 +666,11 @@ export function PlayersTab({ server }: PlayersTabProps) {
                   disabled={playersLoading}
                 >
                   <FaArrowsRotate
-                    className={`h-4 w-4 ${playersLoading ? "animate-spin" : ""}`}
+                    className={`h-3.5 w-3.5 ${playersLoading ? "animate-spin" : ""}`}
                   />
                 </Button>
               </div>
-            </CardHeader>
-            <CardContent>
+
               {playersError && (
                 <Alert variant="destructive" className="mb-4">
                   <FaCircleExclamation className="h-4 w-4" />
@@ -421,16 +681,16 @@ export function PlayersTab({ server }: PlayersTabProps) {
               {server.status !== "running" ? (
                 <div className="text-center py-6 text-muted-foreground">
                   <FaWifi className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p>Server is offline</p>
-                  <p className="text-sm mt-1">
+                  <p className="text-sm">Server is offline</p>
+                  <p className="text-xs mt-1">
                     Start the server to see connected players.
                   </p>
                 </div>
               ) : onlinePlayers.length === 0 ? (
                 <div className="text-center py-6 text-muted-foreground">
                   <FaUsers className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p>No players connected</p>
-                  <p className="text-sm mt-1">
+                  <p className="text-sm">No players connected</p>
+                  <p className="text-xs mt-1">
                     Players will appear here when they join the server.
                   </p>
                 </div>
@@ -439,19 +699,20 @@ export function PlayersTab({ server }: PlayersTabProps) {
                   {onlinePlayers.map((player) => (
                     <div
                       key={player.steamId}
-                      className="flex items-center gap-3 p-3 rounded-lg border bg-muted/50"
+                      className="flex flex-col gap-2 p-3 rounded-lg border bg-muted/50 border-border"
                     >
-                      <div className="h-2 w-2 rounded-full bg-ring shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium truncate">
+                      {/* Row 1: Name + Badges + Actions */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="h-2 w-2 rounded-full bg-ring shrink-0" />
+                          <p className="font-medium truncate text-sm">
                             {player.playerName}
                           </p>
                           {getPlayerId(player) &&
                             isWhitelisted(getPlayerId(player)) && (
                               <Badge
                                 variant="outline"
-                                className="text-[10px] px-1.5 py-0 border-blue-500 text-blue-500"
+                                className="text-[10px] px-1.5 py-0 border-blue-500 text-blue-500 shrink-0"
                               >
                                 <FaShield className="h-2.5 w-2.5 mr-0.5" />
                                 WL
@@ -461,112 +722,210 @@ export function PlayersTab({ server }: PlayersTabProps) {
                             isBanned(getPlayerId(player)) && (
                               <Badge
                                 variant="outline"
-                                className="text-[10px] px-1.5 py-0 border-red-500 text-red-500"
+                                className="text-[10px] px-1.5 py-0 border-red-500 text-red-500 shrink-0"
                               >
                                 <FaBan className="h-2.5 w-2.5 mr-0.5" />
                                 Banned
                               </Badge>
                             )}
+                          {hasPriority &&
+                            player.steam64Id &&
+                            isPrioritized(player.steam64Id) && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] px-1.5 py-0 border-yellow-500 text-yellow-500 shrink-0"
+                              >
+                                <FaStar className="h-2.5 w-2.5 mr-0.5" />
+                                Prio
+                              </Badge>
+                            )}
                         </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <div className="flex items-center gap-1 text-sm text-muted-foreground mr-1">
+                            <FaClock className="h-3.5 w-3.5" />
+                            {player.currentSessionStart
+                              ? formatSessionDuration(
+                                  player.currentSessionStart,
+                                )
+                              : "—"}
+                          </div>
+                          {getPlayerId(player) && (
+                            <div className="flex items-center gap-0.5">
+                              {hasDirectMessage && (
+                                <Tip content="Send message">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-ring"
+                                    onClick={() => openMessageDialog(player)}
+                                    disabled={actionLoading !== null}
+                                  >
+                                    <FaMessage className="h-3.5 w-3.5" />
+                                  </Button>
+                                </Tip>
+                              )}
+                              {isWhitelisted(getPlayerId(player)) ? (
+                                <Tip content="Remove from whitelist">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-blue-500 hover:text-blue-600"
+                                    onClick={() =>
+                                      handleRemoveFromWhitelist(
+                                        getPlayerId(player)!,
+                                        player.playerName,
+                                      )
+                                    }
+                                    disabled={actionLoading !== null}
+                                  >
+                                    <FaShieldHalved className="h-4 w-4" />
+                                  </Button>
+                                </Tip>
+                              ) : (
+                                <Tip content="Add to whitelist">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-blue-500"
+                                    onClick={() =>
+                                      handleAddToWhitelist(
+                                        getPlayerId(player)!,
+                                        player.playerName,
+                                      )
+                                    }
+                                    disabled={actionLoading !== null}
+                                  >
+                                    <FaUserShield className="h-4 w-4" />
+                                  </Button>
+                                </Tip>
+                              )}
+                              {isBanned(getPlayerId(player)) ? (
+                                <Tip content="Remove from ban list">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-red-500 hover:text-red-600"
+                                    onClick={() =>
+                                      handleRemoveFromBanList(
+                                        getPlayerId(player)!,
+                                        player.playerName,
+                                      )
+                                    }
+                                    disabled={actionLoading !== null}
+                                  >
+                                    <FaUserMinus className="h-4 w-4" />
+                                  </Button>
+                                </Tip>
+                              ) : (
+                                <Tip content="Add to ban list">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500"
+                                    onClick={() =>
+                                      handleAddToBanList(
+                                        getPlayerId(player)!,
+                                        player.playerName,
+                                      )
+                                    }
+                                    disabled={actionLoading !== null}
+                                  >
+                                    <FaUserPlus className="h-4 w-4" />
+                                  </Button>
+                                </Tip>
+                              )}
+                              {hasPriority &&
+                                player.steam64Id &&
+                                (isPrioritized(player.steam64Id) ? (
+                                  <Tip content="Remove from priority queue">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 w-7 p-0 text-yellow-500 hover:text-yellow-600"
+                                      onClick={() =>
+                                        handleRemoveFromPriority(
+                                          player.steam64Id!,
+                                          player.playerName,
+                                        )
+                                      }
+                                      disabled={actionLoading !== null}
+                                    >
+                                      <FaStar className="h-4 w-4" />
+                                    </Button>
+                                  </Tip>
+                                ) : (
+                                  <Tip content="Add to priority queue">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 w-7 p-0 text-muted-foreground hover:text-yellow-500"
+                                      onClick={() =>
+                                        handleAddToPriority(
+                                          player.steam64Id!,
+                                          player.playerName,
+                                        )
+                                      }
+                                      disabled={actionLoading !== null}
+                                    >
+                                      <FaStar className="h-4 w-4" />
+                                    </Button>
+                                  </Tip>
+                                ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Row 2: IDs */}
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pl-5 text-xs">
                         {getPlayerId(player) ? (
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <span
-                              className="font-mono text-xs text-muted-foreground truncate max-w-[300px]"
-                              title={getPlayerId(player)!}
-                            >
-                              {getPlayerId(player)}
+                          <div className="flex items-center gap-1">
+                            <span className="text-muted-foreground">
+                              {playerIdLabel}:
                             </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-5 w-5 p-0"
-                              onClick={() => handleCopyId(getPlayerId(player)!)}
-                              title={`Copy ${playerIdLabel}`}
-                            >
-                              <FaCopy className="h-3 w-3" />
-                            </Button>
+                            <Tip content={getPlayerId(player)!} side="right">
+                              <span className="font-mono text-foreground/80 truncate max-w-[200px] sm:max-w-[300px]">
+                                {getPlayerId(player)}
+                              </span>
+                            </Tip>
+                            <Tip content={`Copy ${playerIdLabel}`}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-5 w-5 p-0"
+                                onClick={() =>
+                                  handleCopyId(getPlayerId(player)!)
+                                }
+                              >
+                                <FaCopy className="h-3 w-3" />
+                              </Button>
+                            </Tip>
                           </div>
                         ) : (
-                          <span className="font-mono text-xs text-muted-foreground/50 mt-0.5">
+                          <span className="font-mono text-muted-foreground/50">
                             {playerIdLabel} pending...
                           </span>
                         )}
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                          <FaClock className="h-3.5 w-3.5" />
-                          {player.currentSessionStart
-                            ? formatSessionDuration(player.currentSessionStart)
-                            : "—"}
-                        </div>
-                        {getPlayerId(player) && (
-                          <div className="flex items-center gap-0.5 ml-1">
-                            {isWhitelisted(getPlayerId(player)) ? (
+                        {player.steam64Id && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-muted-foreground">
+                              Steam ID:
+                            </span>
+                            <Tip content={player.steam64Id} side="right">
+                              <span className="font-mono text-foreground/80">
+                                {player.steam64Id}
+                              </span>
+                            </Tip>
+                            <Tip content="Copy Steam ID">
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-7 w-7 p-0 text-blue-500 hover:text-blue-600"
-                                onClick={() =>
-                                  handleRemoveFromWhitelist(
-                                    getPlayerId(player)!,
-                                    player.playerName,
-                                  )
-                                }
-                                disabled={actionLoading !== null}
-                                title="Remove from whitelist"
+                                className="h-5 w-5 p-0"
+                                onClick={() => handleCopyId(player.steam64Id!)}
                               >
-                                <FaShieldHalved className="h-4 w-4" />
+                                <FaCopy className="h-3 w-3" />
                               </Button>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0 text-muted-foreground hover:text-blue-500"
-                                onClick={() =>
-                                  handleAddToWhitelist(
-                                    getPlayerId(player)!,
-                                    player.playerName,
-                                  )
-                                }
-                                disabled={actionLoading !== null}
-                                title="Add to whitelist"
-                              >
-                                <FaUserShield className="h-4 w-4" />
-                              </Button>
-                            )}
-                            {isBanned(getPlayerId(player)) ? (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0 text-red-500 hover:text-red-600"
-                                onClick={() =>
-                                  handleRemoveFromBanList(
-                                    getPlayerId(player)!,
-                                    player.playerName,
-                                  )
-                                }
-                                disabled={actionLoading !== null}
-                                title="Remove from ban list"
-                              >
-                                <FaUserMinus className="h-4 w-4" />
-                              </Button>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500"
-                                onClick={() =>
-                                  handleAddToBanList(
-                                    getPlayerId(player)!,
-                                    player.playerName,
-                                  )
-                                }
-                                disabled={actionLoading !== null}
-                                title="Add to ban list"
-                              >
-                                <FaUserPlus className="h-4 w-4" />
-                              </Button>
-                            )}
+                            </Tip>
                           </div>
                         )}
                       </div>
@@ -574,134 +933,124 @@ export function PlayersTab({ server }: PlayersTabProps) {
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
 
-          {/* Player History Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FaClock className="h-5 w-5 text-ring" />
-                Player History
+            {/* Player History */}
+            <div className="py-6">
+              <div className="flex items-center gap-2 mb-3">
+                <FaClock className="h-4 w-4 text-ring" />
+                <span className="text-sm font-medium text-muted-foreground">
+                  Player History
+                </span>
                 {players.length > 0 && (
                   <Badge variant="secondary">{players.length}</Badge>
                 )}
-              </CardTitle>
-              <CardDescription>
-                All players who have joined this server
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+              </div>
+
               {players.length === 0 ? (
                 <div className="text-center py-6 text-muted-foreground">
                   <FaUsers className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p>No player history yet</p>
-                  <p className="text-sm mt-1">
+                  <p className="text-sm">No player history yet</p>
+                  <p className="text-xs mt-1">
                     Player data is collected via RCON while the server is
                     running.
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-left text-muted-foreground">
-                        <th className="pb-2 pr-4">Status</th>
-                        <th className="pb-2 pr-4">Player Name</th>
-                        {capabilities?.logParsing && (
-                          <th className="pb-2 pr-4">Character ID</th>
-                        )}
-                        <th className="pb-2 pr-4">Total Playtime</th>
-                        <th className="pb-2 pr-4">Sessions</th>
-                        <th className="pb-2 pr-4">Last Seen</th>
-                        {(hasWhitelist || hasBanList) && (
-                          <th className="pb-2">Actions</th>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[...onlinePlayers, ...offlinePlayers].map((player) => (
-                        <tr
-                          key={player.steamId}
-                          className="border-b border-border/50 last:border-0"
-                        >
-                          <td className="py-2.5 pr-4">
-                            <div className="flex items-center gap-1">
-                              {player.isOnline ? (
-                                <Badge variant="success" className="text-xs">
-                                  Online
-                                </Badge>
-                              ) : (
-                                <Badge variant="secondary" className="text-xs">
-                                  Offline
-                                </Badge>
-                              )}
-                              {getPlayerId(player) &&
-                                isWhitelisted(getPlayerId(player)) && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-[10px] px-1 py-0 border-blue-500 text-blue-500"
-                                  >
-                                    WL
-                                  </Badge>
-                                )}
-                              {getPlayerId(player) &&
-                                isBanned(getPlayerId(player)) && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-[10px] px-1 py-0 border-red-500 text-red-500"
-                                  >
-                                    Ban
-                                  </Badge>
-                                )}
-                            </div>
-                          </td>
-                          <td className="py-2.5 pr-4 font-medium">
-                            {player.playerName}
-                          </td>
-                          {capabilities?.logParsing && (
-                            <td className="py-2.5 pr-4">
-                              {player.characterId ? (
-                                <div className="flex items-center gap-1">
-                                  <span
-                                    className="font-mono text-xs truncate max-w-[200px]"
-                                    title={player.characterId}
-                                  >
-                                    {player.characterId}
-                                  </span>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-5 w-5 p-0"
-                                    onClick={() =>
-                                      handleCopyId(player.characterId!)
-                                    }
-                                    title="Copy Character ID"
-                                  >
-                                    <FaCopy className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              ) : (
-                                <span className="text-xs text-muted-foreground/50">
-                                  —
-                                </span>
-                              )}
-                            </td>
+                <div className="space-y-2">
+                  {[...onlinePlayers, ...offlinePlayers].map((player) => (
+                    <div
+                      key={player.steamId}
+                      className={`flex flex-col gap-2 p-3 rounded-lg border ${
+                        player.isOnline
+                          ? "bg-muted/50 border-border"
+                          : "bg-muted/20 border-border/50"
+                      }`}
+                    >
+                      {/* Row 1: Status + Name + Badges + Stats + Actions */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {player.isOnline ? (
+                            <Badge
+                              variant="success"
+                              className="text-xs shrink-0"
+                            >
+                              Online
+                            </Badge>
+                          ) : (
+                            <Badge
+                              variant="secondary"
+                              className="text-xs shrink-0"
+                            >
+                              Offline
+                            </Badge>
                           )}
-                          <td className="py-2.5 pr-4">
-                            {formatPlaytime(player.totalPlaytimeSeconds)}
-                          </td>
-                          <td className="py-2.5 pr-4">{player.sessionCount}</td>
-                          <td className="py-2.5 pr-4">
-                            {player.isOnline
-                              ? "Now"
-                              : formatLastSeen(player.lastSeen)}
-                          </td>
-                          {(hasWhitelist || hasBanList) && (
-                            <td className="py-2.5">
-                              {getPlayerId(player) ? (
-                                <div className="flex items-center gap-0.5">
-                                  {isWhitelisted(getPlayerId(player)) ? (
+                          <p className="font-medium truncate text-sm">
+                            {player.playerName}
+                          </p>
+                          {getPlayerId(player) &&
+                            isWhitelisted(getPlayerId(player)) && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] px-1 py-0 border-blue-500 text-blue-500 shrink-0"
+                              >
+                                WL
+                              </Badge>
+                            )}
+                          {getPlayerId(player) &&
+                            isBanned(getPlayerId(player)) && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] px-1 py-0 border-red-500 text-red-500 shrink-0"
+                              >
+                                Ban
+                              </Badge>
+                            )}
+                          {hasPriority &&
+                            player.steam64Id &&
+                            isPrioritized(player.steam64Id) && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] px-1 py-0 border-yellow-500 text-yellow-500 shrink-0"
+                              >
+                                Prio
+                              </Badge>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <div className="hidden sm:flex items-center gap-3 text-xs">
+                            <span>
+                              <span className="text-muted-foreground">
+                                Playtime:
+                              </span>{" "}
+                              <span className="text-foreground/80">
+                                {formatPlaytime(player.totalPlaytimeSeconds)}
+                              </span>
+                            </span>
+                            <span>
+                              <span className="text-muted-foreground">
+                                Sessions:
+                              </span>{" "}
+                              <span className="text-foreground/80">
+                                {player.sessionCount}
+                              </span>
+                            </span>
+                            <span>
+                              <span className="text-muted-foreground">
+                                Last seen:
+                              </span>{" "}
+                              <span className="text-foreground/80">
+                                {player.isOnline
+                                  ? "Now"
+                                  : formatLastSeen(player.lastSeen)}
+                              </span>
+                            </span>
+                          </div>
+                          {(hasWhitelist || hasBanList || hasPriority) &&
+                            getPlayerId(player) && (
+                              <div className="flex items-center gap-0.5">
+                                {isWhitelisted(getPlayerId(player)) ? (
+                                  <Tip content="Remove from whitelist">
                                     <Button
                                       variant="ghost"
                                       size="sm"
@@ -713,11 +1062,12 @@ export function PlayersTab({ server }: PlayersTabProps) {
                                         )
                                       }
                                       disabled={actionLoading !== null}
-                                      title="Remove from whitelist"
                                     >
                                       <FaShieldHalved className="h-3.5 w-3.5" />
                                     </Button>
-                                  ) : (
+                                  </Tip>
+                                ) : (
+                                  <Tip content="Add to whitelist">
                                     <Button
                                       variant="ghost"
                                       size="sm"
@@ -729,12 +1079,13 @@ export function PlayersTab({ server }: PlayersTabProps) {
                                         )
                                       }
                                       disabled={actionLoading !== null}
-                                      title="Add to whitelist"
                                     >
                                       <FaUserShield className="h-3.5 w-3.5" />
                                     </Button>
-                                  )}
-                                  {isBanned(getPlayerId(player)) ? (
+                                  </Tip>
+                                )}
+                                {isBanned(getPlayerId(player)) ? (
+                                  <Tip content="Remove from ban list">
                                     <Button
                                       variant="ghost"
                                       size="sm"
@@ -746,11 +1097,12 @@ export function PlayersTab({ server }: PlayersTabProps) {
                                         )
                                       }
                                       disabled={actionLoading !== null}
-                                      title="Remove from ban list"
                                     >
                                       <FaUserMinus className="h-3.5 w-3.5" />
                                     </Button>
-                                  ) : (
+                                  </Tip>
+                                ) : (
+                                  <Tip content="Add to ban list">
                                     <Button
                                       variant="ghost"
                                       size="sm"
@@ -762,160 +1114,261 @@ export function PlayersTab({ server }: PlayersTabProps) {
                                         )
                                       }
                                       disabled={actionLoading !== null}
-                                      title="Add to ban list"
                                     >
                                       <FaUserPlus className="h-3.5 w-3.5" />
                                     </Button>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-xs text-muted-foreground/50">
-                                  —
-                                </span>
-                              )}
-                            </td>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                                  </Tip>
+                                )}
+                                {hasPriority &&
+                                  player.steam64Id &&
+                                  (isPrioritized(player.steam64Id) ? (
+                                    <Tip content="Remove from priority queue">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 w-7 p-0 text-yellow-500 hover:text-yellow-600"
+                                        onClick={() =>
+                                          handleRemoveFromPriority(
+                                            player.steam64Id!,
+                                            player.playerName,
+                                          )
+                                        }
+                                        disabled={actionLoading !== null}
+                                      >
+                                        <FaStar className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </Tip>
+                                  ) : (
+                                    <Tip content="Add to priority queue">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 w-7 p-0 text-muted-foreground hover:text-yellow-500"
+                                        onClick={() =>
+                                          handleAddToPriority(
+                                            player.steam64Id!,
+                                            player.playerName,
+                                          )
+                                        }
+                                        disabled={actionLoading !== null}
+                                      >
+                                        <FaStar className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </Tip>
+                                  ))}
+                              </div>
+                            )}
+                        </div>
+                      </div>
+
+                      {/* Row 2: IDs + Stats (mobile) */}
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                        {getPlayerId(player) && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-muted-foreground">
+                              {playerIdLabel}:
+                            </span>
+                            <Tip content={getPlayerId(player)!} side="right">
+                              <span className="font-mono text-foreground/80 truncate max-w-[180px] sm:max-w-[200px]">
+                                {getPlayerId(player)}
+                              </span>
+                            </Tip>
+                            <Tip content={`Copy ${playerIdLabel}`}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-5 w-5 p-0"
+                                onClick={() =>
+                                  handleCopyId(getPlayerId(player)!)
+                                }
+                              >
+                                <FaCopy className="h-3 w-3" />
+                              </Button>
+                            </Tip>
+                          </div>
+                        )}
+                        {player.steam64Id && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-muted-foreground">
+                              Steam ID:
+                            </span>
+                            <Tip content={player.steam64Id} side="right">
+                              <span className="font-mono text-foreground/80">
+                                {player.steam64Id}
+                              </span>
+                            </Tip>
+                            <Tip content="Copy Steam ID">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-5 w-5 p-0"
+                                onClick={() => handleCopyId(player.steam64Id!)}
+                              >
+                                <FaCopy className="h-3 w-3" />
+                              </Button>
+                            </Tip>
+                          </div>
+                        )}
+                        <div className="flex sm:hidden items-center gap-3">
+                          <span>
+                            <span className="text-muted-foreground">
+                              Playtime:
+                            </span>{" "}
+                            <span className="text-foreground/80">
+                              {formatPlaytime(player.totalPlaytimeSeconds)}
+                            </span>
+                          </span>
+                          <span>
+                            <span className="text-muted-foreground">
+                              Sessions:
+                            </span>{" "}
+                            <span className="text-foreground/80">
+                              {player.sessionCount}
+                            </span>
+                          </span>
+                          <span>
+                            <span className="text-muted-foreground">
+                              Last seen:
+                            </span>{" "}
+                            <span className="text-foreground/80">
+                              {player.isOnline
+                                ? "Now"
+                                : formatLastSeen(player.lastSeen)}
+                            </span>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </TabsContent>
 
-        {/* Whitelist Tab */}
+        {/* ── Whitelist Tab ── */}
         {hasWhitelist && (
-          <TabsContent value="whitelist">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <FaShield className="h-5 w-5 text-ring" />
-                      Whitelist
-                    </CardTitle>
-                    <CardDescription>
-                      Players with priority queue access (
-                      {countEntries(whitelistContent)} entries)
-                    </CardDescription>
-                  </div>
-                  {isPlayerListEditable && (
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setWhitelistContent(originalWhitelist)}
-                        disabled={!whitelistChanged || saving}
-                      >
-                        <FaRotateLeft className="h-4 w-4 mr-2" />
-                        Reset
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={handleSaveWhitelist}
-                        disabled={!whitelistChanged || saving}
-                      >
-                        <FaFloppyDisk className="h-4 w-4 mr-2" />
-                        {saving ? "Saving..." : "Save"}
-                      </Button>
-                    </div>
-                  )}
+          <TabsContent
+            value="whitelist"
+            className="flex-1 min-h-0 mt-0 px-4 py-4"
+          >
+            <div className={cn("h-full", contentClass)}>
+              {filesLoading ? (
+                <div className="text-center py-8 text-muted-foreground text-sm">
+                  Loading...
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {filesLoading ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    Loading...
-                  </div>
-                ) : (
-                  <>
-                    <Textarea
-                      className="font-mono text-sm h-[400px]"
-                      value={whitelistContent}
-                      onChange={(e) => setWhitelistContent(e.target.value)}
-                      placeholder={`// Add player IDs here (one per line)`}
-                      spellCheck={false}
-                      readOnly={!isPlayerListEditable}
-                    />
-                    <p className="text-sm text-muted-foreground">
-                      {isPlayerListEditable
-                        ? "Add one player ID per line. Lines starting with // are comments. You can also use the player action buttons to add/remove players."
-                        : "This list is managed via the player action buttons. Use the buttons in the Players tab to add or remove entries."}
-                    </p>
-                  </>
-                )}
-              </CardContent>
-            </Card>
+              ) : (
+                <div className="rounded-md border overflow-hidden h-full min-h-[300px] flex flex-col">
+                  <Textarea
+                    className="font-mono text-sm flex-1 resize-none rounded-none border-0 focus-visible:ring-0"
+                    value={whitelistContent}
+                    onChange={(e) => setWhitelistContent(e.target.value)}
+                    placeholder={`// Add player IDs here (one per line)`}
+                    spellCheck={false}
+                    readOnly={!isPlayerListEditable}
+                  />
+                </div>
+              )}
+            </div>
           </TabsContent>
         )}
 
-        {/* Ban List Tab */}
+        {/* ── Ban List Tab ── */}
         {hasBanList && (
-          <TabsContent value="ban">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <FaBan className="h-5 w-5 text-ring" />
-                      Ban List
-                    </CardTitle>
-                    <CardDescription>
-                      Banned players ({countEntries(banContent)} entries)
-                    </CardDescription>
-                  </div>
-                  {isPlayerListEditable && (
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setBanContent(originalBan)}
-                        disabled={!banChanged || saving}
-                      >
-                        <FaRotateLeft className="h-4 w-4 mr-2" />
-                        Reset
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={handleSaveBan}
-                        disabled={!banChanged || saving}
-                      >
-                        <FaFloppyDisk className="h-4 w-4 mr-2" />
-                        {saving ? "Saving..." : "Save"}
-                      </Button>
-                    </div>
-                  )}
+          <TabsContent value="ban" className="flex-1 min-h-0 mt-0 px-4 py-4">
+            <div className={cn("h-full", contentClass)}>
+              {filesLoading ? (
+                <div className="text-center py-8 text-muted-foreground text-sm">
+                  Loading...
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {filesLoading ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    Loading...
-                  </div>
-                ) : (
-                  <>
-                    <Textarea
-                      className="font-mono text-sm h-[400px]"
-                      value={banContent}
-                      onChange={(e) => setBanContent(e.target.value)}
-                      placeholder={`// Add player IDs of banned players here (one per line)`}
-                      spellCheck={false}
-                      readOnly={!isPlayerListEditable}
-                    />
-                    <p className="text-sm text-muted-foreground">
-                      {isPlayerListEditable
-                        ? "Add one player ID per line. Lines starting with // are comments. You can also use the player action buttons to add/remove players."
-                        : "This list is managed via the player action buttons. Use the buttons in the Players tab to add or remove entries."}
-                    </p>
-                  </>
-                )}
-              </CardContent>
-            </Card>
+              ) : (
+                <div className="rounded-md border overflow-hidden h-full min-h-[300px] flex flex-col">
+                  <Textarea
+                    className="font-mono text-sm flex-1 resize-none rounded-none border-0 focus-visible:ring-0"
+                    value={banContent}
+                    onChange={(e) => setBanContent(e.target.value)}
+                    placeholder={`// Add player IDs of banned players here (one per line)`}
+                    spellCheck={false}
+                    readOnly={!isPlayerListEditable}
+                  />
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        )}
+
+        {/* ── Priority Queue Tab ── */}
+        {hasPriority && (
+          <TabsContent
+            value="priority"
+            className="flex-1 min-h-0 mt-0 px-4 py-4"
+          >
+            <div className={cn("h-full", contentClass)}>
+              {filesLoading ? (
+                <div className="text-center py-8 text-muted-foreground text-sm">
+                  Loading...
+                </div>
+              ) : (
+                <div className="rounded-md border overflow-hidden h-full min-h-[300px] flex flex-col">
+                  <Textarea
+                    className="font-mono text-sm flex-1 resize-none rounded-none border-0 focus-visible:ring-0"
+                    value={priorityContent}
+                    onChange={(e) => setPriorityContent(e.target.value)}
+                    placeholder={`// Add Steam IDs here (one per line)\n// Prioritized players get first position in the login queue`}
+                    spellCheck={false}
+                  />
+                </div>
+              )}
+            </div>
           </TabsContent>
         )}
       </Tabs>
+
+      {/* Direct Message Dialog */}
+      <Dialog open={messageDialogOpen} onOpenChange={setMessageDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Send Message</DialogTitle>
+            <DialogDescription>
+              Send a direct message to{" "}
+              <span className="font-medium text-foreground">
+                {messageTarget?.playerName}
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSendDirectMessage();
+            }}
+          >
+            <Input
+              ref={messageInputRef}
+              value={messageText}
+              onChange={(e) => setMessageText(e.target.value)}
+              placeholder="Type your message..."
+              disabled={messageSending}
+              autoFocus
+            />
+            <DialogFooter className="mt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setMessageDialogOpen(false)}
+                disabled={messageSending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={!messageText.trim() || messageSending}
+              >
+                {messageSending ? "Sending..." : "Send"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,4 +1,9 @@
-import { Router, type Request, type Response } from "express";
+import {
+  Router,
+  type Request,
+  type Response,
+  type NextFunction,
+} from "express";
 import path from "path";
 import os from "os";
 import fs from "fs";
@@ -6,7 +11,8 @@ import fsPromises from "fs/promises";
 import { exec } from "child_process";
 import multer from "multer";
 import AdmZip from "adm-zip";
-import { logger, broadcast } from "../index.js";
+import { logger } from "../core/logger.js";
+import { broadcast } from "../core/broadcast.js";
 import {
   getAllServers,
   getServerById,
@@ -17,12 +23,10 @@ import {
   updateServerPorts,
   updateServerName,
   updateServerAutoRestart,
-  deleteServer,
   getModsByServerId,
   createMod,
   updateModEnabled,
   updateModLoadOrder,
-  deleteMod,
   getOnlinePlayers,
   getPlayerSummaries,
   getLogSettings as getLogSettingsFromDb,
@@ -42,7 +46,14 @@ import {
   upsertUpdateRestartSettings,
 } from "../db/index.js";
 import { getConfig } from "../services/config.js";
-import { getSteamConfig, getUsedPorts } from "../db/index.js";
+import {
+  getSteamConfig,
+  getUsedPorts,
+  getBackupsByServerId,
+  getBackupSettings as getBackupSettingsFromDb,
+  upsertBackupSettings,
+  updateBackupRecord,
+} from "../db/index.js";
 import {
   getAllGameDefinitions,
   getGameDefinition,
@@ -54,14 +65,10 @@ import {
 import { STEAM_RESERVED_PORT_RANGES } from "@game-servum/shared";
 import { readGameFile } from "../games/encoding.js";
 import {
-  installServer,
-  cancelInstallation,
   cancelAndCleanupInstallation,
   isInstalling,
   getInstallationProgress,
   queueInstallation,
-  isQueued,
-  removeFromQueue,
 } from "../services/serverInstall.js";
 import {
   startServer,
@@ -72,18 +79,31 @@ import {
 } from "../services/serverProcess.js";
 import { startSchedule, clearSchedule } from "../services/scheduler.js";
 import { reloadMessageBroadcaster } from "../services/messageBroadcaster.js";
+import { getRconConnection } from "../services/playerTracker.js";
 import { BUILTIN_VARIABLES } from "../services/variableResolver.js";
 import {
   triggerUpdateCheck,
   startUpdateChecker,
+  hasPendingUpdateRestart,
+  applyServerUpdates,
 } from "../services/updateChecker.js";
 import { performBackgroundDeletion } from "../services/serverDelete.js";
+import {
+  createBackup,
+  restoreBackup,
+  deleteBackup,
+  isBackupRunning,
+  backupFileExists,
+  getBackupFilePath,
+  getBackupStoragePath,
+} from "../services/backupManager.js";
 import {
   parseWorkshopId,
   getWorkshopModInfo,
   installMod,
   uninstallMod,
   generateModParams,
+  cancelModInstallation,
 } from "../services/modManager.js";
 import {
   getCurrentLogs,
@@ -251,7 +271,7 @@ router.post("/", async (req: Request, res: Response) => {
   // Check for port conflicts with existing servers (using firewallRules as source of truth)
   const requestedPort = body.port || gameDef.defaultPort;
   const createQpOffset = getQueryPortOffset(gameDef);
-  const requestedQueryPort =
+  const _requestedQueryPort =
     body.queryPort ||
     (createQpOffset != null ? requestedPort + createQpOffset : null);
 
@@ -361,7 +381,11 @@ router.get("/:id", (req: Request, res: Response) => {
   // Add installation status
   const installing = isInstalling(id);
 
-  res.json({ ...server, installing });
+  res.json({
+    ...server,
+    installing,
+    hasPendingUpdateRestart: hasPendingUpdateRestart(id),
+  });
 });
 
 // GET /api/servers/:id/check - Check server requirements before starting
@@ -408,6 +432,21 @@ router.post("/:id/start", async (req: Request, res: Response) => {
 
   if (server.status === "deleting") {
     return res.status(400).json({ error: "Server is being deleted" });
+  }
+
+  // Pre-start backup if enabled
+  const backupSettings = getBackupSettingsFromDb(id);
+  if (backupSettings?.backupBeforeStart) {
+    logger.info(`[Backup] Creating pre-start backup for server ${id}`);
+    const backupResult = await createBackup(id, {
+      trigger: "pre-start",
+      skipServerLifecycle: true,
+    });
+    if (!backupResult.success) {
+      logger.warn(
+        `[Backup] Pre-start backup failed for server ${id}: ${backupResult.message}`,
+      );
+    }
   }
 
   const result = startServer(id);
@@ -723,13 +762,19 @@ router.get("/:id/schedule", (req: Request, res: Response) => {
 // PUT /api/servers/:id/schedule - Create or update restart schedule
 router.put("/:id/schedule", (req: Request, res: Response) => {
   const id = parseInt(req.params.id, 10);
-  const { intervalHours, warningMinutes, warningMessage, enabled } =
-    req.body as {
-      intervalHours: number;
-      warningMinutes: number[];
-      warningMessage: string;
-      enabled: boolean;
-    };
+  const {
+    intervalHours,
+    warningMinutes,
+    warningMessage,
+    enabled,
+    restartTime,
+  } = req.body as {
+    intervalHours: number;
+    warningMinutes: number[];
+    warningMessage: string;
+    enabled: boolean;
+    restartTime?: string | null;
+  };
   const server = getServerById(id);
 
   if (!server) {
@@ -759,12 +804,29 @@ router.put("/:id/schedule", (req: Request, res: Response) => {
     return res.status(400).json({ error: "Warning message is required" });
   }
 
+  // Validate restartTime format if provided
+  const normalizedRestartTime = restartTime || null;
+  if (normalizedRestartTime !== null) {
+    if (!/^\d{2}:\d{2}$/.test(normalizedRestartTime)) {
+      return res
+        .status(400)
+        .json({ error: "Restart time must be in HH:mm format" });
+    }
+    const [h, m] = normalizedRestartTime.split(":").map(Number);
+    if (h < 0 || h > 23 || m < 0 || m > 59) {
+      return res
+        .status(400)
+        .json({ error: "Restart time must be a valid time (00:00 - 23:59)" });
+    }
+  }
+
   const schedule = upsertSchedule(
     id,
     intervalHours,
     warningMinutes,
     warningMessage.trim(),
     enabled,
+    normalizedRestartTime,
   );
 
   // Start or clear the schedule based on enabled state
@@ -1086,6 +1148,35 @@ router.post("/:id/check-updates", async (req: Request, res: Response) => {
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Unknown error";
     res.status(500).json({ error: `Failed to check for updates: ${msg}` });
+  }
+});
+
+// POST /api/servers/:id/apply-updates - Apply pending updates to a stopped server
+router.post("/:id/apply-updates", async (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  if (isServerRunning(id)) {
+    return res
+      .status(409)
+      .json({ error: "Server is running — stop it before applying updates" });
+  }
+
+  try {
+    // Run updates in background, respond immediately
+    res.json({
+      success: true,
+      message: "Update started",
+    });
+
+    await applyServerUpdates(id);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    logger.error(`[Routes] Failed to apply updates for server ${id}: ${msg}`);
   }
 });
 
@@ -1748,7 +1839,10 @@ router.put("/:id/logs/settings", (req: Request, res: Response) => {
 // DELETE /api/servers/:id - Delete server and all files
 router.delete("/:id", async (req: Request, res: Response) => {
   const id = parseInt(req.params.id, 10);
-  const { confirmName } = req.body as { confirmName?: string };
+  const { confirmName, deleteBackups } = req.body as {
+    confirmName?: string;
+    deleteBackups?: boolean;
+  };
   const server = getServerById(id);
 
   if (!server) {
@@ -1784,6 +1878,7 @@ router.delete("/:id", async (req: Request, res: Response) => {
     server.gameId,
     server.port,
     server.installPath,
+    deleteBackups === true,
   );
 
   res.status(202).json({
@@ -1942,6 +2037,35 @@ router.post(
   },
 );
 
+// POST /api/servers/:id/mods/:modId/cancel - Cancel an active mod download
+router.post("/:id/mods/:modId/cancel", (req: Request, res: Response) => {
+  const serverId = parseInt(req.params.id, 10);
+  const modId = parseInt(req.params.modId, 10);
+
+  const server = getServerById(serverId);
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  const mods = getModsByServerId(serverId);
+  const mod = mods.find((m) => m.id === modId);
+  if (!mod) {
+    return res.status(404).json({ error: "Mod not found" });
+  }
+
+  const result = cancelModInstallation(modId);
+  if (result.success) {
+    broadcast("mod:error", {
+      modId,
+      serverId,
+      error: "Installation cancelled by user",
+    });
+    res.json(result);
+  } else {
+    res.status(404).json({ error: result.message });
+  }
+});
+
 // DELETE /api/servers/:id/mods/:modId - Remove a mod
 router.delete("/:id/mods/:modId", async (req: Request, res: Response) => {
   const serverId = parseInt(req.params.id, 10);
@@ -2008,6 +2132,148 @@ router.post("/:id/mods/reorder", (req: Request, res: Response) => {
   }
 
   res.json({ success: true, message: "Mod order updated" });
+});
+
+// POST /api/servers/:id/mods/export-modlist - Export mods as mod list files
+router.post("/:id/mods/export-modlist", (req: Request, res: Response) => {
+  const serverId = parseInt(req.params.id, 10);
+  const { includeDisabled } = req.body as { includeDisabled?: boolean };
+
+  const server = getServerById(serverId);
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  const adapter = getGameAdapter(server.gameId);
+  if (
+    !adapter?.definition.capabilities.modListFiles ||
+    !adapter.exportModList
+  ) {
+    return res
+      .status(400)
+      .json({ error: "Mod list files are not supported for this game" });
+  }
+
+  const mods = getModsByServerId(serverId);
+  const backupDir = getBackupStoragePath(serverId);
+
+  try {
+    const result = adapter.exportModList(
+      mods,
+      server.installPath,
+      backupDir,
+      includeDisabled ?? false,
+    );
+
+    const parts: string[] = [];
+    if (result.modListWritten) parts.push("mod_list.txt");
+    if (result.serverModListWritten) parts.push("server_mod_list.txt");
+
+    const backupParts: string[] = [];
+    if (result.backups.modList) backupParts.push(result.backups.modList);
+    if (result.backups.serverModList)
+      backupParts.push(result.backups.serverModList);
+
+    let message =
+      parts.length > 0
+        ? `Exported ${parts.join(" and ")}`
+        : "No mods to export";
+    if (backupParts.length > 0) {
+      message += `. Backups created: ${backupParts.join(", ")}`;
+    }
+
+    res.json({
+      success: true,
+      message,
+      modListWritten: result.modListWritten,
+      serverModListWritten: result.serverModListWritten,
+      backups: result.backups,
+    });
+  } catch (err) {
+    logger.error(
+      `[Mods] Failed to export mod list for server ${serverId}: ${(err as Error).message}`,
+    );
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// POST /api/servers/:id/mods/import-modlist - Import mods from mod list files
+router.post("/:id/mods/import-modlist", async (req: Request, res: Response) => {
+  const serverId = parseInt(req.params.id, 10);
+
+  const server = getServerById(serverId);
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter?.definition.capabilities.modListFiles || !adapter.parseModList) {
+    return res
+      .status(400)
+      .json({ error: "Mod list files are not supported for this game" });
+  }
+
+  const parsed = adapter.parseModList(server.installPath);
+  const allWorkshopIds = [
+    ...parsed.clientMods.map((id) => ({ workshopId: id, isServerMod: false })),
+    ...parsed.serverMods.map((id) => ({ workshopId: id, isServerMod: true })),
+  ];
+
+  if (allWorkshopIds.length === 0) {
+    return res.json({
+      success: true,
+      message: "No mods found in mod list files",
+      imported: 0,
+      skipped: 0,
+    });
+  }
+
+  const existingMods = getModsByServerId(serverId);
+  const existingWorkshopIds = new Set(existingMods.map((m) => m.workshopId));
+
+  let imported = 0;
+  let skipped = 0;
+
+  for (const entry of allWorkshopIds) {
+    if (existingWorkshopIds.has(entry.workshopId)) {
+      skipped++;
+      continue;
+    }
+
+    let modName = `Workshop Mod ${entry.workshopId}`;
+    try {
+      const modInfo = await getWorkshopModInfo(entry.workshopId);
+      if (modInfo?.name) {
+        modName = modInfo.name;
+      }
+    } catch (e) {
+      logger.info(`Could not fetch mod info for ${entry.workshopId}:`, e);
+    }
+
+    const modId = createMod({
+      serverId,
+      workshopId: entry.workshopId,
+      name: modName,
+      isServerMod: entry.isServerMod,
+    });
+
+    installMod(modId).catch((err) => {
+      logger.error(`Mod installation failed for ${modId}:`, err);
+    });
+
+    existingWorkshopIds.add(entry.workshopId);
+    imported++;
+  }
+
+  res.json({
+    success: true,
+    message:
+      imported > 0
+        ? `Imported ${imported} mod${imported !== 1 ? "s" : ""}, skipped ${skipped} already installed`
+        : `All ${skipped} mods are already installed`,
+    imported,
+    skipped,
+  });
 });
 
 // ==================== Player Routes ====================
@@ -2219,6 +2485,159 @@ router.get("/:id/players/ban-content", (req: Request, res: Response) => {
   const content = adapter.getPlayerListContent(server, "ban");
   res.json({ content });
 });
+
+// POST /api/servers/:id/players/priority - Add a player to the priority queue
+router.post("/:id/players/priority", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const { steamId, playerName } = req.body as {
+    steamId: string;
+    playerName?: string;
+  };
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  if (!steamId || steamId.length < 10) {
+    return res.status(400).json({ error: "Valid Steam ID is required" });
+  }
+
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter) {
+    return res.status(400).json({ error: "Unknown game type" });
+  }
+
+  try {
+    const result = adapter.addToPlayerList(
+      server,
+      "priority",
+      steamId,
+      playerName,
+    );
+    if (!result.success) {
+      return res.status(400).json({ error: result.message });
+    }
+    res.json({ success: true, message: result.message });
+  } catch (err) {
+    res.status(500).json({
+      error: `Failed to update priority queue: ${(err as Error).message}`,
+    });
+  }
+});
+
+// DELETE /api/servers/:id/players/priority - Remove a player from the priority queue
+router.delete("/:id/players/priority", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const { steamId } = req.body as { steamId: string };
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  if (!steamId) {
+    return res.status(400).json({ error: "Steam ID is required" });
+  }
+
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter) {
+    return res.status(400).json({ error: "Unknown game type" });
+  }
+
+  try {
+    const result = adapter.removeFromPlayerList(server, "priority", steamId);
+    if (!result.success) {
+      return res.status(404).json({ error: result.message });
+    }
+    res.json({ success: true, message: result.message });
+  } catch (err) {
+    res.status(500).json({
+      error: `Failed to update priority queue: ${(err as Error).message}`,
+    });
+  }
+});
+
+// GET /api/servers/:id/players/priority-content - Get priority queue content as text
+router.get("/:id/players/priority-content", (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const server = getServerById(id);
+
+  if (!server) {
+    return res.status(404).json({ error: "Server not found" });
+  }
+
+  const adapter = getGameAdapter(server.gameId);
+  if (!adapter) {
+    return res.status(400).json({ error: "Unknown game type" });
+  }
+
+  const content = adapter.getPlayerListContent(server, "priority");
+  res.json({ content });
+});
+
+// POST /api/servers/:id/players/:playerId/message - Send a direct message to a player
+router.post(
+  "/:id/players/:playerId/message",
+  async (req: Request, res: Response) => {
+    const id = parseInt(req.params.id, 10);
+    const { playerId } = req.params;
+    const { message, playerName } = req.body as {
+      message: string;
+      playerName?: string;
+    };
+    const server = getServerById(id);
+
+    if (!server) {
+      return res.status(404).json({ error: "Server not found" });
+    }
+
+    if (
+      !message ||
+      typeof message !== "string" ||
+      message.trim().length === 0
+    ) {
+      return res.status(400).json({ error: "Message is required" });
+    }
+
+    if (server.status !== "running") {
+      return res.status(400).json({ error: "Server is not running" });
+    }
+
+    const adapter = getGameAdapter(server.gameId);
+    if (!adapter?.sendDirectMessage) {
+      return res
+        .status(400)
+        .json({ error: "This game does not support direct messages" });
+    }
+
+    const rcon = getRconConnection(server.id);
+    if (!rcon || !rcon.isConnected()) {
+      return res.status(400).json({ error: "RCON is not connected" });
+    }
+
+    try {
+      const sent = await adapter.sendDirectMessage(
+        rcon,
+        playerId,
+        playerName || "",
+        message.trim(),
+      );
+      if (!sent) {
+        return res.status(404).json({ error: "Player not found on server" });
+      }
+      res.json({ success: true, message: "Message sent" });
+    } catch (err) {
+      logger.error(
+        `[Servers] Failed to send direct message to ${playerId} on server ${id}:`,
+        err,
+      );
+      res.status(500).json({
+        error: `Failed to send message: ${(err as Error).message}`,
+      });
+    }
+  },
+);
 
 // ==================== FIREWALL ROUTES ====================
 
@@ -2482,6 +2901,102 @@ router.get("/:id/browse/tree", (req: Request, res: Response) => {
 
   res.json({ root: rootKey, tree });
 });
+
+// GET /api/servers/:id/browse/list - List a single directory level (lazy-loading)
+router.get(
+  "/:id/browse/list",
+  async (req: Request, res: Response): Promise<void> => {
+    const id = parseInt(req.params.id, 10);
+    const rootKey = req.query.root as string;
+    const dirPath = (req.query.path as string) || ".";
+    const server = getServerById(id);
+
+    if (!server) {
+      res.status(404).json({ error: "Server not found" });
+      return;
+    }
+
+    if (!rootKey) {
+      res.status(400).json({ error: "Query parameter 'root' is required" });
+      return;
+    }
+
+    const resolved = resolveAndValidateBrowsePath(server, rootKey, dirPath);
+    if ("error" in resolved) {
+      res.status(400).json({ error: resolved.error });
+      return;
+    }
+
+    try {
+      const stat = await fsPromises.stat(resolved.absolutePath);
+      if (!stat.isDirectory()) {
+        res.status(400).json({ error: "Path is not a directory" });
+        return;
+      }
+
+      const entries = await fsPromises.readdir(resolved.absolutePath, {
+        withFileTypes: true,
+      });
+
+      // Sort: directories first, then files, alphabetically
+      const sorted = entries.sort((a, b) => {
+        if (a.isDirectory() && !b.isDirectory()) return -1;
+        if (!a.isDirectory() && b.isDirectory()) return 1;
+        return a.name.localeCompare(b.name);
+      });
+
+      const result: {
+        name: string;
+        type: "file" | "directory";
+        size?: number;
+        extension?: string;
+        editable?: boolean;
+        hasChildren?: boolean;
+      }[] = [];
+
+      for (const entry of sorted) {
+        const fullPath = path.join(resolved.absolutePath, entry.name);
+        if (entry.isDirectory()) {
+          // Check if directory has any children (non-recursive, lightweight)
+          let hasChildren = false;
+          try {
+            const children = await fsPromises.readdir(fullPath, {
+              recursive: false,
+            });
+            hasChildren = children.length > 0;
+          } catch {
+            // Can't read → treat as empty
+          }
+          result.push({
+            name: entry.name,
+            type: "directory",
+            hasChildren,
+          });
+        } else if (entry.isFile()) {
+          try {
+            const stats = await fsPromises.stat(fullPath);
+            const ext = path.extname(entry.name).toLowerCase();
+            result.push({
+              name: entry.name,
+              type: "file",
+              size: stats.size,
+              extension: ext || undefined,
+              editable: isTextFile(entry.name),
+            });
+          } catch {
+            // Skip files we can't stat
+          }
+        }
+      }
+
+      res.json({ path: dirPath, entries: result });
+    } catch (err) {
+      res.status(500).json({
+        error: `Failed to list directory: ${(err as Error).message}`,
+      });
+    }
+  },
+);
 
 // GET /api/servers/:id/browse/file - Read a file
 router.get("/:id/browse/file", (req: Request, res: Response) => {
@@ -2992,13 +3507,230 @@ router.post(
 
 // Handle multer file-size errors
 router.use(
-  (err: any, _req: Request, res: Response, next: (err?: any) => void) => {
+  (
+    err: Error & { code?: string },
+    _req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
     if (err && err.code === "LIMIT_FILE_SIZE") {
       return res.status(413).json({ error: "File too large (max 500 MB)" });
     }
     next(err);
   },
 );
+
+// ── Backup Endpoints ─────────────────────────────────────────────────
+
+// List backups for a server
+router.get("/:id/backups", (req: Request, res: Response) => {
+  const serverId = parseInt(req.params.id);
+  const server = getServerById(serverId);
+  if (!server) return res.status(404).json({ error: "Server not found" });
+
+  const backups = getBackupsByServerId(serverId);
+  const enriched = backups.map((b) => ({
+    ...b,
+    fileExists:
+      b.status === "success" ? backupFileExists(serverId, b.id) : undefined,
+  }));
+  res.json({ backups: enriched });
+});
+
+// Create a new backup
+router.post("/:id/backups", async (req: Request, res: Response) => {
+  const serverId = parseInt(req.params.id);
+  const server = getServerById(serverId);
+  if (!server) return res.status(404).json({ error: "Server not found" });
+
+  if (isBackupRunning(serverId)) {
+    return res
+      .status(409)
+      .json({ error: "A backup is already running for this server" });
+  }
+
+  const { name, tag } = req.body || {};
+
+  // Start backup in background (non-blocking)
+  createBackup(serverId, {
+    name: name || undefined,
+    tag: tag || undefined,
+    trigger: "manual",
+  }).catch((err) =>
+    logger.error(`[Backup] Unhandled error: ${(err as Error).message}`),
+  );
+
+  res.json({ success: true, message: "Backup started" });
+});
+
+// Delete a backup
+router.delete("/:id/backups/:backupId", (req: Request, res: Response) => {
+  const serverId = parseInt(req.params.id);
+  const server = getServerById(serverId);
+  if (!server) return res.status(404).json({ error: "Server not found" });
+
+  const result = deleteBackup(serverId, req.params.backupId);
+  if (!result.success) {
+    return res.status(400).json({ error: result.message });
+  }
+  res.json(result);
+});
+
+// Update a backup (name, tag)
+router.patch("/:id/backups/:backupId", (req: Request, res: Response) => {
+  const serverId = parseInt(req.params.id);
+  const server = getServerById(serverId);
+  if (!server) return res.status(404).json({ error: "Server not found" });
+
+  const { name, tag } = req.body || {};
+
+  const updates: { name?: string | null; tag?: string | null } = {};
+  if (name !== undefined) {
+    updates.name = typeof name === "string" && name.trim() ? name.trim() : null;
+  }
+  if (tag !== undefined) {
+    updates.tag = typeof tag === "string" && tag.trim() ? tag.trim() : null;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ error: "No fields to update" });
+  }
+
+  updateBackupRecord(req.params.backupId, updates);
+  res.json({ success: true });
+});
+
+// Restore a backup
+router.post(
+  "/:id/backups/:backupId/restore",
+  async (req: Request, res: Response) => {
+    const serverId = parseInt(req.params.id);
+    const server = getServerById(serverId);
+    if (!server) return res.status(404).json({ error: "Server not found" });
+
+    if (isServerRunning(serverId)) {
+      return res
+        .status(400)
+        .json({ error: "Server must be stopped before restoring" });
+    }
+
+    const { preRestoreBackup } = req.body || {};
+    const result = await restoreBackup(serverId, req.params.backupId, {
+      preRestoreBackup: !!preRestoreBackup,
+    });
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.message });
+    }
+    res.json(result);
+  },
+);
+
+// Download a backup zip
+router.get("/:id/backups/:backupId/download", (req: Request, res: Response) => {
+  const serverId = parseInt(req.params.id);
+  const server = getServerById(serverId);
+  if (!server) return res.status(404).json({ error: "Server not found" });
+
+  const filePath = getBackupFilePath(serverId, req.params.backupId);
+  if (!filePath) {
+    return res.status(404).json({ error: "Backup file not found" });
+  }
+
+  res.download(filePath);
+});
+
+// Get backup settings
+router.get("/:id/backup-settings", (req: Request, res: Response) => {
+  const serverId = parseInt(req.params.id);
+  const server = getServerById(serverId);
+  if (!server) return res.status(404).json({ error: "Server not found" });
+
+  const adapter = getGameAdapter(server.gameId);
+  const defaultPaths = adapter
+    ? adapter.getBackupPaths(server)
+    : { savePaths: [], configPaths: [], excludePatterns: [] };
+
+  const settings = getBackupSettingsFromDb(serverId) ?? {
+    serverId,
+    enabled: false,
+    fullBackup: false,
+    backupBeforeStart: false,
+    backupBeforeRestart: false,
+    backupBeforeUpdate: false,
+    retentionCount: 5,
+    retentionDays: 30,
+    customIncludePaths: [
+      ...defaultPaths.savePaths,
+      ...defaultPaths.configPaths,
+    ],
+    customExcludePaths: [...defaultPaths.excludePatterns],
+  };
+
+  // Auto-populate custom paths with defaults when empty (first load or legacy data)
+  if (
+    settings.customIncludePaths.length === 0 &&
+    settings.customExcludePaths.length === 0
+  ) {
+    settings.customIncludePaths = [
+      ...defaultPaths.savePaths,
+      ...defaultPaths.configPaths,
+    ];
+    settings.customExcludePaths = [...defaultPaths.excludePatterns];
+  }
+
+  res.json({ settings, defaultPaths });
+});
+
+// Update backup settings
+router.put("/:id/backup-settings", (req: Request, res: Response) => {
+  const serverId = parseInt(req.params.id);
+  const server = getServerById(serverId);
+  if (!server) return res.status(404).json({ error: "Server not found" });
+
+  const body = req.body || {};
+
+  // Validate numeric fields
+  if (
+    body.retentionCount !== undefined &&
+    (typeof body.retentionCount !== "number" || body.retentionCount < 0)
+  ) {
+    return res
+      .status(400)
+      .json({ error: "retentionCount must be a non-negative number" });
+  }
+  if (
+    body.retentionDays !== undefined &&
+    (typeof body.retentionDays !== "number" || body.retentionDays < 0)
+  ) {
+    return res
+      .status(400)
+      .json({ error: "retentionDays must be a non-negative number" });
+  }
+
+  // Validate array fields
+  if (
+    body.customIncludePaths !== undefined &&
+    !Array.isArray(body.customIncludePaths)
+  ) {
+    return res
+      .status(400)
+      .json({ error: "customIncludePaths must be an array" });
+  }
+  if (
+    body.customExcludePaths !== undefined &&
+    !Array.isArray(body.customExcludePaths)
+  ) {
+    return res
+      .status(400)
+      .json({ error: "customExcludePaths must be an array" });
+  }
+
+  upsertBackupSettings(serverId, body);
+
+  const settings = getBackupSettingsFromDb(serverId);
+  res.json({ success: true, settings });
+});
 
 export { router as serversRouter };
 

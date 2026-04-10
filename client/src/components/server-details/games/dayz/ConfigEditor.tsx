@@ -1,10 +1,3 @@
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -197,14 +190,16 @@ export function DayZConfigEditor({
   }
 
   return (
-    <>
+    <div className="space-y-6">
       {/* Basic Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Basic Settings</CardTitle>
-          <CardDescription>Server name and access settings</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
+      <div className="space-y-3 rounded-lg border p-4">
+        <div className="border-b pb-2">
+          <h3 className="text-sm font-medium">Basic Settings</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Server name and access settings
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="hostname">Server Name (Hostname)</Label>
             <Input
@@ -251,16 +246,18 @@ export function DayZConfigEditor({
               onChange={(e) => handleChange("passwordAdmin", e.target.value)}
             />
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Gameplay Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Gameplay Settings</CardTitle>
-          <CardDescription>Configure gameplay options</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-3">
+      <div className="space-y-3 rounded-lg border p-4">
+        <div className="border-b pb-2">
+          <h3 className="text-sm font-medium">Gameplay Settings</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Configure gameplay options
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
           <div className="space-y-2">
             <Label>Third Person</Label>
             <Select
@@ -357,16 +354,18 @@ export function DayZConfigEditor({
               </SelectContent>
             </Select>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Server Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Server Settings</CardTitle>
-          <CardDescription>Instance and storage configuration</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
+      <div className="space-y-3 rounded-lg border p-4">
+        <div className="border-b pb-2">
+          <h3 className="text-sm font-medium">Server Settings</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Instance and storage configuration
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="instanceId">Instance ID</Label>
             <Input
@@ -452,18 +451,18 @@ export function DayZConfigEditor({
               Auto-replace corrupted persistence files
             </p>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Network Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Network Settings</CardTitle>
-          <CardDescription>
+      <div className="space-y-3 rounded-lg border p-4">
+        <div className="border-b pb-2">
+          <h3 className="text-sm font-medium">Network Settings</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
             Login queue and network configuration
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="loginQueueConcurrentPlayers">
               Concurrent Login Players
@@ -516,16 +515,18 @@ export function DayZConfigEditor({
               Fixed value - communication protocol
             </p>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Time Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Time Settings</CardTitle>
-          <CardDescription>Configure in-game time</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
+      <div className="space-y-3 rounded-lg border p-4">
+        <div className="border-b pb-2">
+          <h3 className="text-sm font-medium">Time Settings</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Configure in-game time
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="serverTime">Server Time</Label>
             <Input
@@ -599,16 +600,18 @@ export function DayZConfigEditor({
               Multiplied with day acceleration
             </p>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Mission Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Mission / Map</CardTitle>
-          <CardDescription>Select the map to play on</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <div className="space-y-3 rounded-lg border p-4">
+        <div className="border-b pb-2">
+          <h3 className="text-sm font-medium">Mission / Map</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Select the map to play on
+          </p>
+        </div>
+        <div>
           <div className="space-y-2">
             <Label>Mission Template</Label>
             <Select
@@ -627,8 +630,8 @@ export function DayZConfigEditor({
               </SelectContent>
             </Select>
           </div>
-        </CardContent>
-      </Card>
-    </>
+        </div>
+      </div>
+    </div>
   );
 }

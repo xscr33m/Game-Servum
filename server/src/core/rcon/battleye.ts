@@ -18,7 +18,7 @@
  */
 
 import dgram from "dgram";
-import { logger } from "../../index.js";
+import { logger } from "../logger.js";
 import type {
   RconClient,
   GenericRconPlayer,
@@ -78,7 +78,7 @@ function buildAckPacket(seq: number): Buffer {
 }
 
 /** BattlEye-specific player info (superset of GenericRconPlayer) */
-export interface BattlEyePlayer {
+interface BattlEyePlayer {
   index: number;
   ip: string;
   port: number;
@@ -210,12 +210,6 @@ export class BattlEyeRcon implements RconClient {
       ping: p.ping,
       ip: p.ip,
     }));
-  }
-
-  /** Get BattlEye-specific player data (includes guid, index, verified status) */
-  async getBattlEyePlayers(): Promise<BattlEyePlayer[]> {
-    const response = await this.sendCommand("players");
-    return parseBattlEyePlayersResponse(response);
   }
 
   async broadcastMessage(message: string): Promise<void> {

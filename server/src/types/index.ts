@@ -1,9 +1,7 @@
 // Re-export all shared types
 export type {
-  ServerStatus,
   GameServer,
   SteamConfig,
-  ModStatus,
   ServerMod,
   PlayerSummary,
   LogSettings,
@@ -12,16 +10,18 @@ export type {
   ServerVariable,
   UpdateRestartSettings,
   CreateServerRequest,
-  SteamLoginRequest,
-  SteamGuardRequest,
-  LoginState,
   SteamCMDStatus,
-  WSMessageType,
-  WSMessage,
-  SystemMetrics,
-  SystemSettings,
-  ApiResponse,
+  BackupMetadata,
+  BackupSettings,
+  BackupTrigger,
 } from "@game-servum/shared";
+
+// Augment IncomingMessage so both Express (req) and WS (info.req) see agentSession
+declare module "http" {
+  interface IncomingMessage {
+    agentSession?: { keyId: number; name: string };
+  }
+}
 
 // Server-only types (not exposed to client)
 
@@ -31,6 +31,7 @@ export interface PlayerSession {
   steamId: string;
   playerName: string;
   characterId: string | null;
+  steam64Id: string | null;
   connectedAt: string;
   disconnectedAt: string | null;
   isOnline: boolean;
@@ -41,6 +42,7 @@ export interface AppConfig {
   steamcmdPath: string;
   serversPath: string;
   dataPath: string;
+  backupsPath: string;
   logsPath: string;
   port: number;
   host: string;

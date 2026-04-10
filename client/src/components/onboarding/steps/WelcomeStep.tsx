@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -6,7 +7,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { FaArrowRight, FaServer, FaGamepad } from "react-icons/fa6";
+import {
+  FaArrowRight,
+  FaServer,
+  FaGamepad,
+  FaCircleQuestion,
+} from "react-icons/fa6";
 import { publicAsset } from "@/lib/assets";
 
 interface WelcomeStepProps {
@@ -17,12 +23,14 @@ interface WelcomeStepProps {
  * First step of onboarding — compact welcome with branding.
  */
 export function WelcomeStep({ onNext }: WelcomeStepProps) {
+  const navigate = useNavigate();
+
   return (
     <Card>
       <CardHeader className="text-center pb-4">
         <div className="flex justify-center mb-4">
           <img
-            src={publicAsset("dashboard-icon.png")}
+            src={publicAsset("commander-icon.png")}
             alt="Game-Servum"
             className="h-24 w-auto drop-shadow-xl"
           />
@@ -34,7 +42,7 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Brief feature highlights */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="flex items-start gap-2.5 rounded-lg border border-border/50 p-3">
             <FaGamepad className="h-4 w-4 text-ring mt-0.5 shrink-0" />
             <div>
@@ -58,6 +66,16 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
         <Button onClick={onNext} className="w-full group" size="lg">
           Get Started
           <FaArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+        </Button>
+
+        <Button
+          variant="outline"
+          className="w-full"
+          size="lg"
+          onClick={() => navigate("/help")}
+        >
+          <FaCircleQuestion className="mr-2 h-4 w-4" />
+          Learn More
         </Button>
 
         <p className="text-xs text-center text-muted-foreground/60">

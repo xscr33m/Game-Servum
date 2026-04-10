@@ -2,11 +2,11 @@
 // Pluggable storage backends for persisting agent credentials.
 // Current: localStorage (plaintext) + Electron IPC (plaintext file in Documents/Game-Servum/data/).
 
-import type { BackendConnection } from "./config";
+import type { BackendConnection } from "@/types";
 
 // ── Storage Backend Interface ──
 
-export interface CredentialStore {
+interface CredentialStore {
   load(): Promise<BackendConnection[]>;
   save(connections: BackendConnection[]): Promise<void>;
   clear(): Promise<void>;
@@ -30,7 +30,7 @@ function stripSensitiveSessionData(
     void sessionToken;
     void tokenExpiresAt;
 
-    // Persist "updating" / "restarting" status so the Dashboard knows
+    // Persist "updating" / "restarting" status so the Commander knows
     // to use unlimited retries after a refresh during an agent update.
     if (conn.status === "updating" || conn.status === "restarting") {
       return {
@@ -74,7 +74,7 @@ export function cleanStaleStatuses(
 
 // ── LocalStorage (Plaintext) ──
 
-export class LocalCredentialStore implements CredentialStore {
+class LocalCredentialStore implements CredentialStore {
   async load(): Promise<BackendConnection[]> {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
@@ -96,7 +96,7 @@ export class LocalCredentialStore implements CredentialStore {
 }
 
 // ── Electron Credential Store (persists in Documents/Game-Servum/data/) ──
-// Uses Electron IPC to store plaintext JSON file in Documents/Game-Servum/data/dashboard-connections.json.
+// Uses Electron IPC to store plaintext JSON file in Documents/Game-Servum/data/commander-connections.json.
 // Data survives reinstalls because Documents/ is preserved.
 
 interface ElectronCredentialsAPI {
@@ -217,65 +217,85 @@ export class ElectronCredentialStore implements CredentialStore {
   }
 }
 
+// ── Web Credential Store (Commander Web Server backend) ──
+// Used when running as a Docker-hosted web app (VITE_WEB_MODE=true).
+// Persists connections server-side via /commander/api/connections.
+
+class WebCredentialStore implements CredentialStore {
+  async load(): Promise<BackendConnection[]> {
+    try {
+      const res = await fetch("/commander/api/connections", {
+        credentials: "same-origin",
+      });
+      if (res.status === 401) {
+        // Session expired — trigger re-login
+        window.dispatchEvent(new CustomEvent("commander:session-expired"));
+        return [];
+      }
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? cleanStaleStatuses(data) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  async save(connections: BackendConnection[]): Promise<void> {
+    const toSave = stripSensitiveSessionData(connections);
+    try {
+      const res = await fetch("/commander/api/connections", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify(toSave),
+      });
+      if (res.status === 401) {
+        window.dispatchEvent(new CustomEvent("commander:session-expired"));
+      }
+    } catch {
+      console.error("[WebCredentialStore] Save failed");
+    }
+  }
+
+  async clear(): Promise<void> {
+    try {
+      await fetch("/commander/api/connections", {
+        method: "DELETE",
+        credentials: "same-origin",
+      });
+    } catch {
+      console.error("[WebCredentialStore] Clear failed");
+    }
+  }
+}
+
 // ── Singleton ──
+
+const isWebMode = import.meta.env.VITE_WEB_MODE === "true";
 
 let storeInstance: CredentialStore | null = null;
 
 export function getCredentialStore(): CredentialStore {
   if (!storeInstance) {
-    storeInstance = new LocalCredentialStore();
+    if (isWebMode) {
+      storeInstance = new WebCredentialStore();
+    } else if (getElectronCredentials()) {
+      storeInstance = new ElectronCredentialStore();
+    } else {
+      storeInstance = new LocalCredentialStore();
+    }
   }
   return storeInstance;
 }
 
 /**
- * Override the credential store (e.g. with Electron safeStorage implementation).
- * Call this before any React rendering.
+ * Initialize the credential store (must be called before React renders).
+ * In Electron: pre-loads connections from disk into the synchronous cache.
+ * In other modes: no-op.
  */
-export function setCredentialStore(store: CredentialStore): void {
-  storeInstance = store;
-}
-
-/**
- * Initialize the Electron credential store if running in Electron.
- * Must be awaited before React renders so connections are available synchronously.
- */
-export async function initElectronCredentialStore(): Promise<void> {
-  const w = window as unknown as { electronAPI?: unknown };
-
-  console.log("[CredentialStore] Init environment check:");
-  console.log("  - window.electronAPI present:", !!w.electronAPI);
-  console.log("  - User agent:", navigator.userAgent);
-
-  if (!w.electronAPI) {
-    console.log(
-      "[CredentialStore] Not in Electron, using LocalCredentialStore",
-    );
-    console.log(
-      "[CredentialStore] Connections will be stored in browser localStorage",
-    );
-    return; // Not in Electron — keep localStorage store
-  }
-
-  console.log("[CredentialStore] Initializing ElectronCredentialStore...");
-  const store = new ElectronCredentialStore();
-  await store.init();
-  setCredentialStore(store);
-  console.log("[CredentialStore] ✓ ElectronCredentialStore active");
-
-  // Verify the store has the right type
-  const verifyStore = getCredentialStore();
-  console.log(
-    "[CredentialStore] Active store type:",
-    verifyStore.constructor.name,
-  );
-
-  // If in Electron and store is ElectronCredentialStore, verify cache
-  if (verifyStore instanceof ElectronCredentialStore) {
-    const cachedConnections = verifyStore.loadSync();
-    console.log(
-      "[CredentialStore] Cached connections ready:",
-      cachedConnections.length,
-    );
+export async function initCredentialStore(): Promise<void> {
+  const store = getCredentialStore();
+  if (store instanceof ElectronCredentialStore) {
+    await store.init();
   }
 }

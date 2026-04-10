@@ -1,0 +1,47 @@
+{
+  "name": "game-servum-commander",
+  "version": "0.9.9",
+  "description": "Game-Servum Commander — Remote Agent Management",
+  "author": "xscr33mLabs",
+  "license": "GPL-3.0-only",
+  "main": "main/main-unified.js",
+  "dependencies": {
+    "electron-updater": "^6.8.3"
+  },
+  "devDependencies": {
+    "electron": "^40.4.1",
+    "electron-builder": "^26.8.0"
+  },
+  "overrides": {
+    "global-agent": "^4.0.0",
+    "balanced-match": "^4.0.2"
+  },
+  "build": {
+    "appId": "com.gameservum.commander",
+    "productName": "Game-Servum Commander",
+    "copyright": "Copyright © 2026 xscr33mLabs",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main/**/*",
+      "assets/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "runtime",
+        "to": "runtime",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "xscr33m",
+      "repo": "Game-Servum",
+      "channel": "commander"
+    }
+  }
+}

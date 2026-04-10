@@ -3,40 +3,43 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   FaPlus,
   FaArrowsRotate,
-  FaArrowUpRightFromSquare,
-  FaHeart,
-  FaGlobe,
-  FaGithub,
   FaGear,
   FaUser,
   FaUserSlash,
-  FaCircleInfo,
   FaPlugCircleXmark,
   FaFileLines,
+  FaCircleQuestion,
+  FaDownload,
+  FaTriangleExclamation,
+  FaArrowRightFromBracket,
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ServerCard } from "@/components/server-details/ServerCard";
 import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
-import {
-  isOnboardingComplete,
-  resetOnboarding,
-} from "@/components/onboarding/onboardingState";
+import { hasSeenWelcome } from "@/components/onboarding/onboardingState";
 import { AddServerDialog } from "@/components/server-details/dialogs/AddServerDialog";
 import { DeleteServerDialog } from "@/components/server-details/dialogs/DeleteServerDialog";
 import { CancelInstallDialog } from "@/components/server-details/dialogs/CancelInstallDialog";
 import { SteamAccountDialog } from "@/components/agent/SteamAccountDialog";
+import { SteamCmdInstallDialog } from "@/components/agent/SteamCmdInstallDialog";
 import { SystemMonitor } from "@/components/agent/SystemMonitor";
 import { AgentStatusBanner } from "@/components/agent/AgentStatusBanner";
 import { useBackend } from "@/hooks/useBackend";
 import { logger } from "@/lib/logger";
 import { getElectronSettings } from "@/lib/electronSettings";
 import { AgentControlPanel } from "@/components/agent/AgentControlPanel";
+import { MobileAgentSection } from "@/components/agent/MobileAgentSection";
 import { AppHeader } from "@/components/AppHeader";
 import { publicAsset } from "@/lib/assets";
 import { toastSuccess, toastError, showDependencyError } from "@/lib/toast";
+import { Tip } from "@/components/ui/tooltip";
+import { useContentWidth } from "@/hooks/useContentWidth";
+import { cn } from "@/lib/utils";
 import type { GameServer, SteamCMDStatus } from "@/types";
 import { APP_VERSION } from "@game-servum/shared";
+
+const isWebMode = import.meta.env.VITE_WEB_MODE === "true";
 
 // ── Module-level navigation cache ──
 // Survives SPA navigation (Dashboard → ServerDetail → Dashboard) but not
@@ -52,16 +55,10 @@ export function Dashboard() {
   const [servers, setServers] = useState<GameServer[]>([]);
   const [steamcmd, setSteamcmd] = useState<SteamCMDStatus | null>(null);
   const [loading, setLoading] = useState(false); // Start with false, set true when actually loading
-  const [showOnboarding, setShowOnboarding] = useState(
-    () => !isOnboardingComplete(),
-  );
+  const [showWizard, setShowWizard] = useState(false);
   const [showAddServer, setShowAddServer] = useState(false);
   const [showSteamAccount, setShowSteamAccount] = useState(false);
-  const [showInfo, setShowInfo] = useState(false);
-  const [showNoAgents, setShowNoAgents] = useState(false);
-  const [onboardingInitialStep, setOnboardingInitialStep] = useState<
-    "connect" | undefined
-  >(undefined);
+  const [showSteamInstall, setShowSteamInstall] = useState(false);
   const [serverToDelete, setServerToDelete] = useState<GameServer | null>(null);
   const [serverToCancel, setServerToCancel] = useState<GameServer | null>(null);
   const [installProgress, setInstallProgress] = useState<
@@ -75,6 +72,7 @@ export function Dashboard() {
 
   const { api, subscribe, isConnected, activeConnection, connections } =
     useBackend();
+  const { contentClass, mode: contentWidthMode } = useContentWidth();
 
   // Restore from navigation cache if the active agent matches
   useEffect(() => {
@@ -147,44 +145,57 @@ export function Dashboard() {
     }
   }, [loadSteamCMD, loadServers, api.system]);
 
-  // Fetch initial data (skip during onboarding and before connection is ready)
-  // Also skip if we already have cached data — it will be refreshed once connected
+  // Fetch initial data (skip before connection is ready or when no agents)
   const hasData = servers.length > 0 || steamcmd !== null;
   useEffect(() => {
-    if (!showOnboarding && isConnected) {
+    if (isConnected && connections.length > 0) {
       loadData();
     }
-  }, [loadData, showOnboarding, isConnected]);
+  }, [loadData, isConnected, connections.length]);
 
   // Reload data when connection is (re-)established
   const prevConnected = useRef(isConnected);
   useEffect(() => {
-    if (isConnected && !prevConnected.current && !showOnboarding) {
+    if (isConnected && !prevConnected.current && connections.length > 0) {
       // Connection just came back — reload everything
       logger.info("[Dashboard] Connection restored, reloading data...");
       loadData();
     }
     prevConnected.current = isConnected;
-  }, [isConnected, loadData, showOnboarding]);
+  }, [isConnected, loadData, connections.length]);
 
-  // When all agents are removed, show intermediate screen
+  // When all agents are removed, clear stale dashboard state
   useEffect(() => {
-    if (connections.length === 0 && !showOnboarding) {
-      setShowNoAgents(true);
-      // Clear stale dashboard state
+    if (connections.length === 0) {
       setServers([]);
       setSteamcmd(null);
-      setLoading(true);
-    } else {
-      setShowNoAgents(false);
+      setInstallProgress(new Map());
+      setLoading(false);
+      // Clear navigation cache
+      _cachedServers = [];
+      _cachedSteamcmd = null;
+      _cacheAgentId = null;
     }
-  }, [connections.length, showOnboarding]);
+  }, [connections.length]);
 
-  // Handle ?setup= query param to re-open onboarding
+  // Auto-open wizard on first launch (no agents, never seen welcome)
+  const hasAutoOpened = useRef(false);
+  useEffect(() => {
+    if (
+      !hasAutoOpened.current &&
+      connections.length === 0 &&
+      !hasSeenWelcome()
+    ) {
+      hasAutoOpened.current = true;
+      setShowWizard(true);
+    }
+  }, [connections.length]);
+
+  // Handle ?setup= query param to open wizard
   useEffect(() => {
     const setupStep = searchParams.get("setup");
     if (setupStep) {
-      setShowOnboarding(true);
+      setShowWizard(true);
     }
   }, [searchParams]);
 
@@ -292,9 +303,12 @@ export function Dashboard() {
     }
   }
 
-  async function confirmDeleteServer(server: GameServer) {
+  async function confirmDeleteServer(
+    server: GameServer,
+    deleteBackups: boolean,
+  ) {
     try {
-      await api.servers.delete(server.id, server.name);
+      await api.servers.delete(server.id, server.name, deleteBackups);
       toastSuccess(`${server.name} is being deleted...`);
       // The server:status WS event will update the card to "Deleting"
       // and server:deleted will remove it once complete
@@ -325,57 +339,35 @@ export function Dashboard() {
     }
   }
 
-  // No agents connected — show intermediate screen before onboarding
-  if (showNoAgents) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-        <div className="w-full max-w-sm mx-4 rounded-xl border bg-card p-8 shadow-lg text-center space-y-4 animate-in fade-in-0 zoom-in-95 duration-200">
-          <div className="mx-auto w-14 h-14 rounded-full bg-muted flex items-center justify-center">
-            <FaPlugCircleXmark className="h-6 w-6 text-muted-foreground" />
-          </div>
-          <div className="space-y-1.5">
-            <h2 className="text-lg font-semibold">No Agent Connected</h2>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              There are no agents configured. Connect an agent to start managing
-              your game servers.
-            </p>
-          </div>
-          <Button
-            className="w-full"
-            onClick={() => {
-              resetOnboarding();
-              setShowNoAgents(false);
-              setOnboardingInitialStep("connect");
-              setShowOnboarding(true);
-            }}
-          >
-            Connect Agent
-          </Button>
-        </div>
-      </div>
-    );
+  // Callback for AgentControlPanel "Add Agent" button
+  function handleAddAgent() {
+    setShowWizard(true);
   }
 
-  // Show onboarding wizard for first-time users
-  if (showOnboarding) {
-    return (
-      <OnboardingWizard
-        initialStep={onboardingInitialStep}
-        onComplete={() => {
-          setShowOnboarding(false);
-          setOnboardingInitialStep(undefined);
-          setSearchParams({}, { replace: true });
-          loadData();
-        }}
-      />
-    );
-  }
+  const noAgents = connections.length === 0;
 
-  if (loading && !hasData) {
+  if (loading && !hasData && !noAgents && !showWizard) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <FaArrowsRotate className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
+    );
+  }
+
+  // Render wizard as a full page — no dashboard behind it
+  if (showWizard) {
+    return (
+      <OnboardingWizard
+        onClose={() => {
+          setShowWizard(false);
+          setSearchParams({}, { replace: true });
+        }}
+        onComplete={() => {
+          setShowWizard(false);
+          setSearchParams({}, { replace: true });
+          loadData();
+        }}
+      />
     );
   }
 
@@ -386,139 +378,238 @@ export function Dashboard() {
         left={
           <>
             <img
-              src={publicAsset("dashboard-icon.png")}
-              alt="Game-Servum"
+              src={publicAsset("commander-icon.png")}
+              alt="Game-Servum Commander"
               className="h-7 w-auto"
             />
-            <div className="flex items-baseline gap-2">
-              <h1 className="text-xl font-bold">Game-Servum</h1>
-              <span className="text-xs text-muted-foreground font-mono">
+            <div className="flex items-end gap-2">
+              <div className="flex flex-col leading-tight">
+                <span className="text-[10px] font-semibold text-muted-foreground tracking-wide uppercase">
+                  Game-Servum
+                </span>
+                <span className="text-xl font-bold -mt-0.5">Commander</span>
+              </div>
+              <span className="text-xs text-muted-foreground font-mono hidden md:inline mb-0.5">
                 v{APP_VERSION}
               </span>
             </div>
-            <div className="h-7 w-px bg-ring/30" />
-            <AgentControlPanel />
+            <div className="h-7 w-px bg-ring/30 hidden md:block" />
+            <div className="hidden md:flex">
+              <AgentControlPanel onAddAgent={handleAddAgent} />
+            </div>
           </>
         }
         right={
           <>
             {/* SteamCMD status indicator */}
-            {steamcmd?.installed && (
-              <Badge
-                variant={steamcmd.loggedIn ? "success" : "secondary"}
-                className={`gap-1.5 ${isConnected ? "cursor-pointer" : "opacity-50 cursor-not-allowed"}`}
-                onClick={() => isConnected && setShowSteamAccount(true)}
-                title="Steam Account"
-              >
-                {steamcmd.loggedIn ? (
-                  <>
-                    <FaUser className="h-3 w-3" />
-                    {steamcmd.username}
-                  </>
-                ) : (
-                  <>
-                    <FaUserSlash className="h-3 w-3" />
-                    Anonymous
-                  </>
-                )}
-              </Badge>
+            {steamcmd !== null && !steamcmd.installed && (
+              <Tip content="SteamCMD is required to manage game servers">
+                <Badge
+                  variant="warning"
+                  className={`gap-1.5 ${isConnected ? "cursor-pointer" : "opacity-50 cursor-not-allowed"}`}
+                  onClick={() => isConnected && setShowSteamInstall(true)}
+                >
+                  <FaDownload className="h-3 w-3" />
+                  Install SteamCMD
+                </Badge>
+              </Tip>
             )}
-            <Button
-              onClick={loadData}
-              variant="outline"
-              size="icon"
-              title="Refresh Data"
-              disabled={!isConnected}
-            >
-              <FaArrowsRotate className="h-4 w-4" />
-            </Button>
-            <div className="relative">
+            {steamcmd?.installed && (
+              <Tip content="Steam Account">
+                <Badge
+                  variant={steamcmd.loggedIn ? "success" : "secondary"}
+                  className={`gap-1.5 ${isConnected ? "cursor-pointer" : "opacity-50 cursor-not-allowed"}`}
+                  onClick={() => isConnected && setShowSteamAccount(true)}
+                >
+                  {steamcmd.loggedIn ? (
+                    <>
+                      <FaUser className="h-3 w-3" />
+                      {steamcmd.username}
+                    </>
+                  ) : (
+                    <>
+                      <FaUserSlash className="h-3 w-3" />
+                      Anonymous
+                    </>
+                  )}
+                </Badge>
+              </Tip>
+            )}
+            <Tip content="Refresh Data">
+              <Button
+                onClick={loadData}
+                variant="outline"
+                size="icon"
+                disabled={!isConnected || noAgents}
+              >
+                <FaArrowsRotate className="h-4 w-4" />
+              </Button>
+            </Tip>
+            <Tip content="Help & Info">
               <Button
                 variant="outline"
                 size="icon"
-                onClick={() => setShowInfo(!showInfo)}
-                title="About Game-Servum"
+                onClick={() => navigate("/help")}
               >
-                <FaCircleInfo className="h-4 w-4" />
+                <FaCircleQuestion className="h-4 w-4" />
               </Button>
-              {showInfo && (
-                <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setShowInfo(false)}
-                  />
-                  <div className="absolute right-0 top-full mt-1.5 z-50 w-64 rounded-lg border bg-popover p-4 shadow-lg animate-in fade-in-0 zoom-in-95">
-                    <div className="flex items-center gap-2.5 mb-3">
-                      <img
-                        src={publicAsset("dashboard-icon.png")}
-                        alt=""
-                        className="h-6 w-auto"
-                      />
-                      <div>
-                        <p className="text-sm font-semibold leading-tight">
-                          Game-Servum
-                        </p>
-                        <p className="text-[11px] text-muted-foreground">
-                          v{APP_VERSION}
-                        </p>
-                      </div>
-                    </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-                      Open Source Game Server Manager powered by SteamCMD.
-                    </p>
-                    <div className="border-t border-border/50 pt-2.5 space-y-0.5">
-                      <a
-                        href="https://github.com/xscr33m/Game-Servum"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                      >
-                        <FaGithub className="h-3.5 w-3.5" />
-                        GitHub
-                        <FaArrowUpRightFromSquare className="h-2.5 w-2.5 ml-auto opacity-40" />
-                      </a>
-                      <a
-                        href="https://xscr33mlabs.com"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                      >
-                        <FaGlobe className="h-3.5 w-3.5" />
-                        Website
-                        <FaArrowUpRightFromSquare className="h-2.5 w-2.5 ml-auto opacity-40" />
-                      </a>
-                      <a
-                        href="https://ko-fi.com/xscr33m"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                      >
-                        <FaHeart className="h-3.5 w-3.5" />
-                        Donate
-                        <FaArrowUpRightFromSquare className="h-2.5 w-2.5 ml-auto opacity-40" />
-                      </a>
-                    </div>
+            </Tip>
+            <Tip content="Application Logs">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => navigate("/logs")}
+              >
+                <FaFileLines className="h-4 w-4" />
+              </Button>
+            </Tip>
+            <Tip content="Settings">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => navigate("/settings")}
+              >
+                <FaGear className="h-4 w-4" />
+              </Button>
+            </Tip>
+            {isWebMode && (
+              <Tip content="Logout">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={async () => {
+                    try {
+                      await fetch("/commander/api/auth/logout", {
+                        method: "POST",
+                        credentials: "same-origin",
+                      });
+                    } catch {
+                      // Ignore
+                    }
+                    window.location.reload();
+                  }}
+                >
+                  <FaArrowRightFromBracket className="h-4 w-4" />
+                </Button>
+              </Tip>
+            )}
+          </>
+        }
+        mobileMenuTitle="Commander"
+        mobileMenu={
+          <div className="space-y-5">
+            {/* Agent section */}
+            <MobileAgentSection onAddAgent={handleAddAgent} />
+
+            <div className="border-t" />
+
+            {/* Steam account / SteamCMD install */}
+            {steamcmd !== null && !steamcmd.installed && (
+              <button
+                data-mobile-nav
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                onClick={() => isConnected && setShowSteamInstall(true)}
+                disabled={!isConnected}
+              >
+                <FaDownload className="h-4 w-4 text-warning" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium">Install SteamCMD</div>
+                  <div className="text-[11px] text-muted-foreground">
+                    Required to manage game servers
                   </div>
-                </>
+                </div>
+              </button>
+            )}
+            {steamcmd?.installed && (
+              <button
+                data-mobile-nav
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                onClick={() => isConnected && setShowSteamAccount(true)}
+                disabled={!isConnected}
+              >
+                {steamcmd.loggedIn ? (
+                  <FaUser className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <FaUserSlash className="h-4 w-4 text-muted-foreground" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium">
+                    {steamcmd.loggedIn ? steamcmd.username : "Anonymous"}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    Steam Account
+                  </div>
+                </div>
+              </button>
+            )}
+
+            {/* Navigation */}
+            <div className="space-y-1">
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1 mb-2">
+                Navigation
+              </div>
+              <button
+                data-mobile-nav
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                onClick={loadData}
+                disabled={!isConnected || noAgents}
+              >
+                <FaArrowsRotate className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">Refresh Data</span>
+              </button>
+              <button
+                data-mobile-nav
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                onClick={() => navigate("/help")}
+              >
+                <FaCircleQuestion className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">Help & Info</span>
+              </button>
+              <button
+                data-mobile-nav
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                onClick={() => navigate("/logs")}
+              >
+                <FaFileLines className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">Application Logs</span>
+              </button>
+              <button
+                data-mobile-nav
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                onClick={() => navigate("/settings")}
+              >
+                <FaGear className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">Settings</span>
+              </button>
+              {isWebMode && (
+                <button
+                  data-mobile-nav
+                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left text-destructive"
+                  onClick={async () => {
+                    try {
+                      await fetch("/commander/api/auth/logout", {
+                        method: "POST",
+                        credentials: "same-origin",
+                      });
+                    } catch {
+                      // Ignore
+                    }
+                    window.location.reload();
+                  }}
+                >
+                  <FaArrowRightFromBracket className="h-4 w-4" />
+                  <span className="text-sm">Logout</span>
+                </button>
               )}
             </div>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => navigate("/logs")}
-              title="Application Logs"
-            >
-              <FaFileLines className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => navigate("/settings")}
-              title="Settings"
-            >
-              <FaGear className="h-4 w-4" />
-            </Button>
-          </>
+
+            {/* Version info */}
+            <div className="border-t pt-3">
+              <span className="text-[11px] text-muted-foreground/60 font-mono">
+                v{APP_VERSION}
+              </span>
+            </div>
+          </div>
         }
       />
 
@@ -526,75 +617,140 @@ export function Dashboard() {
 
       <div className="flex-1 flex overflow-hidden">
         <main className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
-          <div className="container mx-auto px-4 py-4 space-y-8">
+          <div
+            className={cn("mx-auto w-full px-4 py-4 space-y-8", contentClass)}
+          >
             {/* System Monitoring */}
-            {monitoringEnabled && <SystemMonitor key={activeConnection?.id} />}
+            {monitoringEnabled && !noAgents && (
+              <SystemMonitor key={activeConnection?.id} />
+            )}
 
-            {/* Servers */}
-            <div>
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-xl font-semibold">Game Servers</h2>
-                  <p className="text-sm text-muted-foreground mt-0.5">
-                    {servers.length === 0
-                      ? "No servers installed yet"
-                      : `${servers.length} server${servers.length !== 1 ? "s" : ""} configured`}
-                  </p>
+            {/* No agents connected — inline empty state */}
+            {noAgents ? (
+              <div className="flex flex-col items-center justify-center py-24 text-center">
+                <div className="mx-auto w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-5">
+                  <FaPlugCircleXmark className="h-7 w-7 text-muted-foreground" />
                 </div>
-                <Button
-                  disabled={!steamcmd?.installed || !isConnected}
-                  onClick={() => setShowAddServer(true)}
-                >
-                  <FaPlus className="h-4 w-4 mr-2" />
-                  Add Server
-                </Button>
+                <h2 className="text-xl font-semibold mb-2">
+                  No Agent Connected
+                </h2>
+                <p className="text-sm text-muted-foreground max-w-sm mb-6 leading-relaxed">
+                  Connect a Game-Servum Agent to start managing your game
+                  servers. The agent runs on the machine hosting your servers.
+                </p>
+                <div className="flex gap-3">
+                  <Button onClick={handleAddAgent} size="lg">
+                    <FaPlus className="h-4 w-4 mr-2" />
+                    Connect Agent
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={() => navigate("/help")}
+                  >
+                    <FaCircleQuestion className="h-4 w-4 mr-2" />
+                    Learn More
+                  </Button>
+                </div>
               </div>
-
-              {servers.length === 0 ? (
-                !isConnected && connections.length > 0 ? (
-                  <div className="flex flex-col items-center justify-center py-20 text-center">
-                    <div className="rounded-full bg-muted p-6 mb-4">
-                      <FaArrowsRotate className="h-8 w-8 text-muted-foreground animate-spin" />
-                    </div>
-                    <h3 className="text-lg font-medium mb-1">
-                      Waiting for agent connection…
-                    </h3>
-                    <p className="text-sm text-muted-foreground max-w-sm">
-                      The agent is currently unreachable. Server list will load
-                      automatically once the connection is restored.
+            ) : (
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h2 className="text-xl font-semibold">Game Servers</h2>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      {servers.length === 0
+                        ? "No servers installed yet"
+                        : `${servers.length} server${servers.length !== 1 ? "s" : ""} configured`}
                     </p>
                   </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-20 text-center">
-                    <div className="rounded-full bg-muted p-6 mb-4">
-                      <FaPlus className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                    <h3 className="text-lg font-medium mb-1">
-                      No servers installed
-                    </h3>
-                    <p className="text-sm text-muted-foreground max-w-sm">
-                      Get started by adding your first game server. SteamCMD
-                      will handle the download and installation.
-                    </p>
-                  </div>
-                )
-              ) : (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {servers.map((server) => (
-                    <ServerCard
-                      key={server.id}
-                      server={server}
-                      onStart={handleStartServer}
-                      onStop={handleStopServer}
-                      onDelete={handleDeleteServer}
-                      onCancelInstall={handleCancelInstall}
-                      disabled={!isConnected}
-                      installProgress={installProgress.get(server.id)}
-                    />
-                  ))}
+                  <Button
+                    disabled={!steamcmd?.installed || !isConnected}
+                    onClick={() => setShowAddServer(true)}
+                  >
+                    <FaPlus className="h-4 w-4 mr-2" />
+                    Add Server
+                  </Button>
                 </div>
-              )}
-            </div>
+
+                {/* SteamCMD not installed alert */}
+                {steamcmd !== null && !steamcmd.installed && isConnected && (
+                  <div className="flex items-start gap-4 rounded-lg border border-warning/40 bg-warning/5 p-4 mb-6">
+                    <div className="rounded-full bg-warning/15 p-2.5 shrink-0">
+                      <FaTriangleExclamation className="h-5 w-5 text-warning" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-semibold mb-1">
+                        SteamCMD Required
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        SteamCMD must be installed on the connected agent before
+                        you can download and manage game servers.
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => setShowSteamInstall(true)}
+                      className="shrink-0"
+                    >
+                      <FaDownload className="h-3.5 w-3.5 mr-1.5" />
+                      Install
+                    </Button>
+                  </div>
+                )}
+
+                {servers.length === 0 ? (
+                  !isConnected && connections.length > 0 ? (
+                    <div className="flex flex-col items-center justify-center py-20 text-center">
+                      <div className="rounded-full bg-muted p-6 mb-4">
+                        <FaArrowsRotate className="h-8 w-8 text-muted-foreground animate-spin" />
+                      </div>
+                      <h3 className="text-lg font-medium mb-1">
+                        Waiting for agent connection…
+                      </h3>
+                      <p className="text-sm text-muted-foreground max-w-sm">
+                        The agent is currently unreachable. Server list will
+                        load automatically once the connection is restored.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-20 text-center">
+                      <div className="rounded-full bg-muted p-6 mb-4">
+                        <FaPlus className="h-8 w-8 text-muted-foreground" />
+                      </div>
+                      <h3 className="text-lg font-medium mb-1">
+                        No servers installed
+                      </h3>
+                      <p className="text-sm text-muted-foreground max-w-sm">
+                        Get started by adding your first game server. SteamCMD
+                        will handle the download and installation.
+                      </p>
+                    </div>
+                  )
+                ) : (
+                  <div
+                    className={
+                      contentWidthMode === "full"
+                        ? "grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
+                        : "grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3"
+                    }
+                  >
+                    {servers.map((server) => (
+                      <ServerCard
+                        key={server.id}
+                        server={server}
+                        onStart={handleStartServer}
+                        onStop={handleStopServer}
+                        onDelete={handleDeleteServer}
+                        onCancelInstall={handleCancelInstall}
+                        disabled={!isConnected}
+                        installProgress={installProgress.get(server.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </main>
       </div>
@@ -630,6 +786,13 @@ export function Dashboard() {
         onOpenChange={setShowSteamAccount}
         steamcmd={steamcmd}
         onStatusChange={loadSteamCMD}
+      />
+
+      {/* SteamCMD Install Dialog */}
+      <SteamCmdInstallDialog
+        open={showSteamInstall}
+        onOpenChange={setShowSteamInstall}
+        onInstalled={loadSteamCMD}
       />
     </div>
   );

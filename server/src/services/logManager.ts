@@ -13,7 +13,7 @@
 
 import path from "path";
 import fs from "fs";
-import { logger } from "../index.js";
+import { logger } from "../core/logger.js";
 import { readGameFile } from "../games/encoding.js";
 import type { LogPaths } from "../games/index.js";
 
@@ -95,7 +95,7 @@ export function archiveLogsBeforeStart(logPaths: LogPaths): number {
     try {
       fs.renameSync(src, dest);
       archivedCount++;
-    } catch (error) {
+    } catch {
       // File might be locked — try copy + delete instead
       try {
         fs.copyFileSync(src, dest);
