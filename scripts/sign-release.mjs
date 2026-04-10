@@ -1,8 +1,10 @@
 /**
- * Game-Servum — GPG Release Signing
+ * Game-Servum — Release Checksums & GPG Signing
  *
- * Signs SHA256SUMS with a GPG detached signature for release verification.
- * Run this AFTER all builds are complete and SHA256SUMS contains all entries.
+ * Generates SHA256 checksums for all release artifacts in dist/v{version}/,
+ * then signs SHA256SUMS with a GPG detached signature.
+ *
+ * Run this AFTER all build artifacts (Windows + Linux) are in dist/v{version}/.
  *
  * Usage:
  *   npm run sign:release              # Auto-detects version from package.json
@@ -10,15 +12,17 @@
  *
  * Prerequisites:
  *   - GPG key imported and available (gpg --list-secret-keys)
- *   - SHA256SUMS file in dist/v{version}/
+ *   - Release artifacts in dist/v{version}/
  *
  * Output:
- *   dist/v{version}/SHA256SUMS.sig  (detached ASCII-armored signature)
+ *   dist/v{version}/SHA256SUMS      (checksums for all artifacts)
+ *   dist/v{version}/SHA256SUMS.sig  (detached ASCII-armored GPG signature)
  */
 import { execSync } from "child_process";
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
+import { generateChecksumLine } from "./checksum.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -29,6 +33,9 @@ const DIST_DIR = resolve(ROOT, "dist", `v${APP_VERSION}`);
 const SUMS_FILE = resolve(DIST_DIR, "SHA256SUMS");
 const SIG_FILE = resolve(DIST_DIR, "SHA256SUMS.sig");
 
+/** File extensions to include in checksums */
+const ARTIFACT_EXTENSIONS = [".exe", ".zip", ".AppImage"];
+
 console.log("╔════════════════════════════════════════════");
 console.log(`║  Game-Servum Release Signing               `);
 console.log(`║  Version: ${APP_VERSION.padEnd(32)}`);
@@ -36,9 +43,9 @@ console.log("╚═════════════════════�
 
 // ─── 1. Check prerequisites ─────────────────────────────────────
 
-if (!existsSync(SUMS_FILE)) {
-  console.error(`\n  ✗ SHA256SUMS not found at: ${SUMS_FILE}`);
-  console.error("    Run build scripts first to generate checksums.");
+if (!existsSync(DIST_DIR)) {
+  console.error(`\n  ✗ dist directory not found: ${DIST_DIR}`);
+  console.error("    Run build scripts first to create release artifacts.");
   process.exit(1);
 }
 
@@ -66,14 +73,34 @@ try {
   process.exit(1);
 }
 
-// ─── 2. Show SHA256SUMS contents ─────────────────────────────────
+// ─── 2. Generate SHA256 checksums ────────────────────────────────
 
-console.log("\n  SHA256SUMS contents:");
-const sumsContent = readFileSync(SUMS_FILE, "utf-8").trim();
-for (const line of sumsContent.split("\n")) {
-  const [hash, filename] = line.split(/\s+/);
-  console.log(`    ${hash.substring(0, 16)}...  ${filename}`);
+console.log("\n  Scanning for release artifacts...");
+const files = readdirSync(DIST_DIR).filter((f) =>
+  ARTIFACT_EXTENSIONS.some((ext) => f.endsWith(ext)),
+);
+
+if (files.length === 0) {
+  console.error(`\n  ✗ No release artifacts found in ${DIST_DIR}`);
+  console.error(
+    `    Expected files with extensions: ${ARTIFACT_EXTENSIONS.join(", ")}`,
+  );
+  process.exit(1);
 }
+
+console.log(`  Found ${files.length} artifact(s):\n`);
+
+const checksumLines = [];
+for (const file of files.sort()) {
+  const filePath = resolve(DIST_DIR, file);
+  const line = await generateChecksumLine(filePath);
+  checksumLines.push(line);
+  const [hash] = line.split(/\s+/);
+  console.log(`    ✓ ${hash.substring(0, 16)}...  ${file}`);
+}
+
+writeFileSync(SUMS_FILE, checksumLines.join("\n") + "\n", "utf-8");
+console.log(`\n  ✓ Written SHA256SUMS (${checksumLines.length} entries)`);
 
 // ─── 3. Sign ─────────────────────────────────────────────────────
 

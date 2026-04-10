@@ -40,7 +40,6 @@ import {
   printSigningStatus,
   getSigntoolPath,
 } from "./sign-windows.mjs";
-import { appendToChecksums } from "./checksum.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -303,12 +302,6 @@ try {
 } catch (err) {
   console.warn(`  ⚠ Could not create update ZIP: ${err.message}`);
 }
-
-// ─── 5b. Generate checksums ──────────────────────────────────────
-
-console.log("\nGenerating checksums...");
-await appendToChecksums(installerPath, DIST_DIR);
-await appendToChecksums(updateZipPath, DIST_DIR);
 
 // ─── 6. Clean up and report ──────────────────────────────────────
 
