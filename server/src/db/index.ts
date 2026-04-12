@@ -222,7 +222,7 @@ export function updateSteamConfig(
 // Game server queries
 export function getAllServers(): GameServer[] {
   const result = getDb().exec(
-    `SELECT id, game_id, name, app_id, install_path, executable, launch_params, port, query_port, profiles_path, auto_restart, status, pid, created_at, started_at 
+    `SELECT id, game_id, name, app_id, install_path, executable, launch_params, port, query_port, profiles_path, auto_restart, status, pid, created_at, started_at, version 
      FROM game_servers ORDER BY created_at ASC`,
   );
 
@@ -244,12 +244,13 @@ export function getAllServers(): GameServer[] {
     pid: row[12] as number | null,
     createdAt: row[13] as string,
     startedAt: (row[14] as string | null) ?? null,
+    version: (row[15] as string | null) ?? null,
   }));
 }
 
 export function getServerById(id: number): GameServer | null {
   const result = getDb().exec(
-    `SELECT id, game_id, name, app_id, install_path, executable, launch_params, port, query_port, profiles_path, auto_restart, status, pid, created_at, started_at 
+    `SELECT id, game_id, name, app_id, install_path, executable, launch_params, port, query_port, profiles_path, auto_restart, status, pid, created_at, started_at, version 
      FROM game_servers WHERE id = ?`,
     [id],
   );
@@ -273,6 +274,7 @@ export function getServerById(id: number): GameServer | null {
     pid: row[12] as number | null,
     createdAt: row[13] as string,
     startedAt: (row[14] as string | null) ?? null,
+    version: (row[15] as string | null) ?? null,
   };
 }
 
@@ -382,6 +384,38 @@ export function updateServerPorts(
 export function updateServerName(id: number, name: string): void {
   getDb().run("UPDATE game_servers SET name = ? WHERE id = ?", [name, id]);
   saveDatabase();
+}
+
+export function updateServerVersion(id: number, version: string | null): void {
+  getDb().run("UPDATE game_servers SET version = ? WHERE id = ?", [
+    version,
+    id,
+  ]);
+  saveDatabase();
+}
+
+export function getOnlinePlayerCountsByServer(): Map<number, number> {
+  const result = getDb().exec(
+    `SELECT server_id, COUNT(*) FROM player_sessions WHERE is_online = 1 GROUP BY server_id`,
+  );
+  const counts = new Map<number, number>();
+  if (result.length === 0) return counts;
+  for (const row of result[0].values) {
+    counts.set(row[0] as number, row[1] as number);
+  }
+  return counts;
+}
+
+export function getModCountsByServer(): Map<number, number> {
+  const result = getDb().exec(
+    `SELECT server_id, COUNT(*) FROM server_mods GROUP BY server_id`,
+  );
+  const counts = new Map<number, number>();
+  if (result.length === 0) return counts;
+  for (const row of result[0].values) {
+    counts.set(row[0] as number, row[1] as number);
+  }
+  return counts;
 }
 
 export function updateServerAutoRestart(

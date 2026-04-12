@@ -347,6 +347,13 @@ export interface GameAdapter {
   // ── Optional: Game-Specific Features ─────────────────────────────
 
   /**
+   * Extract the human-readable game version from server log files.
+   * Called after startup detection completes (logs are guaranteed to exist).
+   * Returns the version string (e.g. "1.29.155939") or null if not found.
+   */
+  getServerVersion?(server: GameServer): string | null;
+
+  /**
    * Parse game-specific server logs to backfill player history.
    * Only some games support this (e.g. DayZ ADM logs).
    */

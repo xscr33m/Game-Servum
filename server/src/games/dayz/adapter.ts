@@ -567,6 +567,24 @@ export class DayZAdapter extends BaseGameAdapter {
     return { commands: ["#shutdown"] };
   }
 
+  /**
+   * Extract DayZ version from the latest RPT log file.
+   * RPT files contain a line like: "Version 1.29.162510"
+   */
+  getServerVersion(server: GameServer): string | null {
+    try {
+      const profilesDir = resolveProfilesPath(server);
+      const rptFile = this.findLatestRptFile(profilesDir);
+      if (!rptFile) return null;
+
+      const content = fs.readFileSync(rptFile, "utf-8");
+      const match = content.match(/^Version\s+(\S+)/m);
+      return match ? match[1] : null;
+    } catch {
+      return null;
+    }
+  }
+
   getStartupDetector(server: GameServer): StartupDetector | null {
     const profilesDir = resolveProfilesPath(server);
     // DayZ writes script logs with timestamped filenames (script_YYYY-MM-DD_HH-MM-SS.log).
@@ -722,7 +740,7 @@ export class DayZAdapter extends BaseGameAdapter {
       const lines = content.split("\n");
 
       for (const line of lines) {
-        const match = line.match(/Player "(.+?)"\s*\(id=([A-Za-z0-9+/=]{20,})/);
+        const match = line.match(/Player "(.+?)"\s*\(id=([^)\s]+)\)/);
         if (match) {
           mappings.set(match[1], match[2]);
         }
@@ -766,13 +784,40 @@ export class DayZAdapter extends BaseGameAdapter {
       const content = fs.readFileSync(latestRpt.path, "utf-8");
       const lines = content.split("\n").filter((l) => l.trim());
 
-      const errorLines = lines.filter(
-        (l) =>
-          l.toLowerCase().includes("error") ||
-          l.toLowerCase().includes("failed") ||
-          l.toLowerCase().includes("exception") ||
-          l.toLowerCase().includes("cannot"),
-      );
+      // If the server terminated cleanly, there's nothing to report
+      if (
+        lines.some((l) =>
+          l.includes("--- Termination successfully completed ---"),
+        )
+      ) {
+        return null;
+      }
+
+      // Filter for genuine errors — exclude benign DayZ warnings that
+      // contain "error"/"failed"/"cannot" but are normal during operation
+      const errorLines = lines.filter((l) => {
+        const lower = l.toLowerCase();
+        if (
+          !lower.includes("error") &&
+          !lower.includes("failed") &&
+          !lower.includes("exception") &&
+          !lower.includes("cannot")
+        ) {
+          return false;
+        }
+        // Exclude known benign patterns
+        if (
+          lower.includes("(e):") || // MATERIAL (E):, ENTITY (E): — asset warnings
+          lower.includes("(w):") || // ENTITY (W): — entity warnings
+          lower.includes("placement slopelandcontact failed") ||
+          lower.includes("steaminternalapi") ||
+          lower.includes("steaminternal_") ||
+          lower.includes("items loaded")
+        ) {
+          return false;
+        }
+        return true;
+      });
 
       if (errorLines.length > 0) {
         return errorLines.slice(-3).join(" | ").substring(0, 300);

@@ -18,6 +18,7 @@ import { logger } from "../core/logger.js";
 import {
   getServerById,
   updateServerStatus,
+  updateServerVersion,
   getAllServers,
   getAppSetting,
   setAppSetting,
@@ -61,6 +62,9 @@ const firstStartServers = new Set<number>();
 export function isFirstStartInProgress(serverId: number): boolean {
   return firstStartServers.has(serverId);
 }
+
+// Track servers being intentionally stopped (to distinguish from crashes)
+const stoppingServers = new Set<number>();
 
 // Track crash timestamps for auto-restart protection (max 3 crashes in 10 minutes)
 const crashHistory: Map<number, number[]> = new Map();
@@ -410,6 +414,23 @@ export function startServer(serverId: number): StartResult {
       startMessageBroadcaster(serverId);
       startUpdateChecker(serverId);
 
+      // Extract game version from log files and persist to DB
+      if (adapter) {
+        try {
+          const version = adapter.getServerVersion?.(server!);
+          if (version) {
+            updateServerVersion(serverId, version);
+            logger.info(
+              `[ServerProcess] Detected game version ${version} for server ${serverId}`,
+            );
+          }
+        } catch (err) {
+          logger.error(
+            `[ServerProcess] Failed to extract game version: ${err}`,
+          );
+        }
+      }
+
       // Re-validate adapter config after start (game may have overwritten config files)
       if (adapter) {
         const freshServer = getServerById(serverId);
@@ -605,7 +626,9 @@ export function startServer(serverId: number): StartResult {
       stopUpdateChecker(serverId);
 
       // Determine if this was expected (graceful stop) or a crash
-      const wasExpected = signal === "SIGTERM" || code === 0;
+      const wasExpected =
+        stoppingServers.has(serverId) || signal === "SIGTERM" || code === 0;
+      stoppingServers.delete(serverId);
       const newStatus = wasExpected ? "stopped" : "error";
 
       // Update database
@@ -786,6 +809,9 @@ export async function stopServer(serverId: number): Promise<StopResult> {
   }
 
   logger.info(`[ServerProcess] Stopping server ${serverId}: ${server.name}`);
+
+  // Mark as intentionally stopping so the exit handler knows this isn't a crash
+  stoppingServers.add(serverId);
 
   // Set stopping status immediately
   updateServerStatus(serverId, "stopping", server.pid);

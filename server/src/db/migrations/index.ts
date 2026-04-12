@@ -12,10 +12,11 @@ import type { Database as SqlJsDatabase } from "sql.js";
 import type { Migration } from "./types.js";
 
 import { migration as m001 } from "./001_initial_schema.js";
+import { migration as m002 } from "./002_add_version.js";
 
 // All migrations in order. The runner sorts by version, but keeping this
 // array in order makes it easy to see the migration history at a glance.
-const migrations: Migration[] = [m001];
+const migrations: Migration[] = [m001, m002];
 
 // ── Migration Runner ───────────────────────────────────────────────
 

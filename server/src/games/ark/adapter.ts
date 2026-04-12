@@ -207,6 +207,29 @@ export class ArkAdapter extends BaseGameAdapter {
     return { commands: ["saveworld", "doexit"], delayBetweenMs: 3000 };
   }
 
+  /**
+   * Extract ARK version from ShooterGame.log.
+   * The log contains a line like: "[2026.04.12-15.32.49:753][  0]ARK Version: 361.7"
+   */
+  getServerVersion(server: GameServer): string | null {
+    try {
+      const logPath = path.join(
+        server.installPath,
+        "ShooterGame",
+        "Saved",
+        "Logs",
+        "ShooterGame.log",
+      );
+      if (!fs.existsSync(logPath)) return null;
+
+      const content = fs.readFileSync(logPath, "utf-8");
+      const match = content.match(/ARK Version:\s*([\d.]+)/);
+      return match ? match[1] : null;
+    } catch {
+      return null;
+    }
+  }
+
   getStartupDetector(_server: GameServer): StartupDetector | null {
     return {
       type: "logfile",

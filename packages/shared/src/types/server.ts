@@ -69,6 +69,9 @@ export interface GameServer {
   pid: number | null;
   createdAt: string;
   startedAt: string | null;
+  version?: string | null;
   installing?: boolean; // Set by API when install is in progress
   hasPendingUpdateRestart?: boolean; // Set by API when auto-update restart is pending
+  onlinePlayerCount?: number; // Set by list API
+  modCount?: number; // Set by list API
 }

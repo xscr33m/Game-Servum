@@ -44,6 +44,8 @@ import {
   deleteVariable as deleteVariableFromDb,
   getUpdateRestartSettings,
   upsertUpdateRestartSettings,
+  getOnlinePlayerCountsByServer,
+  getModCountsByServer,
 } from "../db/index.js";
 import { getConfig } from "../services/config.js";
 import {
@@ -154,10 +156,21 @@ router.get("/games", (_req: Request, res: Response) => {
   res.json(games);
 });
 
-// GET /api/servers - List all servers
+// GET /api/servers - List all servers (enriched with player/mod counts + status flags)
 router.get("/", (_req: Request, res: Response) => {
   const servers = getAllServers();
-  res.json(servers);
+  const playerCounts = getOnlinePlayerCountsByServer();
+  const modCounts = getModCountsByServer();
+
+  const enriched = servers.map((s) => ({
+    ...s,
+    onlinePlayerCount: playerCounts.get(s.id) ?? 0,
+    modCount: modCounts.get(s.id) ?? 0,
+    installing: isInstalling(s.id),
+    hasPendingUpdateRestart: hasPendingUpdateRestart(s.id),
+  }));
+
+  res.json(enriched);
 });
 
 // GET /api/servers/used-ports - Get all ports used by existing servers

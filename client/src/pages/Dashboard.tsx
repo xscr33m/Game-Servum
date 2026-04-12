@@ -267,6 +267,39 @@ export function Dashboard() {
           `Installation of ${payload.serverName || "server"} cancelled`,
         );
       }
+      if (message.type === "player:connected") {
+        const payload = message.payload as { serverId: number };
+        setServers((prev) =>
+          prev.map((s) =>
+            s.id === payload.serverId
+              ? { ...s, onlinePlayerCount: (s.onlinePlayerCount ?? 0) + 1 }
+              : s,
+          ),
+        );
+      }
+      if (message.type === "player:disconnected") {
+        const payload = message.payload as { serverId: number };
+        setServers((prev) =>
+          prev.map((s) =>
+            s.id === payload.serverId
+              ? {
+                  ...s,
+                  onlinePlayerCount: Math.max(
+                    (s.onlinePlayerCount ?? 0) - 1,
+                    0,
+                  ),
+                }
+              : s,
+          ),
+        );
+      }
+      if (
+        message.type === "mod:installed" ||
+        message.type === "mod:error" ||
+        message.type === "update:detected"
+      ) {
+        loadServers();
+      }
     });
     return unsubscribe;
   }, [subscribe, loadServers]);
