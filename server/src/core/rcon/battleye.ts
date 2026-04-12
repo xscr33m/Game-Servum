@@ -204,7 +204,13 @@ export class BattlEyeRcon implements RconClient {
 
   async getPlayers(): Promise<GenericRconPlayer[]> {
     const response = await this.sendCommand("players");
-    return parseBattlEyePlayersResponse(response).map((p) => ({
+    const parsed = parseBattlEyePlayersResponse(response);
+    if (parsed.length === 0 && response.trim().length > 0) {
+      logger.debug(
+        `[RCON] BattlEye players response (${response.length} chars, 0 parsed): ${response.substring(0, 500)}`,
+      );
+    }
+    return parsed.map((p) => ({
       id: p.guid,
       name: p.name,
       ping: p.ping,
@@ -364,7 +370,7 @@ export function parseBattlEyePlayersResponse(
 
   for (const line of lines) {
     const match = line.match(
-      /^\s*(\d+)\s+([\d.]+):(\d+)\s+(\d+)\s+([^\s(]+)\((\w+)\)\s+(.+?)\s*$/i,
+      /^\s*(\d+)\s+([\d.]+):(\d+)\s+(\d+)\s+([^\s(]+)\(([^)]*)\)\s+(.+?)\s*$/i,
     );
     if (match) {
       const rawName = match[7].trim().replace(/\s*\(Lobby\)\s*$/i, "");
