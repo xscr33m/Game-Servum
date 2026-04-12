@@ -766,13 +766,40 @@ export class DayZAdapter extends BaseGameAdapter {
       const content = fs.readFileSync(latestRpt.path, "utf-8");
       const lines = content.split("\n").filter((l) => l.trim());
 
-      const errorLines = lines.filter(
-        (l) =>
-          l.toLowerCase().includes("error") ||
-          l.toLowerCase().includes("failed") ||
-          l.toLowerCase().includes("exception") ||
-          l.toLowerCase().includes("cannot"),
-      );
+      // If the server terminated cleanly, there's nothing to report
+      if (
+        lines.some((l) =>
+          l.includes("--- Termination successfully completed ---"),
+        )
+      ) {
+        return null;
+      }
+
+      // Filter for genuine errors — exclude benign DayZ warnings that
+      // contain "error"/"failed"/"cannot" but are normal during operation
+      const errorLines = lines.filter((l) => {
+        const lower = l.toLowerCase();
+        if (
+          !lower.includes("error") &&
+          !lower.includes("failed") &&
+          !lower.includes("exception") &&
+          !lower.includes("cannot")
+        ) {
+          return false;
+        }
+        // Exclude known benign patterns
+        if (
+          lower.includes("(e):") || // MATERIAL (E):, ENTITY (E): — asset warnings
+          lower.includes("(w):") || // ENTITY (W): — entity warnings
+          lower.includes("placement slopelandcontact failed") ||
+          lower.includes("steaminternalapi") ||
+          lower.includes("steaminternal_") ||
+          lower.includes("items loaded")
+        ) {
+          return false;
+        }
+        return true;
+      });
 
       if (errorLines.length > 0) {
         return errorLines.slice(-3).join(" | ").substring(0, 300);
