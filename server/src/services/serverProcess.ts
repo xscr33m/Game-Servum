@@ -18,6 +18,7 @@ import { logger } from "../core/logger.js";
 import {
   getServerById,
   updateServerStatus,
+  updateServerVersion,
   getAllServers,
   getAppSetting,
   setAppSetting,
@@ -412,6 +413,23 @@ export function startServer(serverId: number): StartResult {
       startSchedule(serverId);
       startMessageBroadcaster(serverId);
       startUpdateChecker(serverId);
+
+      // Extract game version from log files and persist to DB
+      if (adapter) {
+        try {
+          const version = adapter.getServerVersion?.(server!);
+          if (version) {
+            updateServerVersion(serverId, version);
+            logger.info(
+              `[ServerProcess] Detected game version ${version} for server ${serverId}`,
+            );
+          }
+        } catch (err) {
+          logger.error(
+            `[ServerProcess] Failed to extract game version: ${err}`,
+          );
+        }
+      }
 
       // Re-validate adapter config after start (game may have overwritten config files)
       if (adapter) {

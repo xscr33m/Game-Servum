@@ -6,6 +6,9 @@ import {
   FaArrowUpRightFromSquare,
   FaSpinner,
   FaXmark,
+  FaUsers,
+  FaPuzzlePiece,
+  FaCircleExclamation,
 } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -69,6 +72,16 @@ export function ServerCard({
       ? "hover:server-card-glow-error"
       : "hover:server-card-glow";
 
+  const onlinePlayerCount = server.onlinePlayerCount ?? 0;
+  const modCount = server.modCount ?? 0;
+  const hasUpdate = server.hasPendingUpdateRestart === true;
+
+  // Short version: first two numeric segments (e.g., "1.29" from "1.29.155939")
+  const fullVersion = server.version ?? null;
+  const shortVersion = fullVersion
+    ? fullVersion.replace(/^(\d+\.\d+).*/, "$1")
+    : null;
+
   function handleOpenServer() {
     if (disabled || server.status === "deleting") return;
     navigate(`/server/${server.id}`);
@@ -87,7 +100,7 @@ export function ServerCard({
         <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-destructive to-transparent" />
       )}
 
-      {/* Top section — Logo banner + Status */}
+      {/* Top section — Logo banner + Status + Stats */}
       <div className="relative h-20 sm:h-28 bg-gradient-to-br from-secondary/80 to-muted/60 flex items-center px-3 sm:px-5">
         {gameLogo ? (
           <img
@@ -100,7 +113,9 @@ export function ServerCard({
             {gameName}
           </span>
         )}
-        <div className="absolute top-3 right-3">
+
+        {/* Right side — Status badge + stats column */}
+        <div className="absolute top-2 right-3 flex flex-col items-end gap-1.5">
           <Badge variant={status.variant}>
             {server.status === "installing" &&
             installProgress &&
@@ -108,6 +123,41 @@ export function ServerCard({
               ? `Installing`
               : status.label}
           </Badge>
+
+          {/* Stats — compact right-aligned column */}
+          <div className="flex flex-col items-end gap-0.5 text-[10px] text-muted-foreground/80">
+            {shortVersion && (
+              <Tip
+                content={
+                  fullVersion !== shortVersion
+                    ? `v${fullVersion}`
+                    : `v${shortVersion}`
+                }
+              >
+                <span className="font-mono">v{shortVersion}</span>
+              </Tip>
+            )}
+            {isRunning && (
+              <span className="flex items-center gap-1 font-mono">
+                <FaUsers className="h-2.5 w-2.5" />
+                {onlinePlayerCount}
+              </span>
+            )}
+            {modCount > 0 && (
+              <span className="flex items-center gap-1 font-mono">
+                <FaPuzzlePiece className="h-2.5 w-2.5" />
+                {modCount}
+              </span>
+            )}
+            {hasUpdate && (
+              <Tip content="Update available">
+                <span className="flex items-center gap-1 text-warning">
+                  <FaCircleExclamation className="h-2.5 w-2.5" />
+                  Update
+                </span>
+              </Tip>
+            )}
+          </div>
         </div>
       </div>
 

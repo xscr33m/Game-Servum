@@ -567,6 +567,24 @@ export class DayZAdapter extends BaseGameAdapter {
     return { commands: ["#shutdown"] };
   }
 
+  /**
+   * Extract DayZ version from the latest RPT log file.
+   * RPT files contain a line like: "Version 1.29.162510"
+   */
+  getServerVersion(server: GameServer): string | null {
+    try {
+      const profilesDir = resolveProfilesPath(server);
+      const rptFile = this.findLatestRptFile(profilesDir);
+      if (!rptFile) return null;
+
+      const content = fs.readFileSync(rptFile, "utf-8");
+      const match = content.match(/^Version\s+(\S+)/m);
+      return match ? match[1] : null;
+    } catch {
+      return null;
+    }
+  }
+
   getStartupDetector(server: GameServer): StartupDetector | null {
     const profilesDir = resolveProfilesPath(server);
     // DayZ writes script logs with timestamped filenames (script_YYYY-MM-DD_HH-MM-SS.log).

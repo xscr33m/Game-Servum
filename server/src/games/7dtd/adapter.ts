@@ -375,6 +375,28 @@ export class SevenDaysAdapter extends BaseGameAdapter {
     return [".txt"];
   }
 
+  /**
+   * Extract 7 Days to Die version from output_log.txt.
+   * The log contains a line like: "INF Version: V 2.6 (b14) Compatibility Version: ..."
+   */
+  getServerVersion(server: GameServer): string | null {
+    try {
+      const logPath = path.join(server.installPath, "output_log.txt");
+      if (!fs.existsSync(logPath)) return null;
+
+      const content = fs.readFileSync(logPath, "utf-8");
+      const match = content.match(/INF Version:\s*V\s*([\d.]+\s*\([^)]+\))/);
+      if (match) return match[1].replace(/\s+/g, "");
+      // Fallback for older log formats
+      const fallback = content.match(
+        /Version:\s*(?:V\s*)?(?:Alpha\s*)?([\d.]+(?:\s*\([^)]+\))?)/,
+      );
+      return fallback ? fallback[1].replace(/\s+/g, "") : null;
+    } catch {
+      return null;
+    }
+  }
+
   getLogPaths(server: GameServer): LogPaths {
     return {
       directories: [server.installPath],
