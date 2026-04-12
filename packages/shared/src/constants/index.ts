@@ -3,13 +3,13 @@
  */
 
 /** Current application version (SemVer) */
-export const APP_VERSION = "0.9.9";
+export const APP_VERSION = "0.9.10";
 
 /** API version identifier */
 export const API_VERSION = "v1";
 
 /** Minimum agent version the Commander is compatible with */
-export const MIN_COMPATIBLE_AGENT_VERSION = "0.9.9";
+export const MIN_COMPATIBLE_AGENT_VERSION = "0.9.10";
 
 /** Default ports */
 export const DEFAULT_AGENT_PORT = 3001;
