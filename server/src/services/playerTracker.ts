@@ -310,6 +310,9 @@ function scheduleReconnect(serverId: number): void {
 async function pollPlayers(serverId: number, rcon: RconClient): Promise<void> {
   try {
     const currentPlayers = await rcon.getPlayers();
+    logger.debug(
+      `[PlayerTracker] RCON poll for server ${serverId}: ${currentPlayers.length} player(s)`,
+    );
     const currentMap = new Map<string, string>();
 
     for (const player of currentPlayers) {

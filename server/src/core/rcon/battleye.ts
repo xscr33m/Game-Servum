@@ -364,7 +364,7 @@ export function parseBattlEyePlayersResponse(
 
   for (const line of lines) {
     const match = line.match(
-      /^\s*(\d+)\s+([\d.]+):(\d+)\s+(\d+)\s+([a-f0-9]+)\((\w+)\)\s+(.+?)\s*$/i,
+      /^\s*(\d+)\s+([\d.]+):(\d+)\s+(\d+)\s+([^\s(]+)\((\w+)\)\s+(.+?)\s*$/i,
     );
     if (match) {
       const rawName = match[7].trim().replace(/\s*\(Lobby\)\s*$/i, "");

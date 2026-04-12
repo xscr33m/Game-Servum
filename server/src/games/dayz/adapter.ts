@@ -722,7 +722,7 @@ export class DayZAdapter extends BaseGameAdapter {
       const lines = content.split("\n");
 
       for (const line of lines) {
-        const match = line.match(/Player "(.+?)"\s*\(id=([A-Za-z0-9+/=]{20,})/);
+        const match = line.match(/Player "(.+?)"\s*\(id=([^)\s]+)\)/);
         if (match) {
           mappings.set(match[1], match[2]);
         }
