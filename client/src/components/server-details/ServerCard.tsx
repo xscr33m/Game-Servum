@@ -125,34 +125,23 @@ export function ServerCard({
           </Badge>
 
           {/* Stats — compact right-aligned column */}
-          <div className="flex flex-col items-end gap-0.5 text-[10px] text-muted-foreground/80">
-            {shortVersion && (
-              <Tip
-                content={
-                  fullVersion !== shortVersion
-                    ? `v${fullVersion}`
-                    : `v${shortVersion}`
-                }
-              >
-                <span className="font-mono">v{shortVersion}</span>
-              </Tip>
-            )}
+          <div className="flex flex-col items-end gap-1 text-xs text-muted-foreground/80">
             {isRunning && (
-              <span className="flex items-center gap-1 font-mono">
-                <FaUsers className="h-2.5 w-2.5" />
+              <span className="flex items-center gap-1.5 font-mono">
+                <FaUsers className="h-3 w-3" />
                 {onlinePlayerCount}
               </span>
             )}
             {modCount > 0 && (
-              <span className="flex items-center gap-1 font-mono">
-                <FaPuzzlePiece className="h-2.5 w-2.5" />
+              <span className="flex items-center gap-1.5 font-mono">
+                <FaPuzzlePiece className="h-3 w-3" />
                 {modCount}
               </span>
             )}
             {hasUpdate && (
               <Tip content="Update available">
-                <span className="flex items-center gap-1 text-warning">
-                  <FaCircleExclamation className="h-2.5 w-2.5" />
+                <span className="flex items-center gap-1.5 text-warning">
+                  <FaCircleExclamation className="h-3 w-3" />
                   Update
                 </span>
               </Tip>
@@ -167,7 +156,22 @@ export function ServerCard({
           <h3 className="font-semibold text-base leading-tight truncate">
             {server.name}
           </h3>
-          <p className="text-xs text-muted-foreground mt-1">{gameName}</p>
+          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
+            {gameName}
+            {shortVersion && (
+              <Tip
+                content={
+                  fullVersion !== shortVersion
+                    ? `v${fullVersion}`
+                    : `v${shortVersion}`
+                }
+              >
+                <span className="font-mono text-muted-foreground/70">
+                  v{shortVersion}
+                </span>
+              </Tip>
+            )}
+          </p>
         </div>
 
         <div className="flex items-center gap-2 sm:gap-4 text-xs text-muted-foreground">
