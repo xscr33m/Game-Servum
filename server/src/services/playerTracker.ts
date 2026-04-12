@@ -333,8 +333,10 @@ async function pollPlayers(serverId: number, rcon: RconClient): Promise<void> {
       lastKnownPlayers.get(serverId) || new Map<string, string>();
 
     // Detect new connections (in current but not in previous)
+    let hasNewPlayers = false;
     for (const [playerId, name] of currentMap) {
       if (!previousMap.has(playerId)) {
+        hasNewPlayers = true;
         // Try to find the character ID and Steam64 ID from previous sessions or logs
         const characterId = lookupCharacterId(serverId, name);
         const steam64Id = lookupSteam64Id(serverId, name);
@@ -375,13 +377,14 @@ async function pollPlayers(serverId: number, rcon: RconClient): Promise<void> {
 
     lastKnownPlayers.set(serverId, currentMap);
 
-    // Game-specific: Periodically try to sync player data from logs
+    // Game-specific: Sync player data from logs — immediately on new connects,
+    // otherwise periodically every N polls
     if (info) {
       const adapter = getGameAdapter(info.gameId);
       if (adapter?.syncPlayerDataFromLogs) {
         const counter = (pollCounters.get(serverId) || 0) + 1;
         pollCounters.set(serverId, counter);
-        if (counter % CHARACTER_ID_SYNC_INTERVAL === 0) {
+        if (hasNewPlayers || counter % CHARACTER_ID_SYNC_INTERVAL === 0) {
           adapter.syncPlayerDataFromLogs(serverId, info.installPath);
         }
       }
