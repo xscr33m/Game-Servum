@@ -27,6 +27,9 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
   },
+  "overrides": {
+    "esbuild": "^0.28.1"
+  },
   "devDependencies": {
     "@eslint/js": "^9.28.0",
     "concurrently": "^9.1.0",
