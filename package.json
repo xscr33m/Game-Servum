@@ -32,7 +32,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.28.0",
-    "concurrently": "^9.1.0",
+    "concurrently": "^9.2.4",
     "eslint": "^10.8.0",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
